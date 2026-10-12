@@ -1,0 +1,6 @@
+.env
+.env.*
+!.env.example
+/email-worker
+/bin/
+/coverage.out
