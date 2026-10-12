@@ -1,0 +1,63 @@
+# Paid persistent staging resources. Review costs and region before creation.
+# Never add database reset/seed commands here.
+previews:
+  generation: "off"
+services:
+  - type: web
+    name: city4christ-staging-api
+    runtime: docker
+    plan: 0.5c-512mb
+    region: oregon
+    autoDeployTrigger: "off"
+    dockerfilePath: ./Dockerfile
+    dockerCommand: /app/api
+    preDeployCommand: /app/api migrate
+    healthCheckPath: /health/ready
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: REGISTRATION_ENABLED
+        value: "false"
+      - key: VERIFICATION_KEY_BASE64
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: city4christ-staging-db
+          property: connectionString
+  - type: worker
+    name: city4christ-staging-email-worker
+    runtime: docker
+    plan: 0.5c-512mb
+    region: oregon
+    autoDeployTrigger: "off"
+    dockerfilePath: ./Dockerfile
+    dockerCommand: /app/email-worker
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: EMAIL_DELIVERY_MODE
+        value: disabled
+      - key: EMAIL_FROM
+        value: City4christ <info@city4christ.org>
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_RECIPIENT_ALLOWLIST
+        sync: false
+      - key: VERIFICATION_KEY_BASE64
+        fromService:
+          type: web
+          name: city4christ-staging-api
+          envVarKey: VERIFICATION_KEY_BASE64
+      - key: DATABASE_URL
+        fromDatabase:
+          name: city4christ-staging-db
+          property: connectionString
+databases:
+  - name: city4christ-staging-db
+    databaseName: city4christ_staging
+    user: city4christ
+    plan: 0.1c-256mb
+    diskSizeGB: 15
+    region: oregon
+    postgresMajorVersion: "16"
+    ipAllowList: []
