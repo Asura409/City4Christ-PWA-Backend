@@ -1,0 +1,1106 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "City4Christ API",
+    "version": "1.0.0",
+    "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Current API origin"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Registration, email verification, sessions, and Google account linking."
+    },
+    {
+      "name": "Health",
+      "description": "Process liveness and database readiness."
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register account",
+        "operationId": "Registeraccount",
+        "description": "Browser requests must include credentials: \"include\" and an allowed Origin. JSON bodies are capped at 16 KiB; unknown fields and null objects are rejected. Creates an unverified account and queues an encrypted OTP email. Does not log in. Signup is disabled by default; the free Render Blueprint has no email worker, so delivery needs separate configuration.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredAccount"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistrationInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verification/verify": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Verify email",
+        "operationId": "Verifyemail",
+        "description": "Browser requests must include credentials: \"include\" and an allowed Origin. JSON bodies are capped at 16 KiB; unknown fields and null objects are rejected. OTP lifetime: ten minutes; single use; five attempts per issued code. Successful verification does not create a session.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Verified"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verification/resend": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Resend verification",
+        "operationId": "Resendverification",
+        "description": "Browser requests must include credentials: \"include\" and an allowed Origin. JSON bodies are capped at 16 KiB; unknown fields and null objects are rejected. Sixty-second cooldown. Returns the same 202 response for unknown, verified, or cooldown accounts. An eligible new code invalidates the previous code.",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResendAccepted"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "500": {
+            "$ref": "#/components/responses/500"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Password login",
+        "operationId": "Passwordlogin",
+        "description": "Browser requests must include credentials: \"include\" and an allowed Origin. JSON bodies are capped at 16 KiB; unknown fields and null objects are rejected. Requires a verified email and a local password. Returns a ten-minute access token and a thirty-day refresh cookie.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTokens"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Host-only __Host-c4c_refresh cookie; Secure, HttpOnly, Path=/; SameSite=Lax by default or None for configured cross-site clients. Browser manages it automatically. Refresh rotates it; logout clears it. Never put refresh tokens in JSON or browser storage.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Refresh session",
+        "operationId": "Refreshsession",
+        "description": "Requires an allowed Origin and the refresh cookie. No JSON body. Rotates refresh token atomically; the original thirty-day absolute expiry is retained. Reusing any consumed token revokes the entire session, including its access tokens. Serialize refresh requests. Failed refresh clears the cookie.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTokens"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Host-only __Host-c4c_refresh cookie; Secure, HttpOnly, Path=/; SameSite=Lax by default or None for configured cross-site clients. Browser manages it automatically. Refresh rotates it; logout clears it. Never put refresh tokens in JSON or browser storage.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "refreshCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Logout session",
+        "operationId": "Logoutsession",
+        "description": "Requires an allowed Origin. No JSON body. Revokes the refresh-cookie session and its access tokens, then clears the cookie. Idempotent, including when the cookie is missing. Authorization alone does not identify the session for this endpoint.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoggedOut"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Host-only __Host-c4c_refresh cookie; Secure, HttpOnly, Path=/; SameSite=Lax by default or None for configured cross-site clients. Browser manages it automatically. Refresh rotates it; logout clears it. Never put refresh tokens in JSON or browser storage.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get current member",
+        "operationId": "Getcurrentmember",
+        "description": "Access JWT must be sent in Authorization: Bearer. Tokens in query parameters or cookies are not accepted. Session revocation is checked on every request.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/google/start": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Begin Google login",
+        "operationId": "BeginGooglelogin",
+        "description": "Creates single-use state, nonce and PKCE S256 challenge. Sets a Secure, HttpOnly, SameSite=Lax browser-binding cookie. Navigate to data.url in this browser; a fetch alone does not complete Google login. New signup obeys REGISTRATION_ENABLED. Google-only accounts have no local password.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStart"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Secure, HttpOnly __Host-c4c_oidc browser-binding cookie, Path=/, SameSite=Lax. Preserve it for callback.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/google/link": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Begin Google linking",
+        "operationId": "BeginGooglelinking",
+        "description": "Requires an allowed Origin and an active Bearer session created within five minutes of login. Explicitly link Google to this account; email must match and be verified. Refreshing a token does not count as a new login.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStart"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Secure, HttpOnly __Host-c4c_oidc browser-binding cookie, Path=/, SameSite=Lax. Preserve it for callback.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/google/callback": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Complete Google login",
+        "operationId": "CompleteGooglelogin",
+        "description": "Google redirects here with code and state. Requires the matching browser-binding cookie and consumes the flow once. Validates signature, issuer, audience, expiry, nonce and verified email. Never automatically links matching local email: account_link_required means sign in locally and explicitly link. Returns JSON tokens and a refresh cookie, not a frontend redirect. A frontend completion page can subsequently call refresh using the cookie. The browser-binding cookie is cleared.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTokens"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Host-only __Host-c4c_refresh cookie; Secure, HttpOnly, Path=/; SameSite=Lax by default or None for configured cross-site clients. Browser manages it automatically. Refresh rotates it; logout clears it. Never put refresh tokens in JSON or browser storage.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "oidcCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Check liveness",
+        "operationId": "Checkliveness",
+        "description": "Process liveness; does not query PostgreSQL.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Check readiness",
+        "operationId": "Checkreadiness",
+        "description": "Checks PostgreSQL connectivity; does not prove provider delivery or validate every migration.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": []
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "fields": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "requestId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "code",
+              "message",
+              "fields",
+              "requestId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "RegistrationInput": {
+        "type": "object",
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Test"
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "example": "Member"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "example": "tester@example.invalid"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 15,
+            "writeOnly": true,
+            "description": "At least 15 Unicode characters, at most 1024 UTF-8 bytes. Preserved exactly.",
+            "example": "a-long-test-password-only"
+          }
+        },
+        "required": [
+          "firstName",
+          "lastName",
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "LoginInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "example": "tester@example.invalid"
+          },
+          "password": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Existing local password; Google-only accounts cannot use password login."
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "EmailInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "example": "tester@example.invalid"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "additionalProperties": false
+      },
+      "VerificationInput": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254,
+            "example": "tester@example.invalid"
+          },
+          "code": {
+            "type": "string",
+            "description": "Eight-digit OTP. Wrong, expired, consumed or exhausted codes are rejected.",
+            "example": "12345678"
+          }
+        },
+        "required": [
+          "email",
+          "code"
+        ],
+        "additionalProperties": false
+      },
+      "RegisteredAccount": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "maxLength": 254,
+                "example": "tester@example.invalid"
+              },
+              "firstName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "lastName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "email_unverified"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "email",
+              "firstName",
+              "lastName",
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "SessionTokens": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "accessToken": {
+                "type": "string",
+                "description": "Ten-minute JWT. Keep in memory and use Authorization: Bearer."
+              },
+              "tokenType": {
+                "type": "string",
+                "enum": [
+                  "Bearer"
+                ]
+              },
+              "expiresIn": {
+                "type": "integer",
+                "description": "Remaining access-token lifetime in seconds.",
+                "example": 600
+              }
+            },
+            "required": [
+              "accessToken",
+              "tokenType",
+              "expiresIn"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "email": {
+                "type": "string",
+                "format": "email",
+                "maxLength": 254,
+                "example": "tester@example.invalid"
+              },
+              "firstName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "lastName": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "emailVerified": {
+                "type": "boolean"
+              },
+              "hasPassword": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "email",
+              "firstName",
+              "lastName",
+              "emailVerified",
+              "hasPassword"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Verified": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "email_verified"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "LoggedOut": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "logged_out"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "ResendAccepted": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string",
+                "example": "If verification is needed, an email will be sent when eligible."
+              }
+            },
+            "required": [
+              "message"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "GoogleStart": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Navigate the browser to this provider URL."
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Health": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ok"
+                ]
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "400": {
+        "description": "Malformed JSON, invalid/expired OTP, or invalid Google callback.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "401": {
+        "description": "Invalid credentials or revoked/expired/missing session.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "403": {
+        "description": "Registration closed, email unverified, or Origin forbidden.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "409": {
+        "description": "Email unavailable, explicit Google linking required, or identity conflict.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "413": {
+        "description": "JSON body exceeds 16 KiB.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "415": {
+        "description": "Use Content-Type: application/json.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "422": {
+        "description": "Validation failed; inspect error.fields.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "429": {
+        "description": "Account or IP rate limit reached.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "description": "Suggested retry delay in seconds.",
+            "schema": {
+              "type": "string",
+              "example": "60"
+            }
+          }
+        }
+      },
+      "500": {
+        "description": "Request could not be completed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "503": {
+        "description": "Service unavailable or authentication/provider configuration missing.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "refreshCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-c4c_refresh",
+        "description": "Automatically set by login/callback and rotated by refresh; do not enter manually in Swagger."
+      },
+      "oidcCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-c4c_oidc",
+        "description": "Browser-managed binding cookie set by Google start/link."
+      }
+    }
+  }
+}
