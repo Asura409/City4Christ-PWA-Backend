@@ -20,6 +20,8 @@ Tests start their own PostgreSQL cluster and database in a private temporary dir
 
 Implemented: registration, Argon2id passwords, email verification and resend, encrypted Resend outbox, password login, ten-minute access JWTs, thirty-day rotating refresh cookies with replay revocation, account/IP limits, logout, `/api/v1/me`, and Google OIDC with explicit account linking. Public signup defaults to disabled. Google-only accounts have no local password.
 
+Interactive API reference: open `/docs/` on your API origin. Download the OpenAPI 3.0.3 contract at `/openapi.json`; [source specification](internal/app/apidocs/openapi.json) and [frontend usage guide](docs/api-documentation.md) are included.
+
 See [auth API and security configuration](docs/auth-sessions.md), [TDD evidence](docs/auth-foundation.md), and [temporary mobile preview](docs/temporary-preview.md). Tests use disposable PostgreSQL. Docker and CI configuration are included; this update does not deploy or modify staging.
 
 OTP defaults are eight digits, a ten-minute lifetime, five verification attempts per issued code, and a sixty-second resend cooldown. The app requires a securely generated, persistent 32-byte `VerificationKey` to enable auth operations. Missing or invalid keys return HTTP 503 for auth operations (closed registration still returns 403). There is no generated fallback key; do not regenerate it on application restarts. Only test fixtures use a fixed sample key.

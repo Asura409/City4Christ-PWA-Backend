@@ -25,6 +25,7 @@ type Config struct {
 
 func New(db *sql.DB, config Config) http.Handler {
 	mux := http.NewServeMux()
+	documentationRoutes(mux)
 	verification, verificationErr := auth.NewVerificationService(db, auth.VerificationConfig{Key: config.VerificationKey, Now: config.Now})
 	var service *auth.RegistrationService
 	var sessions *auth.SessionService
