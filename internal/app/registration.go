@@ -3,11 +3,12 @@ package app
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
 )
 
-func registrationHandler(service *auth.RegistrationService, enabled bool) http.HandlerFunc {
+func registrationHandler(service *auth.RegistrationService, enabled bool, limiter *auth.RateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !enabled {
 			writeError(w, 403, "registration_closed", "Registration is currently closed.", nil)
@@ -19,6 +20,9 @@ func registrationHandler(service *auth.RegistrationService, enabled bool) http.H
 		}
 		input, ok := decodeJSON[auth.Registration](w, r)
 		if !ok {
+			return
+		}
+		if !accountLimit(w, r, limiter, "register", input.Email, 5, 15*time.Minute) {
 			return
 		}
 		account, err := service.Register(r.Context(), input)

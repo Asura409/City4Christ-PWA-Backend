@@ -1,72 +1,31 @@
-# Render staging foundation
+# Free Render preview
 
-This is the registration/verification foundation, not completed authentication.
-Login, tokens, Google OIDC, account/IP limits, the mobile auth page, and protected
-staging inbox remain pending. Keep registration disabled until those prerequisites
-and the signup policy are resolved.
+`render.yaml` creates one Free Docker web service and one Free PostgreSQL database, from GitHub branch `main`. It creates no paid worker, disk, or pre-deploy hook. Automatic deployment remains off. This is temporary preview hosting, not persistent staging.
 
-## Verification
+Render Free PostgreSQL has 1 GB storage, expires after 30 days, and has no backups. After expiration it becomes inaccessible; Render deletes it after the subsequent 14-day upgrade grace period. Export test data before expiration. Never automatically recreate/reset the database. Only one free PostgreSQL database is allowed per workspace. The free API sleeps after 15 minutes idle and has monthly usage limits.
 
-Run `go test -race ./... -count=1 -timeout=5m` with PostgreSQL binaries installed.
-Startup tests use a private disposable cluster and verify that forward migrations
-preserve an existing account, the global HTTP app serves health routes, and shutdown
-works. No test consumes a staging DATABASE_URL.
+The email worker is omitted because Render has no free worker plan. The API still queues encrypted verification emails, but this Blueprint does not deliver them. Keep registration disabled until a worker is deliberately hosted elsewhere (for example on the existing VPS with secure database connectivity), or a separate free-compatible delivery design is implemented. The protected inbox/mobile interface remains available only in the dedicated test-preview executable.
 
-On a host with Docker:
+## Creation
+
+1. Commit and push the reviewed changes to GitHub `main` after tests/CI pass. Local changes are not available to Render until pushed.
+2. Render Dashboard: New > Blueprint; choose the repository, branch `main`, and `render.yaml`.
+3. Review the proposed resources: both must show Free; there must be no worker. If the previous attempt created resources, inspect them first. Do not delete or replace an existing database to retry this setup.
+4. Deploy only when ready. Keep Blueprint Auto Sync off and verify `/health/ready` afterward.
+5. APP_ORIGIN is taken from the API's Render URL. The GitHub Pages frontend origin is allowed; refresh cookies use SameSite=None and Secure. See [auth configuration](auth-sessions.md).
+
+The Docker command `/app/api migrate-and-serve` applies forward migrations and starts the API only after they succeed. Migration reruns preserve data. No reset or seed command exists. Normal `/app/api` startup still does not migrate; `/app/api migrate` applies migrations and exits.
+
+The generated verification key is persistent configuration: preserve it across redeployments. Google remains disabled until both OAuth credentials are configured privately. No Resend key is required by this free Blueprint.
+
+## Local verification
 
 ```sh
+go test -race ./cmd/api -count=1
 docker build --tag city4christ:verify .
 bash scripts/docker-smoke.sh city4christ:verify
 ```
 
-The smoke check creates uniquely named disposable containers/network, tests forward
-migrations twice with account preservation, readiness, closed registration, the
-nonroot API user, disabled worker persistence, and graceful shutdown. It removes only
-its own containers, anonymous database volume, and network. GitHub Actions runs these
-commands after Go tests. CI has not run until changes are pushed.
+Tests use disposable PostgreSQL, including migration reruns with existing accounts. The smoke script creates and cleans up only its own disposable containers, network and database volume. It checks migration-and-serve, readiness, disabled registration, nonroot execution, and graceful shutdown. No staging credentials are consumed.
 
-Docker build and the smoke checks passed locally on ARM64 with Docker 29.1.3
-and Buildx 0.30.1 on 2026-10-12. The image was built with the combined CA secret
-shown below. Smoke checks used PostgreSQL 16 in a disposable container and preserved
-an account across repeated forward migrations. The readiness check explicitly uses
-TCP so PostgreSQL's temporary initialization server cannot cause an early start.
-GitHub Actions on AMD64, live Render deployment, and live Resend sending remain
-unverified.
-
-Managed cloud builds can supply the public combined CA bundle without adding it
-to image layers:
-
-```sh
-docker build --secret id=proxy_ca,src=/etc/ssl/certs/ca-certificates.crt --tag city4christ:verify .
-```
-
-## Blueprint creation (manual, after verification and push)
-
-1. Review `render.yaml`: paid API/worker plans, paid persistent PostgreSQL with 15GB
-   storage, and Oregon region. Review Render's displayed prices before creating them.
-2. Commit and push the reviewed files to GitHub. Nothing in this setup pushes or deploys.
-3. Render Dashboard: **New > Blueprint**, select the repository and reviewed branch,
-   and use `render.yaml` as the Blueprint path.
-4. Enter `RESEND_API_KEY` privately in Render, and a comma-separated
-   `EMAIL_RECIPIENT_ALLOWLIST` containing only authorized staging recipients.
-   Do not put the key in Git or chat.
-5. Review the resources and click **Deploy Blueprint** only when ready to deploy.
-6. Set Blueprint **Auto Sync** to **No**. Service auto-deploy triggers are already off.
-7. Check the API `/health/ready` endpoint and service logs. Email delivery initially
-   remains disabled; no test email is sent automatically.
-
-The API's pre-deploy command is `/app/api migrate`: forward pending migrations only,
-with no reset or seed. Normal API and worker startup never runs migrations.
-PostgreSQL external access is blocked; services use its internal connection string.
-The Blueprint generates one stable 32-byte base64 verification key on the API and
-references that same key from the worker. Preserve it across restarts/redeploys;
-changing it invalidates existing encrypted mail and verification challenges.
-
-The sender is `City4christ <info@city4christ.org>`. Enabling live delivery later requires
-`EMAIL_DELIVERY_MODE=resend` on the worker and a valid recipient allowlist. Keep the
-Blueprint's value aligned with any reviewed configuration change before syncing.
-No staging reset job, destructive migration command, or automatic seed is configured.
-
-References: [Render Blueprint specification](https://render.com/docs/blueprint-spec),
-[Blueprint creation](https://render.com/docs/infrastructure-as-code),
-[Docker services](https://render.com/docs/docker).
+References: [Free limits](https://render.com/docs/free), [deploy hooks](https://render.com/docs/deploys), [Blueprint specification](https://render.com/docs/blueprint-spec).

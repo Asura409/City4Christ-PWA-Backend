@@ -139,7 +139,7 @@ func TestVerificationThroughGlobalApp(t *testing.T) {
 		if path == "verification/resend" {
 			failed = authRequest(t, app, path, `{"email":"otp@example.com"}`)
 		}
-		if failed.Code != 500 || strings.Contains(failed.Body.String(), "sql:") {
+		if failed.Code != 503 || strings.Contains(failed.Body.String(), "sql:") {
 			t.Fatalf("unsafe failure %s: %d %s", path, failed.Code, failed.Body.String())
 		}
 	}

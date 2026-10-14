@@ -4,11 +4,12 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
 )
 
-func verificationHandler(service *auth.VerificationService) http.HandlerFunc {
+func verificationHandler(service *auth.VerificationService, limiter *auth.RateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			writeError(w, 503, "unavailable", "Service unavailable.", nil)
@@ -32,6 +33,9 @@ func verificationHandler(service *auth.VerificationService) http.HandlerFunc {
 			writeError(w, 422, "validation_failed", "Check the supplied fields.", fields)
 			return
 		}
+		if !accountLimit(w, r, limiter, "verify", input.Email, 20, 15*time.Minute) {
+			return
+		}
 		err := service.Verify(r.Context(), input.Email, input.Code)
 		if errors.Is(err, auth.ErrInvalidOTP) {
 			writeError(w, 400, "invalid_verification_code", "Code is invalid or expired.", nil)
@@ -45,7 +49,7 @@ func verificationHandler(service *auth.VerificationService) http.HandlerFunc {
 	}
 }
 
-func resendHandler(service *auth.VerificationService) http.HandlerFunc {
+func resendHandler(service *auth.VerificationService, limiter *auth.RateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			writeError(w, 503, "unavailable", "Service unavailable.", nil)
@@ -59,6 +63,9 @@ func resendHandler(service *auth.VerificationService) http.HandlerFunc {
 		}
 		if strings.TrimSpace(input.Email) == "" {
 			writeError(w, 422, "validation_failed", "Check the supplied fields.", map[string]string{"email": "Enter your email address."})
+			return
+		}
+		if !accountLimit(w, r, limiter, "resend", input.Email, 5, 15*time.Minute) {
 			return
 		}
 		if err := service.Resend(r.Context(), input.Email); err != nil && !errors.Is(err, auth.ErrResendCooldown) {
