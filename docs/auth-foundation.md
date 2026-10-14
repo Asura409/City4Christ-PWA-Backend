@@ -5,13 +5,13 @@ Source: `City4Christ_PWA_Backend_PRD.docx` (11 October 2026), plus the requested
 ## Implemented
 
 - Argon2id adapter using `github.com/alexedwards/argon2id` and current `golang.org/x/crypto`. Parameters: v19, 64 MiB memory, three iterations, two lanes, 16-byte random salt, 32-byte key. Empty or malformed stored credentials fail closed.
-- PostgreSQL account repository using pgx. Unique normalized emails, nullable local passwords for later Google-only identities, unverified accounts, and database-generated UUIDs/timestamps.
+- PostgreSQL account repository using pgx. Unique normalized emails, nullable local passwords for Google-only identities, unverified accounts, and database-generated UUIDs/timestamps.
 - Embedded Goose forward migration. Rerunning it preserves existing accounts. There is no automatic database reset or destructive down migration.
-- Registration service and `POST /api/v1/auth/register` through the global app. Public registration defaults to disabled, pending product policy and remaining authentication controls. Explicitly enabled tests persist unverified accounts without cookies or access credentials. Registration now queues an encrypted verification email transactionally; external delivery is not implemented yet.
+- Registration service and `POST /api/v1/auth/register` through the global app. Public registration defaults to disabled, pending product policy. Explicitly enabled tests persist unverified accounts without cookies or access credentials. Registration now queues an encrypted verification email transactionally; delivery is handled by the opt-in Resend worker.
 - Email verification OTP: eight digits, ten-minute expiry, single use, five attempts, sixty-second resend cooldown. Account row locks serialize verification and resend. Previous codes are invalidated, consumed verifiers removed, and queued email payloads authenticated and encrypted using Go standard cryptographic libraries.
 - Resend adapter using the official SDK, bounded delivery retries, PostgreSQL delivery claims, expiry cleanup, and an opt-in email-worker executable. Staging external sending requires approved recipients. Live provider delivery is unverified.
 - Global app liveness and readiness routes. Database failure affects readiness, while liveness remains healthy. Errors omit dependency details and include server-generated request IDs.
-- GitHub Actions workflow with pinned official checkout/setup-go commits. It installs PostgreSQL binaries and runs formatting, vet, and tests with the race detector. Its remote execution has not been observed.
+- GitHub Actions workflow with pinned official checkout/setup-go commits. It installs PostgreSQL binaries and runs formatting, vet, and tests with the race detector. The previously merged foundation passed remote CI; subsequent changes require a fresh CI run.
 
 Registration validates names (1–100 characters), email syntax (maximum 254 bytes), and passwords (minimum 15 characters, maximum 1024 bytes). These are provisional technical limits. Passwords are preserved exactly. JSON bodies are capped at 16 KiB, reject unknown fields, trailing JSON, and null objects. Successful responses omit passwords and hashes.
 
@@ -44,21 +44,16 @@ git diff --check
 
 All passed. `actionlint` v1.7.12 also validated `.github/workflows/test.yml`. These checks do not establish a remote CI result or deployment success.
 
-## Remaining slices
+## Session and Google TDD evidence
 
-- Live Resend domain/sender/secret setup and a deliberate delivery check; protected staging email inbox and provider delivery/bounce monitoring. The adapter and worker are implemented; no real email has been sent.
-- Login, account/IP rate limits, access credentials, refresh rotation/replay, logout and `/api/v1/me`.
-- Google OIDC with state, nonce and PKCE; explicit secure account linking, no default local password.
-- Runnable API server, Docker, persistent Render staging PostgreSQL, mobile auth test page and protected staging inbox.
+Session tests first failed on missing service symbols, then passed after implementation and forward migrations. They cover passwordless accounts, expired/tampered JWTs, absolute refresh expiry, logout, concurrent refresh replay and transactional rollback. Rate-limit tests first failed before the service existed, then verified concurrent PostgreSQL counters and persistence across service instances.
 
-Each slice begins with executed failing tests, followed by implementation and refactoring. No deployment or merge has occurred. No staging database has been accessed or changed.
+Global-app tests first failed on missing session configuration, then exercised registration through login, Bearer-only `/me`, Secure/HttpOnly cookies, CORS, Origin checks, refresh replay and logout. Google service and route tests failed before implementation, then covered state/browser binding, nonce/PKCE, passwordless signup, closed signup, collision rejection and explicit recent-session linking. The OIDC adapter uses a test issuer with actual RSA-signed ID tokens and JWKS; invalid issuer, audience, nonce and expiry are rejected.
 
-## Open product decisions
+Refactoring shared JWT validation and delaying the dummy password hash restored the startup deadline test. Two older database-outage expectations were updated from 500 to 503 because the new shared rate limiter fails closed when PostgreSQL is unavailable.
 
-- Registration: open, invitation, or approval following verification. Signup remains disabled until decided and completed.
-- Exact PWA/API origins and domain relationship for cookie, CORS and CSRF policy.
-- Staging inbox operator authentication. Resend is selected; sender domain/address and credentials still need configuration.
+## Remaining external acceptance
 
-## Environment
+Live Google login requires privately configured OAuth credentials and the exact callback URL. Live Resend delivery requires provider configuration and an explicitly approved recipient. Neither provider acceptance nor deployment is implied by local tests. The protected inbox is a disposable preview feature, separate from the production API.
 
-The repository initially contained only a README and the PRD. No applicable AGENTS.md was found. The cloud runtime skill was read; its environment-status tool and network-policy snapshot were unavailable. Shell execution required escalation because sandbox startup failed with `bwrap: loopback: Failed RTM_NEWADDR`. Official Go 1.27.2 was downloaded into `/tmp/c4c-toolchain` and checked against its release SHA-256. Docker remains absent.
+Signup remains disabled in the normal API pending product policy. No staging database reset or automatic seed is implemented.

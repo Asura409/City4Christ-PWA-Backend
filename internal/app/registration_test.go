@@ -86,7 +86,7 @@ func TestRegistrationThroughGlobalApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed := request(app, payload)
-	if failed.Code != 500 || strings.Contains(failed.Body.String(), "sql:") {
+	if failed.Code != 503 || strings.Contains(failed.Body.String(), "sql:") {
 		t.Fatalf("unsafe dependency failure: %d %s", failed.Code, failed.Body.String())
 	}
 }

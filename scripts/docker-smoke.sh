@@ -26,7 +26,7 @@ docker run --rm --network "$suffix" -e DATABASE_URL="$url" -e VERIFICATION_KEY_B
 docker exec "$db" psql -U smoke -d smoke -v ON_ERROR_STOP=1 -c "INSERT INTO accounts(email,first_name,last_name) VALUES ('preserve@example.org','Smoke','Test')" >/dev/null
 docker run --rm --network "$suffix" -e DATABASE_URL="$url" -e VERIFICATION_KEY_BASE64="$key" "$image" /app/api migrate
 test "$(docker exec "$db" psql -U smoke -d smoke -tAc "SELECT count(*) FROM accounts WHERE email='preserve@example.org'")" = 1
-docker run -d --name "$api" --network "$suffix" -p 127.0.0.1::10000 -e DATABASE_URL="$url" -e VERIFICATION_KEY_BASE64="$key" "$image" >/dev/null
+docker run -d --name "$api" --network "$suffix" -p 127.0.0.1::10000 -e DATABASE_URL="$url" -e VERIFICATION_KEY_BASE64="$key" "$image" /app/api migrate-and-serve >/dev/null
 endpoint="http://$(docker port "$api" 10000/tcp)"
 for attempt in {1..60}; do
   if curl --fail --silent "$endpoint/health/ready" >/dev/null; then break; fi

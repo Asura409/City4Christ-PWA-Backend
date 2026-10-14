@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net"
 	"net/http"
 	"testing"
@@ -88,5 +89,79 @@ func TestStartupMigrationPreservesDataAndServesGlobalApp(t *testing.T) {
 		}
 	case <-ctx.Done():
 		t.Fatal("shutdown timed out")
+	}
+}
+
+func TestBrowserAndGoogleConfig(t *testing.T) {
+	env := map[string]string{"DATABASE_URL": "postgres://test@localhost/test", "VERIFICATION_KEY_BASE64": base64.StdEncoding.EncodeToString(make([]byte, 32)), "APP_ORIGIN": "https://api.example.invalid", "CORS_ORIGINS": "https://zeetechdot.github.io", "REFRESH_COOKIE_SAME_SITE": "none", "TRUSTED_PROXY_CIDRS": "127.0.0.1/32"}
+	c, err := loadConfig(func(k string) string { return env[k] })
+	if err != nil || c.appOrigin != env["APP_ORIGIN"] || !c.crossSiteCookies || len(c.allowedOrigins) != 1 || len(c.trustedProxyCIDRs) != 1 {
+		t.Fatalf("browser config: %+v %v", c, err)
+	}
+	for _, bad := range []map[string]string{{"APP_ORIGIN": "https://api.example.invalid/path"}, {"CORS_ORIGINS": "*"}, {"REFRESH_COOKIE_SAME_SITE": "unsafe"}, {"TRUSTED_PROXY_CIDRS": "all"}, {"GOOGLE_CLIENT_ID": "incomplete"}} {
+		_, err := loadConfig(func(k string) string {
+			if v, ok := bad[k]; ok {
+				return v
+			}
+			return env[k]
+		})
+		if err == nil {
+			t.Fatalf("accepted %v", bad)
+		}
+	}
+}
+
+func TestMigrateAndServeStartsWithoutResettingData(t *testing.T) {
+	db := testpg.New(t)
+	if err := migrate(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	var socket, user, name string
+	if err := db.QueryRow(`SELECT current_setting('unix_socket_directories'),current_user,current_database()`).Scan(&socket, &user, &name); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("DATABASE_URL", "postgres://"+user+"@/"+name+"?host="+socket+"&sslmode=disable")
+	t.Setenv("VERIFICATION_KEY_BASE64", base64.StdEncoding.EncodeToString(make([]byte, 32)))
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+	t.Setenv("PORT", fmt.Sprint(port))
+	if _, err := db.Exec(`INSERT INTO accounts(email,first_name,last_name) VALUES ('free@example.invalid','Free','Test')`); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- run(ctx, []string{"migrate-and-serve"}) }()
+	ready := false
+	for i := 0; i < 100; i++ {
+		select {
+		case err := <-done:
+			t.Fatalf("startup failed: %v", err)
+		default:
+		}
+		response, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health/ready", port))
+		if err == nil {
+			response.Body.Close()
+			if response.StatusCode == 200 {
+				ready = true
+				break
+			}
+		}
+		time.Sleep(30 * time.Millisecond)
+	}
+	if !ready {
+		t.Fatal("server did not become ready")
+	}
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM accounts WHERE email='free@example.invalid'`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("existing data lost: %d %v", count, err)
 	}
 }

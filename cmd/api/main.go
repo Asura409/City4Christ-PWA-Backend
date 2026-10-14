@@ -9,23 +9,32 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/app"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/googleoidc"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type serverConfig struct {
-	databaseURL         string
-	port                string
-	verificationKey     []byte
-	registrationEnabled bool
+	databaseURL                        string
+	port                               string
+	verificationKey                    []byte
+	registrationEnabled                bool
+	appOrigin                          string
+	allowedOrigins                     []string
+	crossSiteCookies                   bool
+	trustedProxyCIDRs                  []string
+	googleClientID, googleClientSecret string
 }
 
 func loadConfig(getenv func(string) string) (serverConfig, error) {
@@ -55,13 +64,63 @@ func loadConfig(getenv func(string) string) (serverConfig, error) {
 	default:
 		return c, errors.New("REGISTRATION_ENABLED must be true or false")
 	}
+	c.appOrigin = getenv("APP_ORIGIN")
+	validOrigin := func(raw string) bool {
+		u, err := url.Parse(raw)
+		return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil && u.Path == "" && u.RawQuery == "" && u.Fragment == ""
+	}
+	if c.appOrigin != "" && !validOrigin(c.appOrigin) {
+		return c, errors.New("APP_ORIGIN must be an HTTPS origin")
+	}
+	for _, entry := range strings.Split(getenv("CORS_ORIGINS"), ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if !validOrigin(entry) {
+			return c, errors.New("CORS_ORIGINS contains an invalid origin")
+		}
+		c.allowedOrigins = append(c.allowedOrigins, entry)
+	}
+	switch getenv("REFRESH_COOKIE_SAME_SITE") {
+	case "", "lax":
+	case "none":
+		c.crossSiteCookies = true
+	default:
+		return c, errors.New("REFRESH_COOKIE_SAME_SITE must be lax or none")
+	}
+	for _, entry := range strings.Split(getenv("TRUSTED_PROXY_CIDRS"), ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, err := netip.ParsePrefix(entry); err != nil {
+			return c, errors.New("TRUSTED_PROXY_CIDRS contains an invalid prefix")
+		}
+		c.trustedProxyCIDRs = append(c.trustedProxyCIDRs, entry)
+	}
+	c.googleClientID = getenv("GOOGLE_CLIENT_ID")
+	c.googleClientSecret = getenv("GOOGLE_CLIENT_SECRET")
+	if (c.googleClientID == "") != (c.googleClientSecret == "") || c.googleClientID != "" && c.appOrigin == "" {
+		return c, errors.New("Google requires client ID, client secret, and APP_ORIGIN")
+	}
 	return c, nil
 }
 
 func migrate(ctx context.Context, db *sql.DB) error { return database.Migrate(ctx, db) }
 
 func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfig) error {
-	server := &http.Server{Handler: app.New(db, app.Config{RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey}), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
+	appConfig := app.Config{RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
+	if c.googleClientID != "" {
+		discovery, cancel := context.WithTimeout(ctx, 15*time.Second)
+		provider, err := googleoidc.New(discovery, c.googleClientID, c.googleClientSecret, c.appOrigin+"/api/v1/auth/google/callback")
+		cancel()
+		if err != nil {
+			return err
+		}
+		appConfig.GoogleProvider = provider
+	}
+	server := &http.Server{Handler: app.New(db, appConfig), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16 << 10}
 	stopped := make(chan struct{})
 	defer close(stopped)
 	go func() {
@@ -83,8 +142,8 @@ func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfi
 }
 
 func run(ctx context.Context, args []string) error {
-	if len(args) > 1 || (len(args) == 1 && args[0] != "migrate") {
-		return errors.New("usage: api [migrate]")
+	if len(args) > 1 || (len(args) == 1 && args[0] != "migrate" && args[0] != "migrate-and-serve") {
+		return errors.New("usage: api [migrate|migrate-and-serve]")
 	}
 	c, err := loadConfig(os.Getenv)
 	if err != nil {
@@ -108,7 +167,9 @@ func run(ctx context.Context, args []string) error {
 			return errors.New("forward migration failed")
 		}
 		slog.Info("Forward migrations complete")
-		return nil
+		if args[0] == "migrate" {
+			return nil
+		}
 	}
 	listener, err := net.Listen("tcp", ":"+c.port)
 	if err != nil {
