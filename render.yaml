@@ -9,7 +9,7 @@ services:
     runtime: docker
     plan: free
     region: oregon
-    autoDeployTrigger: "off"
+    autoDeployTrigger: checksPass
     dockerfilePath: ./Dockerfile
     branch: main
     dockerCommand: /app/api migrate-and-serve
