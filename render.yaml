@@ -41,4 +41,6 @@ databases:
     plan: free
     region: oregon
     postgresMajorVersion: "16"
-    ipAllowList: []
+    ipAllowList:
+      - source: 51.170.141.205/32
+        description: City4Christ VPS email worker
