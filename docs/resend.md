@@ -35,6 +35,12 @@ go run ./cmd/email-worker
 
 The command does not run migrations, reset data, or enable signup. Empty/disabled delivery mode stays idle until shutdown without connecting to a database or provider. It supports graceful shutdown, polls once per second, and redacts provider/database details from logs. The API executable and staging Blueprint are described in [Render staging](render-staging.md). Authentication sessions and other auth features remain pending.
 
+## Email appearance
+
+Verification emails include a responsive HTML layout and a plain-text alternative. The embedded template lives in `internal/mailresend/verification.html`; it uses inline styles, presentation tables, a prominent selectable eight-digit code, and an absolute UTC expiry. No remote fonts, images, tracking pixels, or verification links are added. HTML is rendered with Go's escaping template library and remains identical across retries for the same challenge.
+
+Changing the template changes the provider payload. Apply it before issuing a fresh test challenge, and avoid changing message settings while retrying a pending challenge under the same idempotency key.
+
 ## Delivery behavior
 
 - The worker locks the account before reading its pending email, matching verification/resend lock ordering. Concurrent workers use `SKIP LOCKED` and do not dispatch the same current challenge concurrently.
