@@ -37,7 +37,7 @@ The command does not run migrations, reset data, or enable signup. Empty/disable
 
 ## Email appearance
 
-Verification emails include a responsive HTML layout and a plain-text alternative. The embedded template lives in `internal/mailresend/verification.html`; it uses inline styles, presentation tables, a prominent selectable eight-digit code, and an absolute UTC expiry. No remote fonts, images, tracking pixels, or verification links are added. HTML is rendered with Go's escaping template library and remains identical across retries for the same challenge.
+Verification emails include a responsive HTML layout and a plain-text alternative. The purple palette follows the official [City4Christ website](https://city4christ.org/): deep plum `#2B0831` with `#542361` accents and a soft lavender code panel. The embedded template lives in `internal/mailresend/verification.html`; it uses inline styles, presentation tables, a prominent selectable eight-digit code, and an absolute UTC expiry. No remote fonts, images, tracking pixels, or verification links are added. HTML is rendered with Go's escaping template library and remains identical across retries for the same challenge.
 
 Changing the template changes the provider payload. Apply it before issuing a fresh test challenge, and avoid changing message settings while retrying a pending challenge under the same idempotency key.
 
