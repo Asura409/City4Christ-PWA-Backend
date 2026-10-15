@@ -58,7 +58,12 @@ func (s *Sender) Send(ctx context.Context, challengeID string, message auth.Veri
 	if _, errID := uuid.Parse(challengeID); errID != nil || err != nil || address.Address != message.Email || !validCode || message.ExpiresAt.IsZero() {
 		return &auth.EmailDeliveryError{Code: "invalid_email_payload"}
 	}
+	htmlBody, err := renderVerificationHTML(message)
+	if err != nil {
+		return &auth.EmailDeliveryError{Code: "invalid_email_payload"}
+	}
 	params := &resend.SendEmailRequest{
+		Html: htmlBody,
 		From: s.from, To: []string{message.Email}, Subject: "Verify your City4Christ email",
 		Text: fmt.Sprintf("Your City4Christ verification code is: %s\n\nThis code expires at %s.\nIf you did not request this, you can ignore this email.\n", message.Code, message.ExpiresAt.UTC().Format(time.RFC3339)),
 	}

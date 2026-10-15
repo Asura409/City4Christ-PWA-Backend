@@ -39,9 +39,9 @@ func TestResendAdapter(t *testing.T) {
 			t.Error("missing SDK authentication")
 		}
 		var body struct {
-			From          string
-			To            []string
-			Subject, Text string
+			From                string
+			To                  []string
+			Subject, Text, HTML string
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Error(err)
@@ -49,7 +49,16 @@ func TestResendAdapter(t *testing.T) {
 		if body.From != "City4Christ <noreply@example.com>" || len(body.To) != 1 || body.To[0] != "member@example.com" || !strings.Contains(body.Text, "01234567") || !strings.Contains(body.Text, "2026-10-12T12:10:00Z") || body.Subject == "" {
 			t.Error("unexpected verification message")
 		}
-		captured <- requestCapture{key: r.Header.Get("Idempotency-Key"), body: body.Text}
+		if !strings.Contains(body.HTML, "01234567") || !strings.Contains(body.HTML, "2026-10-12T12:10:00Z") || !strings.Contains(body.HTML, "Verify your email") || !strings.Contains(body.HTML, `name="viewport"`) || !strings.Contains(body.HTML, `role="presentation"`) {
+			t.Error("missing responsive HTML verification email")
+		}
+		if !strings.Contains(body.HTML, "#2B0831") || !strings.Contains(body.HTML, "#542361") {
+			t.Error("email must match the City4Christ purple theme")
+		}
+		if strings.Contains(body.HTML, "<script") || strings.Contains(body.HTML, "http://") || strings.Contains(body.HTML, "<img") {
+			t.Error("email must not depend on scripts or remote images")
+		}
+		captured <- requestCapture{key: r.Header.Get("Idempotency-Key"), body: body.Text + body.HTML}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"id":"email-123"}`))
 	}))
