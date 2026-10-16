@@ -1,0 +1,12 @@
+[Unit]
+Description=Check City4Christ Render API every ten minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=10min
+AccuracySec=15s
+RandomizedDelaySec=15s
+Unit=city4christ-render-keepalive.service
+
+[Install]
+WantedBy=timers.target
