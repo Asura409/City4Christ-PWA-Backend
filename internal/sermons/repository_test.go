@@ -42,6 +42,41 @@ func TestRepositoryPublicationAndFilters(t *testing.T) {
 	if err != nil || len(got) != 1 || got[0].ID != public {
 		t.Fatalf("filtered published records: %+v %v", got, err)
 	}
+
+	all, err := repo.List(ctx, Options{Limit: 100}, nil, now)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("unfiltered list exposed draft or scheduled content: %+v %v", all, err)
+	}
+	for _, item := range all {
+		if item.ID == draft || item.ID == scheduled {
+			t.Fatal("unpublished record in public list")
+		}
+	}
+	for name, filter := range map[string]Options{
+		"speaker": {Limit: 10, Speaker: "PASTOR JOY"},
+		"series":  {Limit: 10, Series: "FOUNDATIONS"},
+		"topic":   {Limit: 10, Topic: "FAITH"},
+	} {
+		items, err := repo.List(ctx, filter, nil, now)
+		if err != nil || len(items) != 1 || items[0].ID != public {
+			t.Fatalf("independent %s filter: %+v %v", name, items, err)
+		}
+	}
+	for name, filter := range map[string]Options{
+		"speaker exact": {Limit: 10, Speaker: "Pastor"},
+		"series exact":  {Limit: 10, Series: "Foundation"},
+		"topic exact":   {Limit: 10, Topic: "Fai"},
+	} {
+		items, err := repo.List(ctx, filter, nil, now)
+		if err != nil || len(items) != 0 {
+			t.Fatalf("%s must not match substrings: %+v %v", name, items, err)
+		}
+	}
+	boundary := insert(t, db, "Publication boundary", "Speaker", "", "", &now)
+	items, err := repo.List(ctx, Options{Limit: 100}, nil, now)
+	if err != nil || len(items) != 3 || items[0].ID != boundary {
+		t.Fatalf("publication boundary not inclusive: %+v %v", items, err)
+	}
 	for _, id := range []string{draft, scheduled, "00000000-0000-0000-0000-000000000000"} {
 		if _, err := repo.Get(ctx, id, now); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("hidden sermon visible: %v", err)
