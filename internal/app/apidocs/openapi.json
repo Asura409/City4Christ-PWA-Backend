@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -27,6 +27,10 @@
     {
       "name": "Sermon editing",
       "description": "Server-authorized content_editor or system_administrator roles only. Verified active Bearer session required; no default staff assignment."
+    },
+    {
+      "name": "Access management",
+      "description": "Operator-provisioned access administrators delegate only content_editor or scoped ministry_leader roles. No automatic administrator grants."
     }
   ],
   "paths": {
@@ -1007,6 +1011,235 @@
         ],
         "description": "Requires an allowed Origin and current version. A stale version returns 409 without changing the sermon or audit. status=published publishes now and preserves the original publication date if already published. status=draft unpublishes immediately. status=scheduled requires future publishAt and hides the sermon until that instant. Each successful edit increments version and writes an audit event atomically. Role revocation applies without obtaining a new token. Omitted fields are preserved exactly; normalization applies only to supplied fields."
       }
+    },
+    "/api/v1/admin/accounts/{accountId}/roles": {
+      "get": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "ListAccountRoles",
+        "summary": "List account role assignments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoleAssignment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Not an access administrator, self-assignment or disallowed Origin"
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "GrantAccountRole",
+        "summary": "Grant a delegable role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changed"
+                      ],
+                      "properties": {
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Not an access administrator, self-assignment or disallowed Origin"
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleChange"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/roles/revoke": {
+      "post": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "RevokeAccountRole",
+        "summary": "Revoke a delegable role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changed"
+                      ],
+                      "properties": {
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Not an access administrator, self-assignment or disallowed Origin"
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RoleChange"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1620,6 +1853,49 @@
           }
         },
         "description": "Supply version plus at least one field to change. Omitted or null optional fields are ignored; use empty strings to clear optional text/video fields. PublishedAt and roles cannot be supplied."
+      },
+      "RoleChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "reason"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "content_editor",
+              "ministry_leader"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "default": "",
+            "description": "Empty for content_editor. For ministry_leader, a canonical nonzero UUID registered by an operator in access_scopes."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500,
+            "description": "Nonblank reason recorded in the audit trail."
+          }
+        }
+      },
+      "RoleAssignment": {
+        "type": "object",
+        "required": [
+          "role",
+          "scope"
+        ],
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string"
+          }
+        }
       }
     },
     "responses": {

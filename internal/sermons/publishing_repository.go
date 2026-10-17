@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 	"time"
 )
 
@@ -21,12 +22,8 @@ func scanEditorial(row scanner, now time.Time) (EditorialSermon, error) {
 	return s, err
 }
 func checkEditor(ctx context.Context, tx *sql.Tx, actorID string) error {
-	if !canonicalID(actorID) {
-		return ErrForbidden
-	}
-	var role string
-	err := tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND a.email_verified_at IS NOT NULL AND r.role IN ('content_editor','system_administrator') ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, actorID).Scan(&role)
-	if errors.Is(err, sql.ErrNoRows) {
+	err := access.CheckTx(ctx, tx, actorID, "sermons.manage", "")
+	if errors.Is(err, access.ErrForbidden) {
 		return ErrForbidden
 	}
 	return err
