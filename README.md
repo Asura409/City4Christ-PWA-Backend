@@ -31,3 +31,5 @@ See [OTP API and delivery notes](docs/email-verification.md) for endpoint behavi
 See [Resend onboarding](docs/resend.md) for domain verification, secret configuration, staging recipient restrictions, and the worker command. Live sending defaults to disabled.
 
 See [Render staging setup and verification](docs/render-staging.md) for deployment prerequisites and disposable Docker checks.
+
+The first [sermon catalog slice](docs/sermon-catalog.md) adds public published-only metadata listing and detail, filters, and cursor pagination. Editor publishing and media integration are deferred; no content is seeded automatically.

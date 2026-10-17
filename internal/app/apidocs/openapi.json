@@ -19,6 +19,10 @@
     {
       "name": "Health",
       "description": "Process liveness and database readiness."
+    },
+    {
+      "name": "Sermons",
+      "description": "Public read-only catalog of published sermon metadata. Drafts and future publications are hidden."
     }
   ],
   "paths": {
@@ -587,6 +591,178 @@
         },
         "security": []
       }
+    },
+    "/api/v1/sermons": {
+      "get": {
+        "tags": [
+          "Sermons"
+        ],
+        "operationId": "ListPublishedSermons",
+        "summary": "List published sermons",
+        "description": "Public metadata only. Sorted by publication time descending, then ID descending. Drafts (no publication timestamp) and future publications are hidden. Unknown or repeated query parameters and malformed cursors return 422. An empty catalog returns data: [] and nextCursor: \"\". Media delivery, publication administration and series resources are not part of this slice.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Literal case-insensitive substring search across title and summary; % and _ are not wildcards."
+          },
+          {
+            "name": "speaker",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Case-insensitive exact speaker filter."
+          },
+          {
+            "name": "series",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "description": "Case-insensitive exact series label filter."
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Case-insensitive exact topic filter."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            },
+            "description": "Opaque continuation from meta.nextCursor. Keep the same filters across pages."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": "Maximum records in a page."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Sermon"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string",
+                          "description": "Empty string marks the final page."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/sermons/{sermonId}": {
+      "get": {
+        "tags": [
+          "Sermons"
+        ],
+        "operationId": "GetPublishedSermon",
+        "summary": "Get published sermon",
+        "description": "Public metadata for a published sermon. Draft, future, missing and malformed IDs all return 404. No raw media files or private editor data are returned.",
+        "security": [],
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Sermon"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "description": "Sermon not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -969,6 +1145,51 @@
         "required": [
           "data"
         ],
+        "additionalProperties": false
+      },
+      "Sermon": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "speaker",
+          "series",
+          "topic",
+          "preachedAt",
+          "publishedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "series": {
+            "type": "string",
+            "description": "Series label; empty when not assigned. Series administration is a later slice."
+          },
+          "topic": {
+            "type": "string",
+            "description": "Topic label; empty when not assigned."
+          },
+          "preachedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
         "additionalProperties": false
       }
     },

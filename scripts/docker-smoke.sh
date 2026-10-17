@@ -35,6 +35,7 @@ done
 curl --fail --silent "$endpoint/health/ready"
 curl --fail --silent "$endpoint/docs/" >/dev/null
 curl --fail --silent "$endpoint/openapi.json" >/dev/null
+curl --fail --silent "$endpoint/api/v1/sermons" >/dev/null
 curl --fail --silent "$endpoint/docs/swagger-ui-bundle.js" >/dev/null
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/auth/register")" = 403
 test "$(docker inspect -f '{{.Config.User}}' "$api")" = 65532:65532

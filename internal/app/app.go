@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/sermons"
 	"github.com/google/uuid"
 )
 
@@ -26,6 +27,7 @@ type Config struct {
 func New(db *sql.DB, config Config) http.Handler {
 	mux := http.NewServeMux()
 	documentationRoutes(mux)
+	sermonRoutes(mux, sermons.NewService(sermons.NewRepository(db), config.Now))
 	verification, verificationErr := auth.NewVerificationService(db, auth.VerificationConfig{Key: config.VerificationKey, Now: config.Now})
 	var service *auth.RegistrationService
 	var sessions *auth.SessionService
