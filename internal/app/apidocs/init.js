@@ -7,7 +7,7 @@ window.onload = function () {
     persistAuthorization: false,
     validatorUrl: null,
     queryConfigEnabled: false,
-    supportedSubmitMethods: ['get', 'post'],
+    supportedSubmitMethods: ['get', 'post', 'patch'],
     presets: [SwaggerUIBundle.presets.apis]
   });
 };

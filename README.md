@@ -32,4 +32,4 @@ See [Resend onboarding](docs/resend.md) for domain verification, secret configur
 
 See [Render staging setup and verification](docs/render-staging.md) for deployment prerequisites and disposable Docker checks.
 
-The first [sermon catalog slice](docs/sermon-catalog.md) adds public published-only metadata listing and detail, filters, and cursor pagination. Editor publishing and media integration are deferred; no content is seeded automatically.
+The first [sermon catalog slice](docs/sermon-catalog.md) adds public published-only metadata listing and detail, filters, and cursor pagination. The [publishing slice](docs/sermon-publishing.md) adds role-checked draft/publish controls, atomic audit records, version checks and canonical YouTube links. No content or privileged account is seeded automatically.

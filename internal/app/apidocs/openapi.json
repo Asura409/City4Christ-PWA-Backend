@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -23,6 +23,10 @@
     {
       "name": "Sermons",
       "description": "Public read-only catalog of published sermon metadata. Drafts and future publications are hidden."
+    },
+    {
+      "name": "Sermon editing",
+      "description": "Server-authorized content_editor or system_administrator roles only. Verified active Bearer session required; no default staff assignment."
     }
   ],
   "paths": {
@@ -599,7 +603,7 @@
         ],
         "operationId": "ListPublishedSermons",
         "summary": "List published sermons",
-        "description": "Public metadata only. Sorted by publication time descending, then ID descending. Drafts (no publication timestamp) and future publications are hidden. Unknown or repeated query parameters and malformed cursors return 422. An empty catalog returns data: [] and nextCursor: \"\". Media delivery, publication administration and series resources are not part of this slice.",
+        "description": "Public metadata only. Sorted by publication time descending, then ID descending. Drafts (no publication timestamp) and future publications are hidden. Unknown or repeated query parameters and malformed cursors return 422. An empty catalog returns data: [] and nextCursor: \"\". Video links, when present, are canonical YouTube URLs. Editor writes use /admin/sermons; managed series resources and media hosting are deferred.",
         "security": [],
         "parameters": [
           {
@@ -762,6 +766,246 @@
             "$ref": "#/components/responses/503"
           }
         }
+      }
+    },
+    "/api/v1/admin/sermons": {
+      "post": {
+        "tags": [
+          "Sermon editing"
+        ],
+        "operationId": "CreateSermonDraft",
+        "summary": "Create sermon draft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EditorialSermon"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Editor detail URL for the draft."
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SermonDraftInput"
+              }
+            }
+          }
+        },
+        "description": "Requires a verified active Bearer session with an editor role from PostgreSQL, an allowed Origin and application/json. Always creates a draft; does not publish. Creation and actor/version audit are atomic. Mutations are limited to 60 per editor per minute. No role or publication state can be supplied here."
+      }
+    },
+    "/api/v1/admin/sermons/{sermonId}": {
+      "get": {
+        "tags": [
+          "Sermon editing"
+        ],
+        "operationId": "GetEditorialSermon",
+        "summary": "Get sermon for editing",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EditorialSermon"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "404": {
+            "description": "Sermon not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Editor-only access to drafts, scheduled and published sermons with their current version. Public visitors must use /sermons instead."
+      },
+      "patch": {
+        "tags": [
+          "Sermon editing"
+        ],
+        "operationId": "UpdateSermon",
+        "summary": "Edit or publish sermon",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EditorialSermon"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "404": {
+            "description": "Sermon not found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version; reload the latest editor detail before editing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SermonUpdateInput"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Requires an allowed Origin and current version. A stale version returns 409 without changing the sermon or audit. status=published publishes now and preserves the original publication date if already published. status=draft unpublishes immediately. status=scheduled requires future publishAt and hides the sermon until that instant. Each successful edit increments version and writes an audit event atomically. Role revocation applies without obtaining a new token. Omitted fields are preserved exactly; normalization applies only to supplied fields."
       }
     }
   },
@@ -1188,9 +1432,194 @@
           "publishedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "videoUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional canonical YouTube watch URL. Omitted when no video is set."
           }
         },
         "additionalProperties": false
+      },
+      "SermonDraftInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "speaker",
+          "preachedAt"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 10000
+          },
+          "speaker": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+          },
+          "series": {
+            "type": "string",
+            "description": "Series label; empty when not assigned. Series administration is a later slice.",
+            "maxLength": 200
+          },
+          "topic": {
+            "type": "string",
+            "description": "Topic label; empty when not assigned.",
+            "maxLength": 100
+          },
+          "preachedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "videoUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "Optional HTTPS YouTube watch or youtu.be link. Empty clears the video. Saved as a canonical watch URL; tracking/start parameters are discarded. No server-side video fetching."
+          }
+        }
+      },
+      "EditorialSermon": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "speaker",
+          "series",
+          "topic",
+          "preachedAt",
+          "publishedAt",
+          "videoUrl",
+          "version",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "series": {
+            "type": "string",
+            "description": "Series label; empty when not assigned. Series administration is a later slice."
+          },
+          "topic": {
+            "type": "string",
+            "description": "Topic label; empty when not assigned."
+          },
+          "preachedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "videoUrl": {
+            "type": "string",
+            "description": "Canonical YouTube URL, or empty string when absent."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "scheduled"
+            ]
+          }
+        }
+      },
+      "SermonUpdateInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "nullable": true
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "speaker": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "nullable": true
+          },
+          "series": {
+            "type": "string",
+            "description": "Series label; empty when not assigned. Series administration is a later slice.",
+            "maxLength": 200,
+            "nullable": true
+          },
+          "topic": {
+            "type": "string",
+            "description": "Topic label; empty when not assigned.",
+            "maxLength": 100,
+            "nullable": true
+          },
+          "preachedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "videoUrl": {
+            "type": "string",
+            "maxLength": 2048,
+            "description": "Optional HTTPS YouTube watch or youtu.be link. Empty clears the video. Saved as a canonical watch URL; tracking/start parameters are discarded. No server-side video fetching.",
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Required current version from the editor detail response."
+          },
+          "status": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "draft",
+              "published",
+              "scheduled",
+              null
+            ]
+          },
+          "publishAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Required future UTC instant when status is scheduled; forbidden with other statuses. Microsecond precision."
+          }
+        },
+        "description": "Supply version plus at least one field to change. Omitted or null optional fields are ignored; use empty strings to clear optional text/video fields. PublishedAt and roles cannot be supplied."
       }
     },
     "responses": {
@@ -1215,7 +1644,7 @@
         }
       },
       "403": {
-        "description": "Registration closed, email unverified, or Origin forbidden.",
+        "description": "Origin forbidden, insufficient permissions, registration closed, or email unverified.",
         "content": {
           "application/json": {
             "schema": {

@@ -47,9 +47,9 @@ An empty catalog returns `data: []`. An empty `nextCursor` marks the final page.
 
 This slice includes the `sermons` table, publication/filter indexes, repository, validated service, global routes, and OpenAPI documentation. Series and topic are optional labels represented by empty strings when absent; separate managed series records are deferred.
 
-No content is automatically seeded or published. There is no public content-write route. Staging stays empty until content is intentionally added through a future authorized editor workflow. This migration applies forward only and does not alter existing accounts or auth records.
+No content is automatically seeded or published. There is no public content-write route. Authorized writes are available through the [editor workflow](sermon-publishing.md); no account receives permission automatically. This migration applies forward only and does not alter existing accounts or auth records.
 
-Editor roles, audited publishing, GET `/series`, approved media-provider references, playback progress and private notes remain future work. Before exposing media links or editor writes, agree provider/access policy and who may publish. No media is fetched or streamed by this slice.
+[Editor roles, audited publishing and canonical YouTube links](sermon-publishing.md) are implemented in the next slice. GET `/series`, playback progress, private notes and other media providers remain future work. No media is fetched or streamed by the API.
 
 ## Executed TDD
 

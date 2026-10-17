@@ -11,6 +11,7 @@ import (
 var ErrNotFound = errors.New("sermon not found")
 
 type Sermon struct {
+	VideoURL    string    `json:"videoUrl,omitempty"`
 	ID          string    `json:"id"`
 	Title       string    `json:"title"`
 	Summary     string    `json:"summary"`
@@ -32,13 +33,13 @@ type Repository struct{ db *sql.DB }
 
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
 
-const columns = "id,title,summary,speaker,series,topic,preached_at,published_at"
+const columns = "id,title,summary,speaker,series,topic,preached_at,published_at,video_url"
 
 type scanner interface{ Scan(...any) error }
 
 func scan(row scanner) (Sermon, error) {
 	var s Sermon
-	err := row.Scan(&s.ID, &s.Title, &s.Summary, &s.Speaker, &s.Series, &s.Topic, &s.PreachedAt, &s.PublishedAt)
+	err := row.Scan(&s.ID, &s.Title, &s.Summary, &s.Speaker, &s.Series, &s.Topic, &s.PreachedAt, &s.PublishedAt, &s.VideoURL)
 	s.PreachedAt = s.PreachedAt.UTC()
 	s.PublishedAt = s.PublishedAt.UTC()
 	return s, err
