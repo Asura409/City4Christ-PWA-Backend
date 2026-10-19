@@ -60,6 +60,38 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 		handler.ServeHTTP(w, r)
 		return w
 	}
+	// Execute the actual Swagger examples so placeholders cannot silently break Try it out.
+	specResponse := request("GET", "/openapi.json", "", "", "")
+	var spec map[string]any
+	if err := json.Unmarshal(specResponse.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	example := func(path, method, name string) string {
+		op := paths[path].(map[string]any)[method].(map[string]any)
+		examples := op["requestBody"].(map[string]any)["content"].(map[string]any)["application/json"].(map[string]any)["examples"].(map[string]any)
+		raw, err := json.Marshal(examples[name].(map[string]any)["value"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	sample := request("POST", "/api/v1/admin/sermons", editor.AccessToken, example("/api/v1/admin/sermons", "post", "draftWithoutVideo"), origin)
+	if sample.Code != 201 {
+		t.Fatalf("Swagger create example failed: %d %s", sample.Code, sample.Body.String())
+	}
+	var sampleDraft struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(sample.Body.Bytes(), &sampleDraft); err != nil {
+		t.Fatal(err)
+	}
+	sample = request("PATCH", "/api/v1/admin/sermons/"+sampleDraft.Data.ID, editor.AccessToken, example("/api/v1/admin/sermons/{sermonId}", "patch", "publish"), origin)
+	if sample.Code != 200 {
+		t.Fatalf("Swagger publish example failed: %d %s", sample.Code, sample.Body.String())
+	}
 	body := `{"title":"Faith","speaker":"Pastor Joy","summary":"A message","preachedAt":"2026-10-11T14:00:00Z","videoUrl":"https://youtu.be/dQw4w9WgXcQ"}`
 	for _, tc := range []struct {
 		token, origin string
@@ -68,6 +100,26 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 		w := request("POST", "/api/v1/admin/sermons", tc.token, body, tc.origin)
 		if w.Code != tc.want {
 			t.Fatalf("authorization: %d want %d: %s", w.Code, tc.want, w.Body.String())
+		}
+	}
+	for _, tc := range []struct {
+		body, field string
+		status      int
+	}{
+		{`{"title":"Faith","speaker":"Speaker","preachedAt":"2026-10-17T12:00:00Z","videoUrl":"string"}`, "videoUrl", 422},
+		{`{"id":"response-only"}`, "id", 400},
+	} {
+		w := request("POST", "/api/v1/admin/sermons", editor.AccessToken, tc.body, origin)
+		var e struct {
+			Error struct {
+				Fields map[string]string `json:"fields"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &e); err != nil {
+			t.Fatal(err)
+		}
+		if w.Code != tc.status || e.Error.Fields[tc.field] == "" {
+			t.Fatalf("missing actionable %s error: %d %s", tc.field, w.Code, w.Body.String())
 		}
 	}
 	w := request("POST", "/api/v1/admin/sermons", editor.AccessToken, body, origin)

@@ -17,7 +17,12 @@ func sermonPublishingRoutes(mux *http.ServeMux, service *sermons.Service, sessio
 		case errors.Is(err, sermons.ErrNotFound):
 			writeError(w, 404, "sermon_not_found", "Sermon not found.", nil)
 		case errors.Is(err, sermons.ErrInvalidInput):
-			writeError(w, 422, "validation_failed", "Check sermon fields, publication settings and version.", nil)
+			var validation *sermons.ValidationError
+			fields := map[string]string{}
+			if errors.As(err, &validation) {
+				fields = validation.Fields
+			}
+			writeError(w, 422, "validation_failed", "Check the indicated sermon fields.", fields)
 		case errors.Is(err, sermons.ErrVersionConflict):
 			writeError(w, 409, "version_conflict", "The sermon changed. Reload its latest version before editing.", nil)
 		default:
