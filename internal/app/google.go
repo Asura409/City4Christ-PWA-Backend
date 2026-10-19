@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
@@ -25,6 +26,11 @@ func googleRoutes(mux *http.ServeMux, google *auth.GoogleService, c Config) {
 			if !available(w) {
 				return
 			}
+			target := r.URL.Query().Get("returnTo")
+			if len(r.URL.Query()["returnTo"]) > 1 || (target != "" && !googleReturnAllowed(c, target)) || (r.URL.Query().Has("redirect") && (link || target == "" || r.URL.Query().Get("redirect") != "1" || len(r.URL.Query()["redirect"]) != 1)) {
+				writeError(w, 422, "validation_failed", "Choose an allowed frontend sign-in page.", map[string]string{"returnTo": "Use an allowed HTTPS origin and its auth.html page, without query or fragment."})
+				return
+			}
 			access := ""
 			if link {
 				access = requestAccess(r)
@@ -39,13 +45,21 @@ func googleRoutes(mux *http.ServeMux, google *auth.GoogleService, c Config) {
 				return
 			}
 			binding := base64.RawURLEncoding.EncodeToString(random)
-			flow, err := google.Begin(r.Context(), binding, access)
+			flow, err := google.BeginWithReturn(r.Context(), binding, access, target)
 			if err != nil {
 				sessionError(w, err)
 				return
 			}
-			http.SetCookie(w, &http.Cookie{Name: oidcCookieName, Value: binding, Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode, Path: "/", MaxAge: 600, Expires: flow.ExpiresAt})
+			sameSite := http.SameSiteLaxMode
+			if c.CrossSiteCookies {
+				sameSite = http.SameSiteNoneMode
+			}
+			http.SetCookie(w, &http.Cookie{Name: oidcCookieName, Value: binding, Secure: true, HttpOnly: true, SameSite: sameSite, Path: "/", MaxAge: 600, Expires: flow.ExpiresAt})
 			w.Header().Set("Cache-Control", "no-store")
+			if r.URL.Query().Get("redirect") == "1" {
+				http.Redirect(w, r, flow.URL, http.StatusFound)
+				return
+			}
 			writeJSON(w, 200, map[string]any{"data": map[string]string{"url": flow.URL}})
 		}
 	}
@@ -62,7 +76,35 @@ func googleRoutes(mux *http.ServeMux, google *auth.GoogleService, c Config) {
 			writeError(w, 400, "invalid_oidc", "Google sign-in could not be completed.", nil)
 			return
 		}
-		tokens, err := google.Complete(r.Context(), r.URL.Query().Get("state"), cookies[0].Value, r.URL.Query().Get("code"))
+		tokens, target, err := google.CompleteWithReturn(r.Context(), r.URL.Query().Get("state"), cookies[0].Value, r.URL.Query().Get("code"))
+		if target != "" {
+			if !googleReturnAllowed(c, target) {
+				writeError(w, 400, "invalid_oidc", "The frontend return URL is no longer allowed.", nil)
+				return
+			}
+			if err == nil {
+				setRefresh(w, c, tokens.RefreshToken, tokens.RefreshExpiresAt)
+				http.Redirect(w, r, target, http.StatusFound)
+				return
+			}
+			code := "google_sign_in_failed"
+			switch {
+			case errors.Is(err, auth.ErrLinkRequired):
+				code = "account_link_required"
+			case errors.Is(err, auth.ErrIdentityConflict):
+				code = "identity_conflict"
+			case errors.Is(err, auth.ErrRegistrationClosed):
+				code = "registration_closed"
+			case errors.Is(err, auth.ErrInvalidSession):
+				code = "invalid_session"
+			}
+			destination, _ := url.Parse(target)
+			q := destination.Query()
+			q.Set("auth_error", code)
+			destination.RawQuery = q.Encode()
+			http.Redirect(w, r, destination.String(), http.StatusFound)
+			return
+		}
 		switch {
 		case errors.Is(err, auth.ErrLinkRequired):
 			writeError(w, 409, "account_link_required", "Sign in to the existing account, then explicitly link Google.", nil)

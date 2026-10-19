@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -480,7 +480,7 @@
         ],
         "summary": "Begin Google login",
         "operationId": "BeginGooglelogin",
-        "description": "Creates single-use state, nonce and PKCE S256 challenge. Sets a Secure, HttpOnly, SameSite=Lax browser-binding cookie. Navigate to data.url in this browser; a fetch alone does not complete Google login. New signup obeys REGISTRATION_ENABLED. Google-only accounts have no local password.",
+        "description": "Creates single-use state, nonce and PKCE S256 challenge. Sets a Secure, HttpOnly browser-binding cookie; SameSite follows the cross-site cookie configuration. Navigate to data.url in this browser; a fetch alone does not complete Google login. New signup obeys REGISTRATION_ENABLED. Google-only accounts have no local password. Optional returnTo enables browser completion: callback sets the refresh cookie and redirects to the stored frontend page, without access credentials in the URL or response body. The frontend then POSTs /auth/refresh with credentials. Binding cookie uses SameSite=None when cross-site cookies are enabled, otherwise Lax.",
         "responses": {
           "200": {
             "description": "Success",
@@ -493,7 +493,7 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "Secure, HttpOnly __Host-c4c_oidc browser-binding cookie, Path=/, SameSite=Lax. Preserve it for callback.",
+                "description": "Secure, HttpOnly __Host-c4c_oidc binding cookie, Path=/; SameSite follows cross-site cookie configuration. Preserve for callback.",
                 "schema": {
                   "type": "string"
                 }
@@ -508,9 +508,39 @@
           },
           "503": {
             "$ref": "#/components/responses/503"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "302": {
+            "description": "Navigate to Google; binding cookie is set."
           }
         },
-        "security": []
+        "security": [],
+        "parameters": [
+          {
+            "name": "returnTo",
+            "in": "query",
+            "required": false,
+            "description": "Optional absolute HTTPS frontend auth.html URL on an allowed origin, without query or fragment. Stored with the single-use flow; callback does not trust a supplied return URL.",
+            "schema": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "redirect",
+            "in": "query",
+            "description": "Use 1 together with returnTo for top-level browser navigation directly to Google. Omit to receive JSON data.url.",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                1
+              ]
+            }
+          }
+        ]
       }
     },
     "/api/v1/auth/google/link": {
@@ -520,7 +550,7 @@
         ],
         "summary": "Begin Google linking",
         "operationId": "BeginGooglelinking",
-        "description": "Requires an allowed Origin and an active Bearer session created within five minutes of login. Explicitly link Google to this account; email must match and be verified. Refreshing a token does not count as a new login.",
+        "description": "Requires an allowed Origin and an active Bearer session created within five minutes of login. Explicitly link Google to this account; email must match and be verified. Refreshing a token does not count as a new login. Optional returnTo enables browser completion: callback sets the refresh cookie and redirects to the stored frontend page, without access credentials in the URL or response body. The frontend then POSTs /auth/refresh with credentials. Binding cookie uses SameSite=None when cross-site cookies are enabled, otherwise Lax.",
         "responses": {
           "200": {
             "description": "Success",
@@ -533,7 +563,7 @@
             },
             "headers": {
               "Set-Cookie": {
-                "description": "Secure, HttpOnly __Host-c4c_oidc browser-binding cookie, Path=/, SameSite=Lax. Preserve it for callback.",
+                "description": "Secure, HttpOnly __Host-c4c_oidc binding cookie, Path=/; SameSite follows cross-site cookie configuration. Preserve for callback.",
                 "schema": {
                   "type": "string"
                 }
@@ -551,11 +581,27 @@
           },
           "503": {
             "$ref": "#/components/responses/503"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
           }
         },
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "returnTo",
+            "in": "query",
+            "required": false,
+            "description": "Optional absolute HTTPS frontend auth.html URL on an allowed origin, without query or fragment. Stored with the single-use flow; callback does not trust a supplied return URL.",
+            "schema": {
+              "type": "string",
+              "format": "uri",
+              "maxLength": 2048
+            }
           }
         ]
       }
@@ -604,6 +650,9 @@
           },
           "503": {
             "$ref": "#/components/responses/503"
+          },
+          "302": {
+            "description": "For a flow started with returnTo, redirect to the stored allowed frontend page. Success sets the refresh cookie; errors append a known auth_error code. No tokens appear in the redirect URL."
           }
         },
         "security": [
@@ -1096,7 +1145,7 @@
                 "editTitle": {
                   "value": {
                     "version": 2,
-                    "title": "Living in Faith — Updated"
+                    "title": "Living in Faith \u2014 Updated"
                   }
                 },
                 "unpublish": {
