@@ -7,7 +7,7 @@ Resend is the selected provider. The official Go SDK adapter, PostgreSQL deliver
 1. Add `city4christ.org` in Resend and publish the DNS records its dashboard provides. Wait for verification.
 2. Use the selected sender: `City4christ <info@city4christ.org>`.
 3. Create a Sending access API key restricted to that domain. Store it in backend/worker secrets; never commit it or paste it into chat.
-4. Choose approved staging recipient addresses. Staging live sending requires an exact recipient allowlist.
+4. Choose exact staging recipient addresses, or set `EMAIL_RECIPIENT_ALLOWLIST='*'` explicitly to allow all beta recipients. Empty staging policy remains invalid.
 
 Official references: [Go setup](https://resend.com/docs/send-with-go), [domain verification](https://resend.com/docs/dashboard/domains/introduction), [API key permissions](https://resend.com/changelog/new-api-key-permissions).
 
@@ -23,7 +23,7 @@ Official references: [Go setup](https://resend.com/docs/send-with-go), [domain v
 | `VERIFICATION_KEY_BASE64` | Base64 encoding of the same persistent 32-byte verification secret used by the API |
 | `RESEND_API_KEY` | Sending-only Resend API key stored as a secret |
 | `EMAIL_FROM` | Exact sender on your verified domain |
-| `EMAIL_RECIPIENT_ALLOWLIST` | Comma-separated exact addresses; required for staging; optional restriction in production |
+| `EMAIL_RECIPIENT_ALLOWLIST` | Comma-separated exact addresses, or standalone `*` for all recipients; required for staging; optional restriction in production |
 
 Do not generate a new verification key for worker startup or restart. The worker must share the API's existing key to decrypt pending messages. Never use fixed test-fixture keys in a deployed environment.
 
@@ -60,3 +60,5 @@ Adapter tests failed before implementation. They run the official SDK against a 
 The global app integration test registers an account, replaces its code through resend, dispatches through the SDK to the local mock, and verifies the received code through the global app. No real provider requests or external emails are used by automated tests. Live sending needs separately configured domain/sender/secrets and a deliberate delivery check.
 
 Final local verification after refactoring passed: `go test -race ./... -count=1 -timeout=5m`, `go vet ./...`, the `cmd/email-worker` build, formatting, and `git diff --check`. Remote CI and live Resend delivery have not been observed. Nothing was deployed or merged, and no staging database was accessed.
+
+For open beta email delivery, set `EMAIL_RECIPIENT_ALLOWLIST='*'` in the VPS worker environment and restart the worker. Do not mix `*` with addresses. API registration separately requires `REGISTRATION_ENABLED=true`; email verification and rate limits still apply. A previously blocked OTP needs a fresh resend request.

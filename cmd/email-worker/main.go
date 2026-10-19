@@ -63,6 +63,11 @@ func loadConfig(getenv func(string) string) (workerConfig, error) {
 		return workerConfig{}, errors.New("RESEND_API_KEY and a valid EMAIL_FROM are required")
 	}
 	config.recipients = make(map[string]bool)
+	// A standalone wildcard explicitly enables email to all beta recipients.
+	if strings.TrimSpace(getenv("EMAIL_RECIPIENT_ALLOWLIST")) == "*" {
+		config.recipients["*"] = true
+		return config, nil
+	}
 	for _, entry := range strings.Split(getenv("EMAIL_RECIPIENT_ALLOWLIST"), ",") {
 		email := strings.ToLower(strings.TrimSpace(entry))
 		if email == "" {
@@ -81,6 +86,9 @@ func loadConfig(getenv func(string) string) (workerConfig, error) {
 }
 
 func (c workerConfig) allowed(email string) bool {
+	if c.recipients["*"] {
+		return true
+	}
 	if len(c.recipients) > 0 {
 		return c.recipients[strings.ToLower(strings.TrimSpace(email))]
 	}
