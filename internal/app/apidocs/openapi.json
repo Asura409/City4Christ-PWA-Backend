@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -31,6 +31,10 @@
     {
       "name": "Access management",
       "description": "Operator-provisioned access administrators delegate only content_editor or scoped ministry_leader roles. No automatic administrator grants."
+    },
+    {
+      "name": "Profiles",
+      "description": "Own member profile and directory visibility preference. No public member directory is exposed by this slice."
     }
   ],
   "paths": {
@@ -360,7 +364,7 @@
     "/api/v1/me": {
       "get": {
         "tags": [
-          "Authentication"
+          "Profiles"
         ],
         "summary": "Get current member",
         "operationId": "Getcurrentmember",
@@ -391,6 +395,78 @@
             "bearerAuth": []
           }
         ]
+      },
+      "patch": {
+        "tags": [
+          "Profiles"
+        ],
+        "operationId": "UpdateOwnProfile",
+        "summary": "Update own profile or directory visibility",
+        "description": "Active verified Bearer session and allowed Origin required. Actor comes only from the session. Maximum 30 write attempts per account per minute. 16 KiB JSON body cap; unknown/security fields rejected. Omitted/null fields are unchanged. Concurrent different-field edits are preserved; same-field edits use last committed value. This preference does not expose a directory yet.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              },
+              "examples": {
+                "editName": {
+                  "value": {
+                    "firstName": "Grace",
+                    "lastName": "Member"
+                  }
+                },
+                "hideFromDirectory": {
+                  "value": {
+                    "directoryVisible": false
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated own profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unknown field, invalid field type or malformed JSON"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Origin not allowed"
+          },
+          "413": {
+            "description": "Body too large"
+          },
+          "415": {
+            "description": "Use application/json"
+          },
+          "422": {
+            "description": "Invalid profile fields or empty patch; see error.fields"
+          },
+          "429": {
+            "description": "Profile write rate limit exceeded"
+          },
+          "503": {
+            "description": "Service unavailable"
+          }
+        }
       }
     },
     "/api/v1/auth/google/start": {
@@ -842,11 +918,21 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SermonDraftInput"
+              },
+              "examples": {
+                "draftWithoutVideo": {
+                  "summary": "Create a draft without an optional video",
+                  "value": {
+                    "title": "Living in Faith",
+                    "speaker": "Pastor Joy",
+                    "preachedAt": "2026-10-17T12:00:00Z"
+                  }
+                }
               }
             }
           }
         },
-        "description": "Requires a verified active Bearer session with an editor role from PostgreSQL, an allowed Origin and application/json. Always creates a draft; does not publish. Creation and actor/version audit are atomic. Mutations are limited to 60 per editor per minute. No role or publication state can be supplied here."
+        "description": "Requires a verified active Bearer session with an editor role from PostgreSQL, an allowed Origin and application/json. Always creates a draft; does not publish. Creation and actor/version audit are atomic. Mutations are limited to 60 per editor per minute. No role or publication state can be supplied here. Validation errors identify the field in error.fields. Response-only fields (id, publishedAt) are not accepted in request bodies."
       }
     },
     "/api/v1/admin/sermons/{sermonId}": {
@@ -994,6 +1080,27 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/SermonUpdateInput"
+              },
+              "examples": {
+                "publish": {
+                  "summary": "Publish version 1; replace with the current version",
+                  "value": {
+                    "version": 1,
+                    "status": "published"
+                  }
+                },
+                "editTitle": {
+                  "value": {
+                    "version": 2,
+                    "title": "Living in Faith — Updated"
+                  }
+                },
+                "unpublish": {
+                  "value": {
+                    "version": 3,
+                    "status": "draft"
+                  }
+                }
               }
             }
           }
@@ -1009,7 +1116,7 @@
             }
           }
         ],
-        "description": "Requires an allowed Origin and current version. A stale version returns 409 without changing the sermon or audit. status=published publishes now and preserves the original publication date if already published. status=draft unpublishes immediately. status=scheduled requires future publishAt and hides the sermon until that instant. Each successful edit increments version and writes an audit event atomically. Role revocation applies without obtaining a new token. Omitted fields are preserved exactly; normalization applies only to supplied fields."
+        "description": "Requires an allowed Origin and current version. A stale version returns 409 without changing the sermon or audit. status=published publishes now and preserves the original publication date if already published. status=draft unpublishes immediately. status=scheduled requires future publishAt and hides the sermon until that instant. Each successful edit increments version and writes an audit event atomically. Role revocation applies without obtaining a new token. Omitted fields are preserved exactly; normalization applies only to supplied fields. Validation errors identify the field in error.fields. Response-only fields (id, publishedAt) are not accepted in request bodies."
       }
     },
     "/api/v1/admin/accounts/{accountId}/roles": {
@@ -1489,6 +1596,10 @@
               },
               "hasPassword": {
                 "type": "boolean"
+              },
+              "directoryVisible": {
+                "type": "boolean",
+                "description": "Directory listing opt-in. Defaults to false for existing and new accounts."
               }
             },
             "required": [
@@ -1497,7 +1608,8 @@
               "firstName",
               "lastName",
               "emailVerified",
-              "hasPassword"
+              "hasPassword",
+              "directoryVisible"
             ],
             "additionalProperties": false
           }
@@ -1714,7 +1826,8 @@
           "videoUrl": {
             "type": "string",
             "maxLength": 2048,
-            "description": "Optional HTTPS YouTube watch or youtu.be link. Empty clears the video. Saved as a canonical watch URL; tracking/start parameters are discarded. No server-side video fetching."
+            "description": "Optional HTTPS YouTube watch or youtu.be link. Empty clears the video. Saved as a canonical watch URL; tracking/start parameters are discarded. No server-side video fetching.",
+            "example": ""
           }
         }
       },
@@ -1828,7 +1941,8 @@
             "type": "string",
             "maxLength": 2048,
             "description": "Optional HTTPS YouTube watch or youtu.be link. Empty clears the video. Saved as a canonical watch URL; tracking/start parameters are discarded. No server-side video fetching.",
-            "nullable": true
+            "nullable": true,
+            "example": ""
           },
           "version": {
             "type": "integer",
@@ -1896,6 +2010,30 @@
             "type": "string"
           }
         }
+      },
+      "ProfileUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "minProperties": 1,
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "nullable": true
+          },
+          "lastName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "nullable": true
+          },
+          "directoryVisible": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "description": "At least one non-null supported field required. Null means omitted. Names are trimmed and reject control characters. No email, password, verification or role changes."
       }
     },
     "responses": {

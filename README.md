@@ -35,3 +35,5 @@ See [Render staging setup and verification](docs/render-staging.md) for deployme
 The first [sermon catalog slice](docs/sermon-catalog.md) adds public published-only metadata listing and detail, filters, and cursor pagination. The [publishing slice](docs/sermon-publishing.md) adds role-checked draft/publish controls, atomic audit records, version checks and canonical YouTube links. No content or privileged account is seeded automatically.
 
 See [access management](docs/access-management.md) for scoped permissions, operator-provisioned access administrators and audited role delegation.
+
+See [member profiles and privacy](docs/member-profiles.md) for own-profile edits and directory visibility, and [request validation](docs/api-validation.md) for field-specific errors and improved Swagger examples.

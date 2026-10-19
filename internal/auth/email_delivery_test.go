@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -204,6 +205,47 @@ func TestVerificationEmailDelivery(t *testing.T) {
 			t.Fatalf("dispatches=%d", calls.Load())
 		}
 		queuedCount(t, 0)
+	})
+	t.Run("claimed candidates are revalidated", func(t *testing.T) {
+		for _, state := range []string{"already drained", "retry deferred", "permanently failed"} {
+			t.Run(state, func(t *testing.T) {
+				account, _, _ := create(t, "revalidate-"+strings.ReplaceAll(state, " ", "-")+"@example.com")
+				switch state {
+				case "already drained":
+					if _, err := db.Exec(`DELETE FROM verification_email_outbox WHERE account_id=$1`, account.ID); err != nil {
+						t.Fatal(err)
+					}
+				case "retry deferred":
+					if _, err := db.Exec(`UPDATE verification_email_outbox SET next_attempt_at=$2 WHERE account_id=$1`, account.ID, now.Add(time.Minute)); err != nil {
+						t.Fatal(err)
+					}
+				case "permanently failed":
+					if _, err := db.Exec(`UPDATE verification_email_outbox SET failed_at=$2 WHERE account_id=$1`, account.ID, now); err != nil {
+						t.Fatal(err)
+					}
+				}
+				tx, err := db.BeginTx(ctx, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer tx.Rollback()
+				var locked string
+				if err = tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 FOR UPDATE`, account.ID).Scan(&locked); err != nil {
+					t.Fatal(err)
+				}
+				sender := emailSenderFunc(func(context.Context, string, VerificationEmail) error {
+					t.Error("stale claim dispatched email")
+					return nil
+				})
+				if worked, err := service.deliverClaimed(ctx, tx, account.ID, sender); err != nil || worked {
+					t.Fatalf("stale claim: worked=%v err=%v", worked, err)
+				}
+				tx.Rollback()
+				if _, err = db.Exec(`DELETE FROM verification_email_outbox WHERE account_id=$1`, account.ID); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
 	})
 	t.Run("unreadable outbox fails closed", func(t *testing.T) {
 		account, _, _ := create(t, "corrupt@example.com")
