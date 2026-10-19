@@ -29,6 +29,11 @@ func (s *VerificationService) DeliverNext(ctx context.Context, sender Verificati
 	if err != nil {
 		return false, err
 	}
+	return s.deliverClaimed(ctx, tx, accountID, sender)
+}
+
+// deliverClaimed revalidates a candidate while its account row is locked.
+func (s *VerificationService) deliverClaimed(ctx context.Context, tx *sql.Tx, accountID string, sender VerificationEmailSender) (bool, error) {
 	account, err := scanAccount(tx.QueryRowContext(ctx, "SELECT "+accountColumns+" FROM accounts WHERE id=$1", accountID))
 	if err != nil {
 		return true, err
@@ -36,7 +41,11 @@ func (s *VerificationService) DeliverNext(ctx context.Context, sender Verificati
 	var challengeID string
 	var sealed []byte
 	var attempts int
-	if err := tx.QueryRowContext(ctx, "SELECT challenge_id,sealed_payload,delivery_attempts FROM verification_email_outbox WHERE account_id=$1", accountID).Scan(&challengeID, &sealed, &attempts); err != nil {
+	var eligible bool
+	if err := tx.QueryRowContext(ctx, "SELECT challenge_id,sealed_payload,delivery_attempts,failed_at IS NULL AND next_attempt_at<=$2 FROM verification_email_outbox WHERE account_id=$1", accountID, s.now().UTC()).Scan(&challengeID, &sealed, &attempts, &eligible); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
 		return true, err
 	}
 	challenge, err := loadChallenge(ctx, tx, accountID)
@@ -52,6 +61,11 @@ func (s *VerificationService) DeliverNext(ctx context.Context, sender Verificati
 	}
 	if errors.Is(err, sql.ErrNoRows) || account.EmailVerifiedAt != nil || challenge.id != challengeID || challenge.consumedAt != nil || challenge.attempts >= VerificationMaxAttempts || !now.Before(challenge.expiresAt) {
 		return discard()
+	}
+	// Candidate selection may have used a snapshot from before another worker
+	// drained, deferred or failed this entry. Recheck dispatch eligibility.
+	if !eligible {
+		return false, nil
 	}
 	message, openErr := s.OpenEmail(accountID, challengeID, sealed)
 	var sendErr error

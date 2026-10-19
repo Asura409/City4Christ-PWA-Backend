@@ -62,3 +62,5 @@ The global app integration test registers an account, replaces its code through 
 Final local verification after refactoring passed: `go test -race ./... -count=1 -timeout=5m`, `go vet ./...`, the `cmd/email-worker` build, formatting, and `git diff --check`. Remote CI and live Resend delivery have not been observed. Nothing was deployed or merged, and no staging database was accessed.
 
 For open beta email delivery, set `EMAIL_RECIPIENT_ALLOWLIST='*'` in the VPS worker environment and restart the worker. Do not mix `*` with addresses. API registration separately requires `REGISTRATION_ENABLED=true`; email verification and rate limits still apply. A previously blocked OTP needs a fresh resend request.
+
+Workers revalidate queue entries after acquiring the account lock. If another worker has drained an entry, it is ignored without an error. Retry delays and permanent-failure flags are checked again before dispatch, so stale queue candidates cannot bypass them. Expired or consumed challenges are still cleaned up. PostgreSQL regressions exercise all three stale-claim states and concurrent single dispatch.
