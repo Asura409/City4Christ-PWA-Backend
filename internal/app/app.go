@@ -45,7 +45,9 @@ func New(db *sql.DB, config Config) http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/verification/verify", verificationHandler(verification, limiter))
 	mux.HandleFunc("POST /api/v1/auth/verification/resend", resendHandler(verification, limiter))
 	sessionRoutes(mux, sessions, limiter, config)
-	profileRoutes(mux, profiles.NewService(profiles.NewRepository(db)), sessions, limiter, config)
+	profileService := profiles.NewService(profiles.NewRepository(db))
+	profileRoutes(mux, profileService, sessions, limiter, config)
+	directoryRoutes(mux, profileService, sessions, limiter, config)
 	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
 	accessRoutes(mux, access.NewService(db), sessions, limiter, config)
 	var google *auth.GoogleService
