@@ -33,7 +33,7 @@ Once the schema and environment are intentionally configured, the worker command
 go run ./cmd/email-worker
 ```
 
-The command does not run migrations, reset data, or enable signup. Empty/disabled delivery mode stays idle until shutdown without connecting to a database or provider. It supports graceful shutdown, polls once per second, and redacts provider/database details from logs. The API executable and staging Blueprint are described in [Render staging](render-staging.md). Authentication sessions and other auth features remain pending.
+The command does not run migrations, reset data, or enable signup. Empty/disabled delivery mode stays idle until shutdown without connecting to a database or provider. It supports graceful shutdown, polls once per second, and redacts provider/database details from logs. The API executable and staging Blueprint are described in [Render staging](render-staging.md). Sessions and Google OIDC are implemented; see [auth configuration](auth-sessions.md). See [VPS worker operations](vps-email-worker.md) for the current staging worker setup.
 
 ## Email appearance
 
