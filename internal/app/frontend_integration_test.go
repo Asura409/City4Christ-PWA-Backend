@@ -61,6 +61,22 @@ func TestFrontendWithRealAPI(t *testing.T) {
 				return
 			}
 			writeJSON(w, 200, map[string]string{"code": message.Code, "id": account})
+		case r.URL.Path == "/__test/recovery-inbox":
+			// Recovery secrets are exposed only inside this disposable test harness.
+			var account, id string
+			var sealed []byte
+			err := db.QueryRowContext(r.Context(), `SELECT a.id,o.id,o.sealed_payload FROM accounts a JOIN password_recovery_outbox o ON o.account_id=a.id WHERE a.email=$1 AND o.kind='reset'`, r.URL.Query().Get("email")).Scan(&account, &id, &sealed)
+			if err != nil {
+				http.Error(w, "test inbox unavailable", 404)
+				return
+			}
+			recovery := auth.NewPasswordRecoveryService(db, verification)
+			message, err := recovery.OpenEmail(account, id, sealed)
+			if err != nil {
+				http.Error(w, "test inbox unavailable", 500)
+				return
+			}
+			writeJSON(w, 200, map[string]string{"resetURL": message.ResetURL})
 		case r.URL.Path == "/__test/editor" && r.Method == "POST":
 			// An operator fixture, never a production HTTP role-grant route.
 			_, err := db.ExecContext(r.Context(), `INSERT INTO account_roles(account_id,role,scope) SELECT id,'content_editor','' FROM accounts WHERE email=$1 AND email_verified_at IS NOT NULL ON CONFLICT DO NOTHING`, r.URL.Query().Get("email"))
@@ -77,7 +93,7 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	})
 	server.StartTLS()
 	defer server.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "npm", "exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs")
 	cmd.Dir = filepath.Dir(dist)

@@ -128,9 +128,11 @@ roles, and no real account gains privileged access without the approved procedur
 - [ ] **M2.4:** Implement private visitor intake and QR entry, duplicate handling,
   New Visitors follow-up list and secure verification/account claiming. Existing
   emails must not be claimed or linked by an unauthenticated form submission.
-- [ ] **M2.5:** Implement forgot/reset password with expiring single-use recovery,
-  generic responses, attempt/rate limits and session revocation; add separately
-  authorized change-email/change-password flows and audited assisted recovery.
+- [ ] **M2.5:** Email forgot/reset password is implemented locally with expiring
+  single-use links, generic responses, rate limits, session revocation and frontend
+  forms; release and live receipt acceptance remain pending. See
+  [password recovery](password-recovery.md). Separately implement authorized
+  change-email/change-password flows and audited assisted recovery.
 - [ ] **M2.6:** Implement authorized own-family editing and welcome-team follow-up
   UI. Defer avatar upload until the media pipeline is available in M5.
 - [ ] **M2.7:** Test cross-member/family access denial, consent/privacy serialization,

@@ -86,7 +86,7 @@ func (s *SessionService) Login(ctx context.Context, email, password string) (Ses
 	if err != nil || a.PasswordHash == nil || !valid {
 		return SessionTokens{}, ErrInvalidCredentials
 	}
-	return s.Start(ctx, a.ID)
+	return s.start(ctx, a.ID, a.PasswordHash)
 }
 
 func randomCredential() (string, error) {
@@ -99,14 +99,22 @@ func randomCredential() (string, error) {
 func tokenDigest(token string) []byte { sum := sha256.Sum256([]byte(token)); return sum[:] }
 
 func (s *SessionService) Start(ctx context.Context, accountID string) (SessionTokens, error) {
+	return s.start(ctx, accountID, nil)
+}
+
+func (s *SessionService) start(ctx context.Context, accountID string, expectedHash *string) (SessionTokens, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SessionTokens{}, err
 	}
 	defer tx.Rollback()
 	var verified *time.Time
-	if err := tx.QueryRowContext(ctx, `SELECT email_verified_at FROM accounts WHERE id=$1 FOR UPDATE`, accountID).Scan(&verified); err != nil {
+	var currentHash *string
+	if err := tx.QueryRowContext(ctx, `SELECT email_verified_at,password_hash FROM accounts WHERE id=$1 FOR UPDATE`, accountID).Scan(&verified, &currentHash); err != nil {
 		return SessionTokens{}, err
+	}
+	if expectedHash != nil && (currentHash == nil || *currentHash != *expectedHash) {
+		return SessionTokens{}, ErrInvalidCredentials
 	}
 	if verified == nil {
 		return SessionTokens{}, ErrEmailUnverified

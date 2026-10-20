@@ -107,3 +107,20 @@ func TestExplicitAllRecipientPolicy(t *testing.T) {
 		t.Fatal("ambiguous mixed wildcard policy accepted")
 	}
 }
+
+type recordingRecoverySender struct{ calls int }
+
+func (s *recordingRecoverySender) SendRecovery(context.Context, string, auth.RecoveryEmail) error {
+	s.calls++
+	return nil
+}
+func TestRecoveryRecipientGuard(t *testing.T) {
+	provider := &recordingRecoverySender{}
+	sender := guardedRecoverySender{config: workerConfig{environment: "staging", recipients: map[string]bool{"tester@example.com": true}}, sender: provider}
+	if err := sender.SendRecovery(context.Background(), "id", auth.RecoveryEmail{Email: "blocked@example.com"}); err == nil || provider.calls != 0 {
+		t.Fatal("blocked recovery recipient sent")
+	}
+	if err := sender.SendRecovery(context.Background(), "id", auth.RecoveryEmail{Email: "tester@example.com"}); err != nil || provider.calls != 1 {
+		t.Fatal("allowed recovery recipient blocked")
+	}
+}

@@ -100,3 +100,24 @@ func TestDirectoryContractContainsOnlyApprovedFields(t *testing.T) {
 		t.Fatal("directory schema exposes unapproved fields")
 	}
 }
+
+func TestPasswordRecoveryContract(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	for _, path := range []string{"/api/v1/auth/password/forgot", "/api/v1/auth/password/reset"} {
+		route, ok := paths[path].(map[string]any)
+		if !ok {
+			t.Fatalf("missing recovery contract: %s", path)
+		}
+		op := route["post"].(map[string]any)
+		if len(op["security"].([]any)) != 0 {
+			t.Fatal("recovery requires signed-in credentials")
+		}
+	}
+}
