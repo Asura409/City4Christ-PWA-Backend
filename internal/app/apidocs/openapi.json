@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.5.0",
+    "version": "1.6.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -1484,6 +1484,158 @@
           }
         }
       }
+    },
+    "/api/v1/auth/password/forgot": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Request a password reset",
+        "operationId": "RequestPasswordReset",
+        "description": "Returns identical 202 responses for eligible, unknown, unverified, Google-only and cooldown accounts. Five requests per normalized email per 15 minutes, plus shared 60 auth requests per IP per minute. One-minute resend cooldown. Resending invalidates the previous link. Password accounts must already have verified email. Requesting a reset does not revoke sessions. Links expire in 15 minutes; token is carried in the frontend URL fragment. Requires allowed Origin and JSON body.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordForgotInput"
+              },
+              "example": {
+                "email": "member@example.invalid",
+                "returnTo": "https://city4christ-pwa.vercel.app/auth.html"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "message": "If this email has an eligible password account, a reset link will be sent when eligible."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password/reset": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Reset a forgotten password",
+        "operationId": "ResetPassword",
+        "description": "Consumes a single-use emailed token, replaces the Argon2id hash and revokes all existing sessions atomically. Ten attempts per token per 15 minutes plus shared IP limit. Invalid, expired and used tokens return invalid_reset_token. Clears the refresh cookie and queues a password-change notification. Sign in normally afterwards; Google-only accounts cannot acquire a password through recovery. Requires allowed Origin and JSON body.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetInput"
+              },
+              "example": {
+                "token": "REPLACE_WITH_TOKEN_FROM_YOUR_EMAIL_LINK",
+                "password": "replace with your new private password"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Password reset; all prior sessions revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "status": "password_reset"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2221,11 +2373,55 @@
             }
           }
         }
+      },
+      "PasswordForgotInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "email",
+          "returnTo"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          },
+          "returnTo": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048,
+            "description": "HTTPS URL ending /auth.html at APP_ORIGIN or CORS_ORIGINS. No credentials, query or fragment."
+          }
+        }
+      },
+      "PasswordResetInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "token",
+          "password"
+        ],
+        "properties": {
+          "token": {
+            "type": "string",
+            "minLength": 43,
+            "maxLength": 43,
+            "writeOnly": true
+          },
+          "password": {
+            "type": "string",
+            "minLength": 15,
+            "maxLength": 1024,
+            "writeOnly": true,
+            "description": "At least 15 Unicode characters, at most 1024 UTF-8 bytes. Preserved exactly."
+          }
+        }
       }
     },
     "responses": {
       "400": {
-        "description": "Malformed JSON, invalid/expired OTP, or invalid Google callback.",
+        "description": "Malformed JSON, invalid/expired OTP or reset token, or invalid Google callback.",
         "content": {
           "application/json": {
             "schema": {

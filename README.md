@@ -2,6 +2,8 @@
 
 Go and PostgreSQL backend for the City4Christ PWA. Implementation proceeds in small slices using TDD.
 
+Planning: [church roles, operational workflows and privacy requirements](docs/requirements/church-operations-addendum.md), and the [start-to-finish implementation checklist with milestones](docs/implementation-checklist.md). The checklist distinguishes the implemented foundation from future church-wide features.
+
 Requires Go 1.27 or newer and PostgreSQL server binaries. On Ubuntu:
 
 ```sh
@@ -18,7 +20,7 @@ go vet ./...
 
 Tests start their own PostgreSQL cluster and database in a private temporary directory, with TCP disabled, and remove them afterward. They never read `DATABASE_URL` or connect to staging. Set `TEST_POSTGRES_BIN` to the directory containing `initdb` and `pg_ctl` if those binaries are outside PATH or Ubuntu's usual installation paths. Missing binaries fail tests rather than skipping integration coverage.
 
-Implemented: registration, Argon2id passwords, email verification and resend, encrypted Resend outbox, password login, ten-minute access JWTs, thirty-day rotating refresh cookies with replay revocation, account/IP limits, logout, `/api/v1/me`, and Google OIDC with explicit account linking. Public signup defaults to disabled. Google-only accounts have no local password.
+Implemented: registration, Argon2id passwords, email verification and resend, encrypted Resend outbox, password login, ten-minute access JWTs, thirty-day rotating refresh cookies with replay revocation, account/IP limits, logout, `/api/v1/me`, Google OIDC with explicit account linking, and [email password recovery](docs/password-recovery.md) with expiring single-use links and session revocation. Public signup defaults to disabled. Google-only accounts have no local password.
 
 Interactive API reference: open `/docs/` on your API origin. Download the OpenAPI 3.0.3 contract at `/openapi.json`; [source specification](internal/app/apidocs/openapi.json) and [frontend usage guide](docs/api-documentation.md) are included.
 

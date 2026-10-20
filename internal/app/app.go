@@ -44,6 +44,11 @@ func New(db *sql.DB, config Config) http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/register", registrationHandler(service, config.RegistrationEnabled, limiter))
 	mux.HandleFunc("POST /api/v1/auth/verification/verify", verificationHandler(verification, limiter))
 	mux.HandleFunc("POST /api/v1/auth/verification/resend", resendHandler(verification, limiter))
+	var recovery *auth.PasswordRecoveryService
+	if verificationErr == nil {
+		recovery = auth.NewPasswordRecoveryService(db, verification)
+	}
+	passwordRecoveryRoutes(mux, recovery, limiter, config)
 	sessionRoutes(mux, sessions, limiter, config)
 	profileService := profiles.NewService(profiles.NewRepository(db))
 	profileRoutes(mux, profileService, sessions, limiter, config)

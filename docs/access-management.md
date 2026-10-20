@@ -2,6 +2,8 @@
 
 Authentication proves identity; authorization checks the requested action and its scope in PostgreSQL. Roles are never accepted from JWT claims or profile edits. Unknown permissions deny access. No account is promoted automatically.
 
+The target church-wide roles and workflows are recorded in the [20 October requirements addendum](requirements/church-operations-addendum.md). The policy below describes current implementation; rollout of Super Admin, Staff and finance capabilities is tracked in [milestone M1](implementation-checklist.md#m1--church-roles-and-permission-management). Existing technical roles are not automatically promoted.
+
 ## Implemented policy
 
 | Role | Permission | Scope | How appointed |

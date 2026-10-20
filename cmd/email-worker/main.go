@@ -138,6 +138,8 @@ func run(ctx context.Context, config workerConfig) error {
 		return errors.New("email worker sender configuration failed")
 	}
 	guarded := guardedSender{config: config, sender: sender}
+	recovery := auth.NewPasswordRecoveryService(db, verification)
+	recoverySender := guardedRecoverySender{config: config, sender: sender}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -155,6 +157,14 @@ func run(ctx context.Context, config workerConfig) error {
 				code = failure.Code
 			}
 			slog.Warn("Verification email processing failed", "code", code)
+		}
+		if _, recoveryErr := recovery.DeliverNext(ctx, recoverySender); recoveryErr != nil && ctx.Err() == nil {
+			code := "storage_unavailable"
+			var failure *auth.EmailDeliveryError
+			if errors.As(recoveryErr, &failure) {
+				code = failure.Code
+			}
+			slog.Warn("Password recovery email processing failed", "code", code)
 		}
 		select {
 		case <-ctx.Done():

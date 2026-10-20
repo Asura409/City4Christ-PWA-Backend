@@ -30,3 +30,5 @@ To enable Google, privately configure both `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT
 Rate limits use atomic PostgreSQL counters: auth IP 60/minute; registration and resend account 5/15 minutes; login 10/15 minutes; verification 20/15 minutes. Limits return 429 and dependency failures return 503. Account keys are HMAC digests. `TRUSTED_PROXY_CIDRS` must contain only real ingress proxies; forwarded IP headers are ignored by default. Configure this for your hosting ingress so clients do not share a proxy's IP bucket.
 
 Migrate with `/app/api migrate` before starting the updated API, or use `/app/api migrate-and-serve` for the free Blueprint. Migrations only move forward and do not reset or seed staging. Tests create their own disposable PostgreSQL databases. The protected OTP inbox is available only through `cmd/auth-preview`, never the production API.
+
+Email-based password recovery is described in [password recovery](password-recovery.md). It uses public forgot/reset endpoints, verified local-password accounts, single-use links and complete session revocation. Google-only accounts keep using Google.
