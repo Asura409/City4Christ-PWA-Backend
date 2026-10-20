@@ -23,11 +23,12 @@ services:
           name: city4christ-staging-api
           envVarKey: RENDER_EXTERNAL_URL
       - key: CORS_ORIGINS
-        value: https://zeetechdot.github.io
+        value: https://zeetechdot.github.io,https://city4christ-pwa.vercel.app
       - key: REFRESH_COOKIE_SAME_SITE
         value: none
       - key: REGISTRATION_ENABLED
-        value: "false"
+        # Preserve the operator's current signup policy on Blueprint updates.
+        sync: false
       - key: VERIFICATION_KEY_BASE64
         generateValue: true
       - key: DATABASE_URL

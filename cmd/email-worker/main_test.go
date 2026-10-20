@@ -85,3 +85,25 @@ func TestDisabledWorkerWaitsForShutdown(t *testing.T) {
 		t.Fatal("worker did not stop")
 	}
 }
+
+func TestExplicitAllRecipientPolicy(t *testing.T) {
+	values := map[string]string{"EMAIL_DELIVERY_MODE": "resend", "APP_ENV": "staging", "DATABASE_URL": "postgres://localhost/test", "VERIFICATION_KEY_BASE64": base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))), "RESEND_API_KEY": "test-key", "EMAIL_FROM": "noreply@example.com", "EMAIL_RECIPIENT_ALLOWLIST": " * "}
+	config, err := loadConfig(func(k string) string { return values[k] })
+	if err != nil {
+		t.Fatalf("explicit all-recipient policy rejected: %v", err)
+	}
+	provider := &recordingSender{}
+	sender := guardedSender{config: config, sender: provider}
+	for _, email := range []string{"first@example.com", "second@example.org"} {
+		if err = sender.Send(context.Background(), "test-challenge", auth.VerificationEmail{Email: email}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if provider.calls != 2 {
+		t.Fatal("open beta recipients blocked")
+	}
+	values["EMAIL_RECIPIENT_ALLOWLIST"] = "*,tester@example.com"
+	if _, err = loadConfig(func(k string) string { return values[k] }); err == nil {
+		t.Fatal("ambiguous mixed wildcard policy accepted")
+	}
+}

@@ -23,6 +23,11 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes postgresql
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - name: Verify Swagger editor methods and session configuration
+        run: node scripts/test-swagger-config.cjs
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Vet

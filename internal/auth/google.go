@@ -47,6 +47,11 @@ func NewGoogleService(db *sql.DB, sessions *SessionService, provider GoogleProvi
 	return &GoogleService{db: db, sessions: sessions, provider: provider, signup: signup, now: now}
 }
 func (s *GoogleService) Begin(ctx context.Context, browser, access string) (GoogleFlow, error) {
+	return s.BeginWithReturn(ctx, browser, access, "")
+}
+
+// BeginWithReturn stores an HTTP-allowlisted frontend target with the one-use flow.
+func (s *GoogleService) BeginWithReturn(ctx context.Context, browser, access, returnTo string) (GoogleFlow, error) {
 	if browser == "" || s.provider == nil {
 		return GoogleFlow{}, ErrInvalidOIDC
 	}
@@ -83,40 +88,46 @@ func (s *GoogleService) Begin(ctx context.Context, browser, access string) (Goog
 		return GoogleFlow{}, err
 	}
 	verifier := oauth2.GenerateVerifier()
-	_, err = s.db.ExecContext(ctx, `INSERT INTO google_oidc_flows(state_digest,browser_digest,nonce,pkce_verifier,link_account_id,link_session_id,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, tokenDigest(state), tokenDigest(browser), nonce, verifier, accountID, sessionID, expires)
+	_, err = s.db.ExecContext(ctx, `INSERT INTO google_oidc_flows(state_digest,browser_digest,nonce,pkce_verifier,link_account_id,link_session_id,expires_at,return_to) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, tokenDigest(state), tokenDigest(browser), nonce, verifier, accountID, sessionID, expires, returnTo)
 	if err != nil {
 		return GoogleFlow{}, err
 	}
 	return GoogleFlow{URL: s.provider.AuthURL(state, nonce, verifier), ExpiresAt: expires}, nil
 }
 func (s *GoogleService) Complete(ctx context.Context, state, browser, code string) (SessionTokens, error) {
+	tokens, _, err := s.CompleteWithReturn(ctx, state, browser, code)
+	return tokens, err
+}
+func (s *GoogleService) CompleteWithReturn(ctx context.Context, state, browser, code string) (SessionTokens, string, error) {
+	var returnTo string
 	if len(state) != 43 || browser == "" || code == "" || len(code) > 4096 {
-		return SessionTokens{}, ErrInvalidOIDC
+		return SessionTokens{}, returnTo, ErrInvalidOIDC
 	}
 	var nonce, verifier string
 	var accountID, sessionID *string
 	// Atomic deletion ensures exactly one callback can exchange the authorization code.
-	err := s.db.QueryRowContext(ctx, `DELETE FROM google_oidc_flows WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>$3 RETURNING nonce,pkce_verifier,link_account_id,link_session_id`, tokenDigest(state), tokenDigest(browser), s.now().UTC()).Scan(&nonce, &verifier, &accountID, &sessionID)
+	err := s.db.QueryRowContext(ctx, `DELETE FROM google_oidc_flows WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>$3 RETURNING nonce,pkce_verifier,link_account_id,link_session_id,return_to`, tokenDigest(state), tokenDigest(browser), s.now().UTC()).Scan(&nonce, &verifier, &accountID, &sessionID, &returnTo)
 	if errors.Is(err, sql.ErrNoRows) {
-		return SessionTokens{}, ErrInvalidOIDC
+		return SessionTokens{}, returnTo, ErrInvalidOIDC
 	}
 	if err != nil {
-		return SessionTokens{}, err
+		return SessionTokens{}, returnTo, err
 	}
 	identity, err := s.provider.Exchange(ctx, code, nonce, verifier)
 	if err != nil {
-		return SessionTokens{}, ErrInvalidOIDC
+		return SessionTokens{}, returnTo, ErrInvalidOIDC
 	}
 	identity.Email = normalizeEmail(identity.Email)
 	address, err := mail.ParseAddress(identity.Email)
 	if !identity.EmailVerified || identity.Subject == "" || len(identity.Subject) > 255 || err != nil || address.Address != identity.Email || len(identity.Email) > 254 {
-		return SessionTokens{}, ErrInvalidOIDC
+		return SessionTokens{}, returnTo, ErrInvalidOIDC
 	}
 	id, err := s.resolve(ctx, identity, accountID, sessionID)
 	if err != nil {
-		return SessionTokens{}, err
+		return SessionTokens{}, returnTo, err
 	}
-	return s.sessions.Start(ctx, id)
+	tokens, err := s.sessions.Start(ctx, id)
+	return tokens, returnTo, err
 }
 func googleName(value, fallback string) string {
 	value = strings.TrimSpace(value)

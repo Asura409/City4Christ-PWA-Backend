@@ -8,7 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/profiles"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/sermons"
 	"github.com/google/uuid"
 )
 
@@ -26,6 +29,8 @@ type Config struct {
 func New(db *sql.DB, config Config) http.Handler {
 	mux := http.NewServeMux()
 	documentationRoutes(mux)
+	catalog := sermons.NewService(sermons.NewRepository(db), config.Now)
+	sermonRoutes(mux, catalog)
 	verification, verificationErr := auth.NewVerificationService(db, auth.VerificationConfig{Key: config.VerificationKey, Now: config.Now})
 	var service *auth.RegistrationService
 	var sessions *auth.SessionService
@@ -40,6 +45,11 @@ func New(db *sql.DB, config Config) http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/verification/verify", verificationHandler(verification, limiter))
 	mux.HandleFunc("POST /api/v1/auth/verification/resend", resendHandler(verification, limiter))
 	sessionRoutes(mux, sessions, limiter, config)
+	profileService := profiles.NewService(profiles.NewRepository(db))
+	profileRoutes(mux, profileService, sessions, limiter, config)
+	directoryRoutes(mux, profileService, sessions, limiter, config)
+	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
+	accessRoutes(mux, access.NewService(db), sessions, limiter, config)
 	var google *auth.GoogleService
 	if sessions != nil && config.GoogleProvider != nil {
 		google = auth.NewGoogleService(db, sessions, config.GoogleProvider, config.RegistrationEnabled, config.Now)

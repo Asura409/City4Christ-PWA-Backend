@@ -6,6 +6,8 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
+	"strings"
 )
 
 func decodeJSON[T any](w http.ResponseWriter, r *http.Request) (T, bool) {
@@ -38,6 +40,18 @@ func writeDecodeError(w http.ResponseWriter, err error) {
 	var tooLarge *http.MaxBytesError
 	if errors.As(err, &tooLarge) {
 		writeError(w, 413, "body_too_large", "Request body is too large.", nil)
+		return
+	}
+	if err != nil && strings.HasPrefix(err.Error(), "json: unknown field ") {
+		name, parseErr := strconv.Unquote(strings.TrimPrefix(err.Error(), "json: unknown field "))
+		if parseErr == nil && len(name) <= 64 {
+			writeError(w, 400, "unknown_field", "Remove fields that are not accepted by this endpoint.", map[string]string{name: "This field is not accepted in this request."})
+			return
+		}
+	}
+	var wrongType *json.UnmarshalTypeError
+	if errors.As(err, &wrongType) && wrongType.Field != "" {
+		writeError(w, 400, "invalid_field_type", "Check the indicated field type.", map[string]string{wrongType.Field: "Use the JSON type documented for this field."})
 		return
 	}
 	writeError(w, 400, "invalid_json", "Supply a single valid JSON object.", nil)

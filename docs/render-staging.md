@@ -12,7 +12,9 @@ The email worker is omitted because Render has no free worker plan. The API stil
 2. Render Dashboard: New > Blueprint; choose the repository, branch `main`, and `render.yaml`.
 3. Review the proposed resources: both must show Free; there must be no worker. If the previous attempt created resources, inspect them first. Do not delete or replace an existing database to retry this setup.
 4. Apply this configuration with Blueprint Manual Sync if Auto Sync is off, or set the API Settings > Auto-Deploy to After CI Checks Pass. Verify `/health/ready` after deployment. Blueprint Auto Sync controls configuration updates separately from service code deployments.
-5. APP_ORIGIN is taken from the API's Render URL. The GitHub Pages frontend origin is allowed; refresh cookies use SameSite=None and Secure. See [auth configuration](auth-sessions.md).
+5. APP_ORIGIN is taken from the API's Render URL. The GitHub Pages and `https://city4christ-pwa.vercel.app` frontend origins are allowed; refresh cookies use SameSite=None and Secure. See [auth configuration](auth-sessions.md).
+6. The database allowlist retains the approved VPS worker address `51.170.141.205/32`. Keep it in the Blueprint so synchronization does not remove delivery access; do not add other addresses or use a global range without approval.
+7. Set `REGISTRATION_ENABLED` deliberately during initial Blueprint creation: use `false` until delivery is ready. It uses `sync: false`, so later Blueprint updates preserve the operator's current setting. Existing staging signup remains enabled; this release must not close it. Render's [Blueprint specification](https://render.com/docs/blueprint-spec) documents that `sync: false` entries are ignored when updating an existing Blueprint.
 
 The Docker command `/app/api migrate-and-serve` applies forward migrations and starts the API only after they succeed. Migration reruns preserve data. No reset or seed command exists. Normal `/app/api` startup still does not migrate; `/app/api migrate` applies migrations and exits.
 

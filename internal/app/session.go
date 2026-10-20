@@ -117,16 +117,4 @@ func sessionRoutes(mux *http.ServeMux, service *auth.SessionService, limiter *au
 		clearRefresh(w, c)
 		writeJSON(w, 200, map[string]any{"data": map[string]string{"status": "logged_out"}})
 	})
-	mux.HandleFunc("GET /api/v1/me", func(w http.ResponseWriter, r *http.Request) {
-		if !available(w) {
-			return
-		}
-		a, err := service.Authenticate(r.Context(), requestAccess(r))
-		if err != nil {
-			sessionError(w, err)
-			return
-		}
-		w.Header().Set("Cache-Control", "no-store")
-		writeJSON(w, 200, map[string]any{"data": map[string]any{"id": a.ID, "email": a.Email, "firstName": a.FirstName, "lastName": a.LastName, "emailVerified": a.EmailVerifiedAt != nil, "hasPassword": a.PasswordHash != nil}})
-	})
 }
