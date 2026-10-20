@@ -54,3 +54,5 @@ The migration upgrade rehearsal applies versions 1–8, inserts an existing edit
 Executed checks: race tests passed across all packages with tests (access/app/sermons and cmd/auth/googleoidc/mailresend batches), including the final HTTP and upgrade regressions; go vet, formatting, whitespace, Swagger initializer and Redocly 2.63.0 OpenAPI validation passed. Docker build and smoke verification passed against disposable PostgreSQL. No remote CI, live deployment or production acceptance is claimed for this slice.
 
 See [the access audit](access-management-audit.md) for the reproduced concurrency finding and its fix.
+
+The [church permission policy and current-access slice](church-permissions.md) defines scoped capability names and the protected rollout plan. `GET /api/v1/me/access` returns the caller’s effective role-derived permissions for navigation; it does not authorize appointments or replace server checks.

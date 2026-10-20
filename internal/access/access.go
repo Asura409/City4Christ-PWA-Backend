@@ -39,28 +39,12 @@ func CheckTx(ctx context.Context, tx *sql.Tx, actor, permission, scope string) e
 	if !validID(actor) {
 		return ErrForbidden
 	}
-	var roles []string
-	switch permission {
-	case "sermons.manage":
-		if scope != "" {
-			return ErrForbidden
-		}
-		roles = []string{"content_editor", "system_administrator"}
-	case "roles.manage":
-		if scope != "" {
-			return ErrForbidden
-		}
-		roles = []string{"access_administrator", "access_administrator"}
-	case "ministry.members.manage":
-		if !validID(scope) {
-			return ErrForbidden
-		}
-		roles = []string{"ministry_leader", "ministry_leader"}
-	default:
+	roles := rolesForPermission(permission, scope)
+	if len(roles) == 0 {
 		return ErrForbidden
 	}
 	var role string
-	err := tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope=$2 AND r.role IN ($3,$4) AND a.email_verified_at IS NOT NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, actor, scope, roles[0], roles[1]).Scan(&role)
+	err := tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope=$2 AND r.role=ANY($3::text[]) AND a.email_verified_at IS NOT NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, actor, scope, roles).Scan(&role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrForbidden
 	}

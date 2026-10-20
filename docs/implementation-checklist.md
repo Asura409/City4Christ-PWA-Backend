@@ -28,6 +28,12 @@ when its exit gate has evidence. No dates or provider spend are assumed.
 - [x] **B8:** VPS email-worker access restored through PR #6 and freshly verified
   with a read-only `SELECT 1` over `sslmode=verify-full`; the worker is active.
   Received-email acceptance remains separate in M0.4.
+- [x] **B9:** Password recovery released through backend PR #13 (`46762e1`) and
+  frontend PR #2 (`c643756`). The owner confirmed the emailed reset succeeded;
+  read-only checks confirmed token consumption, revocation of the six prior
+  active sessions and a new sign-in session. Used-link rejection is covered by
+  automated tests; separate live replay confirmation is not claimed.
+
 
 ## Execution rules for every feature slice
 
@@ -99,8 +105,10 @@ proof of received email or completed real-provider login.
 
 ## M1 — Church roles and permission management
 
-- [ ] **M1.1:** Translate R1 into named capabilities and global/group/task scopes;
-  document grantable roles, sensitive read/export permissions and deny-by-default.
+- [x] **M1.1:** Define the [named capability policy](church-permissions.md),
+  global/ministry/own/task scope boundaries, protected delegation and finance/care
+  separation. Only the existing technical-role capabilities are active; reserved
+  church roles/domain permissions remain denied until their protected slices.
 - [ ] **M1.2:** Add role definitions/assignment lifecycle with additive migrations.
   Preserve technical editor/admin assignments without silently making anyone a
   Super Admin. Resolve first-Super-Admin identity and mapping before live rollout.
@@ -109,8 +117,12 @@ proof of received email or completed real-provider login.
 - [ ] **M1.4:** Implement audited role read/grant/revoke and eligible-member lookup.
   Only Super Admin can appoint pastors/admins/finance officers; Staff delegates only
   permitted operational appointments. Prevent self-escalation and scope inflation.
-- [ ] **M1.5:** Expose current capabilities for frontend navigation. Apply revocation
-  on the same existing JWT/session and refresh UI capabilities without a new account.
+- [x] **M1.5:** Implement current-role snapshots and frontend gating/refresh.
+  Local real-API desktop/mobile tests confirm same-JWT grant visibility, hiding
+  after revocation and server denial. Race tests passed for access/app/sermons;
+  16 frontend unit tests, 20 mocked browser scenarios, four real-API workflows,
+  vet, contract validation and Docker smoke checks passed. Release verification
+  is separate; new church-role activation remains M1.2–M1.4.
 - [ ] **M1.6:** Add User Management/role-change UI and test every actor/target/scope,
   concurrent last-admin changes, rollback and role revocation with a still-valid JWT.
 
@@ -128,9 +140,9 @@ roles, and no real account gains privileged access without the approved procedur
 - [ ] **M2.4:** Implement private visitor intake and QR entry, duplicate handling,
   New Visitors follow-up list and secure verification/account claiming. Existing
   emails must not be claimed or linked by an unauthenticated form submission.
-- [ ] **M2.5:** Email forgot/reset password is implemented locally with expiring
-  single-use links, generic responses, rate limits, session revocation and frontend
-  forms; release and live receipt acceptance remain pending. See
+- [ ] **M2.5:** Email forgot/reset password is released with expiring single-use
+  links, generic responses, rate limits, session revocation and frontend forms.
+  The owner confirmed live receipt/reset; see B9 and
   [password recovery](password-recovery.md). Separately implement authorized
   change-email/change-password flows and audited assisted recovery.
 - [ ] **M2.6:** Implement authorized own-family editing and welcome-team follow-up
