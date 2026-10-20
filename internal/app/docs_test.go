@@ -121,3 +121,30 @@ func TestPasswordRecoveryContract(t *testing.T) {
 		}
 	}
 }
+
+func TestCurrentAccessContract(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	route, ok := paths["/api/v1/me/access"].(map[string]any)
+	if !ok {
+		t.Fatal("current access contract missing")
+	}
+	if len(route) != 1 {
+		t.Fatal("current access exposes mutation methods")
+	}
+	get := route["get"].(map[string]any)
+	if len(get["security"].([]any)) == 0 {
+		t.Fatal("access snapshot permits anonymous requests")
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	current := schemas["CurrentAccess"].(map[string]any)["properties"].(map[string]any)
+	if len(current) != 2 || current["roles"] == nil || current["capabilities"] == nil {
+		t.Fatal("access snapshot exposes unexpected fields")
+	}
+}

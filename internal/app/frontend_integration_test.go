@@ -77,6 +77,14 @@ func TestFrontendWithRealAPI(t *testing.T) {
 				return
 			}
 			writeJSON(w, 200, map[string]string{"resetURL": message.ResetURL})
+		case r.URL.Path == "/__test/editor/revoke" && r.Method == "POST":
+			// Isolated test operator fixture, never part of the production router.
+			_, err := db.ExecContext(r.Context(), `DELETE FROM account_roles WHERE account_id=(SELECT id FROM accounts WHERE email=$1) AND role='content_editor' AND scope=''`, r.URL.Query().Get("email"))
+			if err != nil {
+				http.Error(w, "test fixture failed", 500)
+				return
+			}
+			w.WriteHeader(204)
 		case r.URL.Path == "/__test/editor" && r.Method == "POST":
 			// An operator fixture, never a production HTTP role-grant route.
 			_, err := db.ExecContext(r.Context(), `INSERT INTO account_roles(account_id,role,scope) SELECT id,'content_editor','' FROM accounts WHERE email=$1 AND email_verified_at IS NOT NULL ON CONFLICT DO NOTHING`, r.URL.Query().Get("email"))

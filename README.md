@@ -43,3 +43,5 @@ See [member profiles and privacy](docs/member-profiles.md) for own-profile edits
 See [the member directory](docs/member-directory.md) for authenticated name search, opt-in visibility, cursor pagination and response privacy.
 
 See [frontend browser integration](docs/frontend-browser-integration.md) for Google browser completion and optional Playwright checks through the real app with disposable PostgreSQL. The frontend checkout is an independent repository.
+
+See [church permissions and current-access snapshots](docs/church-permissions.md) for role-derived navigation, exact ministry scopes and the protected church-role rollout plan.

@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.6.0",
+    "version": "1.7.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -1636,6 +1636,64 @@
           }
         }
       }
+    },
+    "/api/v1/me/access": {
+      "get": {
+        "tags": [
+          "Access management"
+        ],
+        "summary": "Read my current role-derived access",
+        "operationId": "GetCurrentAccess",
+        "description": "Verified active Bearer session required. Uses the authenticated account only; query parameters are rejected. Returns supported assignments and exact scoped capabilities from one PostgreSQL snapshot; committed grants/revocations are reflected without replacing the JWT. No automatic promotions, new church-role grants or authorization bypass. Existing own-profile and directory access do not require a staff role. Maximum 60 requests/account/minute and 120/IP/minute. Refresh navigation on page entry, focus or explicit user action; every protected server action still authorizes independently.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Current database-backed access snapshot; Cache-Control: no-store. This response is display data, not an authorization credential.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentAccessResponse"
+                },
+                "example": {
+                  "data": {
+                    "roles": [
+                      {
+                        "role": "content_editor",
+                        "scope": ""
+                      }
+                    ],
+                    "capabilities": [
+                      {
+                        "permission": "sermons.manage",
+                        "scope": ""
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2415,6 +2473,63 @@
             "maxLength": 1024,
             "writeOnly": true,
             "description": "At least 15 Unicode characters, at most 1024 UTF-8 bytes. Preserved exactly."
+          }
+        }
+      },
+      "CurrentCapability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "permission",
+          "scope"
+        ],
+        "properties": {
+          "permission": {
+            "type": "string",
+            "enum": [
+              "sermons.manage",
+              "roles.manage",
+              "ministry.members.manage"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "Empty for global publishing/delegation; one canonical nonzero registered ministry UUID for ministry.members.manage."
+          }
+        }
+      },
+      "CurrentAccess": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "roles",
+          "capabilities"
+        ],
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoleAssignment"
+            },
+            "description": "Effective supported assignments for this authenticated account, ordered by role and scope. No inferred Super Admin or church membership."
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CurrentCapability"
+            },
+            "description": "Deduplicated role-derived capabilities ordered by permission and scope. Empty arrays are returned for verified accounts without staff assignments. Public and own-profile baseline access is separate."
+          }
+        }
+      },
+      "CurrentAccessResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/CurrentAccess"
           }
         }
       }
