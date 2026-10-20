@@ -2,6 +2,8 @@
 
 Go and PostgreSQL backend for the City4Christ PWA. Implementation proceeds in small slices using TDD.
 
+Planning: [church roles, operational workflows and privacy requirements](docs/requirements/church-operations-addendum.md), and the [start-to-finish implementation checklist with milestones](docs/implementation-checklist.md). The checklist distinguishes the implemented foundation from future church-wide features.
+
 Requires Go 1.27 or newer and PostgreSQL server binaries. On Ubuntu:
 
 ```sh
