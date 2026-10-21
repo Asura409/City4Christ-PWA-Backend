@@ -31,7 +31,7 @@ func TestRoleCatalogUpgradePreservesAssignments(t *testing.T) {
 		t.Fatal(err)
 	}
 	for range 2 {
-		if err = Migrate(ctx, db); err != nil {
+		if _, err = provider.UpTo(ctx, 14); err != nil {
 			t.Fatal(err)
 		}
 	}

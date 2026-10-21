@@ -84,7 +84,7 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 	if _, err = db.Exec("ALTER TABLE account_roles DROP CONSTRAINT account_roles_role_scope"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Exec("INSERT INTO account_roles(account_id,role,scope) VALUES($1,'super_administrator',''),($1,'content_editor',$2)", member, a); err != nil {
+	if _, err = db.Exec("INSERT INTO account_roles(account_id,role,scope) VALUES($1,'super_administrator',$2),($1,'content_editor',$2)", member, a); err != nil {
 		t.Fatal(err)
 	}
 	current, err = s.Current(ctx, member)

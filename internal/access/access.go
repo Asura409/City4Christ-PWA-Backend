@@ -82,13 +82,11 @@ func (s *Service) change(ctx context.Context, actor, target string, in Change, g
 		return false, err
 	}
 	defer tx.Rollback()
-	if err = CheckTx(ctx, tx, actor, "roles.manage", ""); err != nil {
+	if err = lockRoleChanges(ctx, tx); err != nil {
 		return false, err
 	}
-	if guard != nil {
-		if err = guard(ctx, tx); err != nil {
-			return false, err
-		}
+	if err = CheckTx(ctx, tx, actor, "roles.manage", ""); err != nil {
+		return false, err
 	}
 	in.Reason = strings.TrimSpace(in.Reason)
 	if !validID(target) || !utf8.ValidString(in.Reason) || strings.ContainsRune(in.Reason, 0) || utf8.RuneCountInString(in.Reason) < 1 || utf8.RuneCountInString(in.Reason) > 500 {
@@ -117,6 +115,11 @@ func (s *Service) change(ctx context.Context, actor, target string, in Change, g
 	}
 	if grant && !verified {
 		return false, ErrInvalid
+	}
+	if guard != nil {
+		if err = guard(ctx, tx); err != nil {
+			return false, err
+		}
 	}
 	var result sql.Result
 	if grant {

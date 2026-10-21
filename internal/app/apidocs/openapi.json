@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.9.0",
+    "version": "1.10.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -1171,7 +1171,7 @@
                 "editTitle": {
                   "value": {
                     "version": 2,
-                    "title": "Living in Faith \u2014 Updated"
+                    "title": "Living in Faith — Updated"
                   }
                 },
                 "unpublish": {
@@ -1221,7 +1221,7 @@
             }
           }
         ],
-        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "description": "Verified active access_administrator or super_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
         "responses": {
           "200": {
             "description": "Success. Repeated identical mutations return changed=false without another audit event.",
@@ -1286,7 +1286,7 @@
             }
           }
         ],
-        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet. Requires fresh session authentication (five-minute window), checked and locked in the assignment transaction. A stale session returns 403 reauthentication_required; confirm identity and explicitly resubmit. This does not enable reserved church roles or replace future MFA requirements. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
+        "description": "Verified active access_administrator or super_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet. Requires fresh session authentication (five-minute window), checked and locked in the assignment transaction. A stale session returns 403 reauthentication_required; confirm identity and explicitly resubmit. Protected church appointments use the separate church-roles routes and mandatory MFA. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
         "responses": {
           "200": {
             "description": "Success. Repeated identical mutations return changed=false without another audit event.",
@@ -1368,7 +1368,7 @@
             }
           }
         ],
-        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet. Requires fresh session authentication (five-minute window), checked and locked in the assignment transaction. A stale session returns 403 reauthentication_required; confirm identity and explicitly resubmit. This does not enable reserved church roles or replace future MFA requirements. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
+        "description": "Verified active access_administrator or super_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet. Requires fresh session authentication (five-minute window), checked and locked in the assignment transaction. A stale session returns 403 reauthentication_required; confirm identity and explicitly resubmit. Protected church appointments use the separate church-roles routes and mandatory MFA. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
         "responses": {
           "200": {
             "description": "Success. Repeated identical mutations return changed=false without another audit event.",
@@ -2394,7 +2394,7 @@
             "$ref": "#/components/responses/403"
           },
           "409": {
-            "$ref": "#/components/responses/409"
+            "description": "mfa_protected_role: remove protected church appointments through authorized role management before disabling MFA."
           },
           "413": {
             "$ref": "#/components/responses/413"
@@ -2448,6 +2448,360 @@
                 "properties": {}
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/church-roles": {
+      "get": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "ListChurchRoleAssignments",
+        "summary": "Read a target account’s current assignments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoleAssignment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Church-role read permission is required."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "GrantChurchRole",
+        "summary": "Grant a protected church role or scoped leader appointment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected. Every mutation additionally requires fresh primary identity confirmation and mandatory current-session application MFA, rechecked in the assignment transaction after locks. Super Admin alone can grant/revoke the four global church roles; Assistant Pastor/Staff can appoint registered-scope ministry leaders only. Protected-role grant targets must be verified and MFA-enrolled. No self-grant; only Super Admin self-resignation is allowed when another verified MFA-enrolled Super Admin remains. Changes and audit commit atomically. Confirm identity/MFA then explicitly resubmit; never automatically replay a mutation. This route does not bootstrap administrators or create ministries.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changed"
+                      ],
+                      "properties": {
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Forbidden role delegation, missing/stale identity or MFA, self-escalation, or disallowed Origin."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          },
+          "409": {
+            "description": "last_administrator: this operation would remove the last effective Super Admin."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChurchRoleChange"
+              },
+              "examples": {
+                "staff": {
+                  "value": {
+                    "role": "staff",
+                    "scope": "",
+                    "reason": "Approved church staff appointment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/church-roles/revoke": {
+      "post": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "RevokeChurchRole",
+        "summary": "Revoke a church role or scoped ministry appointment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected. Every mutation additionally requires fresh primary identity confirmation and mandatory current-session application MFA, rechecked in the assignment transaction after locks. Super Admin alone can grant/revoke the four global church roles; Assistant Pastor/Staff can appoint registered-scope ministry leaders only. Protected-role grant targets must be verified and MFA-enrolled. No self-grant; only Super Admin self-resignation is allowed when another verified MFA-enrolled Super Admin remains. Changes and audit commit atomically. Confirm identity/MFA then explicitly resubmit; never automatically replay a mutation. This route does not bootstrap administrators or create ministries.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changed"
+                      ],
+                      "properties": {
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Forbidden role delegation, missing/stale identity or MFA, self-escalation, or disallowed Origin."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          },
+          "409": {
+            "description": "last_administrator: this operation would remove the last effective Super Admin."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChurchRoleChange"
+              },
+              "examples": {
+                "staff": {
+                  "value": {
+                    "role": "staff",
+                    "scope": "",
+                    "reason": "Approved church staff appointment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/role-candidates": {
+      "get": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "SearchRoleCandidates",
+        "summary": "Search verified accounts for an explicit role appointment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100
+            },
+            "description": "Literal case-insensitive name or email substring; wildcard characters are escaped."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Previous nextCursor, with the same query."
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected.",
+        "responses": {
+          "200": {
+            "description": "Minimal verified account candidates. No phone, address, giving or prayer details. A candidate may lack MFA; protected-role grants will reject that target until enrollment is confirmed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoleCandidate"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string",
+                          "description": "Canonical UUID cursor or empty when no further page exists."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Church-role read permission is required."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
           }
         }
       }
@@ -3246,7 +3600,10 @@
             "enum": [
               "sermons.manage",
               "roles.manage",
-              "ministry.members.manage"
+              "ministry.members.manage",
+              "roles.read",
+              "roles.operational.manage",
+              "roles.privileged.manage"
             ]
           },
           "scope": {
@@ -3405,6 +3762,67 @@
               "maxLength": 43
             },
             "description": "One-time display of high-entropy single-use recovery codes. Only digests are persisted."
+          }
+        }
+      },
+      "ChurchRoleChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "reason"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "super_administrator",
+              "assistant_pastor",
+              "staff",
+              "finance_officer",
+              "ministry_leader"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "Empty for church-wide roles; registered canonical nonzero ministry UUID for ministry_leader.",
+            "default": ""
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "RoleCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "email",
+          "mfaEnabled"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "mfaEnabled": {
+            "type": "boolean",
+            "description": "Confirmed application authenticator is enrolled; contains no setup secret or session proof."
           }
         }
       }

@@ -142,8 +142,15 @@ func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfi
 }
 
 func run(ctx context.Context, args []string) error {
-	if len(args) > 1 || (len(args) == 1 && args[0] != "migrate" && args[0] != "migrate-and-serve") {
-		return errors.New("usage: api [migrate|migrate-and-serve]")
+	var bootstrap *bootstrapOptions
+	if len(args) > 0 && args[0] == "bootstrap-super-admin" {
+		options, err := parseBootstrapOptions(args[1:])
+		if err != nil {
+			return err
+		}
+		bootstrap = &options
+	} else if len(args) > 1 || (len(args) == 1 && args[0] != "migrate" && args[0] != "migrate-and-serve") {
+		return errors.New("usage: api [migrate|migrate-and-serve|bootstrap-super-admin --account-id UUID --confirm-account-id SAME_UUID --reason TEXT]")
 	}
 	c, err := loadConfig(os.Getenv)
 	if err != nil {
@@ -161,6 +168,9 @@ func run(ctx context.Context, args []string) error {
 	defer cancel()
 	if err := db.PingContext(startup); err != nil {
 		return errors.New("database connection failed")
+	}
+	if bootstrap != nil {
+		return bootstrapSuperAdmin(startup, db, *bootstrap)
 	}
 	if len(args) == 1 {
 		if err := migrate(startup, db); err != nil {

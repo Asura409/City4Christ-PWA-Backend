@@ -10,6 +10,8 @@ import (
 
 func mfaError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, auth.ErrMFAProtected):
+		writeError(w, 409, "mfa_protected_role", "Authenticator protection cannot be disabled while a protected church role is assigned.", nil)
 	case errors.Is(err, auth.ErrMFACode):
 		writeError(w, 400, "invalid_mfa_code", "The authenticator or recovery code is invalid or expired.", nil)
 	case errors.Is(err, auth.ErrMFAConflict):

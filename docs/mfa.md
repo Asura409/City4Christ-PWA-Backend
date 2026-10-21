@@ -5,8 +5,8 @@ primary-authentication foundation. It does not appoint administrators, implement
 Super Admin bootstrap, or turn ordinary login into a two-stage login flow.
 An authenticated first-factor session can still read its own profile. Once an
 account enrolls, role grant/revoke and Google linking additionally require recent
-app-specific MFA confirmation. Mandatory MFA for future privileged church roles
-remains part of their protected appointment lifecycle.
+app-specific MFA confirmation. The [protected church-role lifecycle](church-role-management.md) now requires
+mandatory MFA and prevents factor disable while protected appointments remain.
 
 ## Cryptography and storage
 
@@ -106,8 +106,10 @@ factors, codes or proofs. Deploy the backend before the accompanying frontend on
 after separate release approval. This task does not deploy, touch staging or
 appoint any administrator.
 
-Before production-wide/mandatory rollout, complete privileged-role bootstrap and
-last-admin safeguards, audited assisted recovery and factor-change email alerts.
+Protected-role bootstrap and last-admin safeguards are implemented locally.
+Before live activation, obtain owner approval for the first real administrator and
+complete staging acceptance. Audited assisted recovery and factor-change email
+alerts remain separate milestone work.
 Actual authenticator-device and real Google acceptance remain staging checks after
 an authorized release. Local browser tests use disposable data and a synthetic
 Google screen; signed Google token verification is covered separately by the

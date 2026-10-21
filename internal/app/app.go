@@ -56,6 +56,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
 	accessService := access.NewService(db)
 	accessRoutes(mux, accessService, sessions, limiter, config)
+	churchRoleRoutes(mux, accessService, sessions, limiter, config)
 	currentAccessRoutes(mux, accessService, sessions, limiter, config)
 	var google *auth.GoogleService
 	if sessions != nil && config.GoogleProvider != nil {

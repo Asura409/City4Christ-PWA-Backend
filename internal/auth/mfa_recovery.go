@@ -6,6 +6,8 @@ import (
 	"errors"
 )
 
+var ErrMFAProtected = errors.New("authenticator required by protected church role")
+
 func (m *MFAService) replaceRecovery(ctx context.Context, tx *sql.Tx, id string) ([]string, error) {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM mfa_recovery_codes WHERE factor_id=$1`, id); err != nil {
 		return nil, err
@@ -71,6 +73,15 @@ func (m *MFAService) Disable(ctx context.Context, access string) error {
 	id, err := m.activeForManagement(ctx, tx, c)
 	if err != nil {
 		return err
+	}
+	// beginTx holds the account UPDATE lock. Role grants hold a target account
+	// SHARE lock, so a concurrent grant and factor removal cannot both succeed.
+	var protected bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND role IN ('super_administrator','assistant_pastor','staff','finance_officer'))`, c.Subject).Scan(&protected); err != nil {
+		return err
+	}
+	if protected {
+		return ErrMFAProtected
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM mfa_factors WHERE id=$1`, id); err != nil {
 		return err

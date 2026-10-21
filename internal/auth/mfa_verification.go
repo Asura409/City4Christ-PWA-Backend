@@ -87,8 +87,8 @@ func (s *SessionService) RequireSensitiveTx(ctx context.Context, tx *sql.Tx, acc
 }
 
 // requireMFASessionTx requires the caller to hold account/session locks first.
-// mandatory=true is reserved for future privileged flows; there are no role
-// promotions or implicit provider-MFA assumptions in this implementation.
+// Protected church appointments pass mandatory=true. Provider-MFA claims do
+// not substitute for an enrolled application factor and this session proof.
 func (s *SessionService) requireMFASessionTx(ctx context.Context, tx *sql.Tx, account, sid string, mandatory bool) error {
 	var at *time.Time
 	err := tx.QueryRowContext(ctx, `SELECT p.verified_at FROM mfa_factors f LEFT JOIN mfa_session_proofs p ON p.factor_id=f.id AND p.session_id=$2 WHERE f.account_id=$1 AND f.confirmed_at IS NOT NULL`, account, sid).Scan(&at)
@@ -106,4 +106,17 @@ func (s *SessionService) requireMFASessionTx(ctx context.Context, tx *sql.Tx, ac
 		return ErrMFARequired
 	}
 	return nil
+}
+
+// RequirePrivilegedTx protects church-role administration even when an account
+// has never enrolled a factor. Primary and MFA proofs remain session-bound.
+func (s *SessionService) RequirePrivilegedTx(ctx context.Context, tx *sql.Tx, access string) error {
+	if err := s.RequireFreshTx(ctx, tx, access); err != nil {
+		return err
+	}
+	c, err := s.parseAccess(access)
+	if err != nil {
+		return err
+	}
+	return s.requireMFASessionTx(ctx, tx, c.Subject, c.SessionID, true)
 }

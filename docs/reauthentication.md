@@ -76,7 +76,8 @@ transaction as role authorization, mutation and audit. Stale proofs return
 Shared account/session locks serialize the sensitive action with password reset,
 logout and refresh-replay revocation. Token, session and proof deadlines are
 rechecked after waiting for these locks, so a wait cannot extend freshness. Confirmation does not bypass role or scope
-checks and does not enable reserved church roles.
+checks. Protected church appointments now use their own mandatory-MFA routes;
+see [church-role management](church-role-management.md).
 
 Existing Google linking accepts fresh password sign-in or explicit confirmation,
 checks the deadline again at callback, and retains its same-email explicit-link
@@ -99,10 +100,11 @@ Existing login, session, role and audit data are preserved by forward migrations
 ## Remaining milestone work
 
 [Authenticator enrollment, verification and recovery](mfa.md) are now implemented
-locally. Mandatory MFA authorization for future
-privileged actions, first-Super-Admin bootstrap, concurrent last-admin protection,
-and new church-role appointments remain unimplemented. Fresh authentication alone
-must not authorize those flows. No new environment variables are required.
+locally. Mandatory MFA authorization for church appointments, explicit first-Super-Admin
+bootstrap and concurrent last-admin protection are now implemented in the
+[protected lifecycle](church-role-management.md). Fresh authentication alone cannot
+authorize those flows. Live bootstrap/acceptance, assisted recovery and factor-change
+alerts remain separate gates. No new environment variables are required.
 
 ## Local verification evidence
 
