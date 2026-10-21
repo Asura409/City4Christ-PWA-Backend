@@ -214,26 +214,28 @@ is durable and observable. Provider failure never reports a false successful sen
 ## M4 — Groups / ministries and membership
 
 - [x] **M4.1 (foundation):** Add church/leadership audience and join policies,
-  verified-member records, group-scoped access scopes, and audit events. Group archive/detail and
-  leader appointment lifecycle remain open.
+  verified-member records, group-scoped access scopes, and audit events. Group
+  archive and leader appointment lifecycle remain open.
 - [x] **M4.2 (foundation):** Add authenticated visible-group listing, join/request,
-  leave, and pending-request review. Private groups are hidden from outsiders;
-  leader review checks the exact group scope.
+  leave, and pending-request review. Church groups are visible to verified
+  members; the leadership-audience group is hidden from ineligible accounts.
+  Leader review checks the exact group scope.
 - [x] **M4.3 (backend decision):** Approve/decline transitions and audit writes are
   transactional and repeat-safe; PostgreSQL tests cover racing approve/decline
   calls. M3 recipient notifications remain open.
 - [ ] **M4.4:** Implement church-wide Staff/Super Admin oversight with audit and
   approved group create/archive/restore behavior; no automatic leadership-group access.
-- [ ] **M4.5:** Connect My Groups, rosters and Pending Requests in the frontend;
-  test leaders of group A against every read/write operation on group B.
+- [ ] **M4.5:** React directory, My Groups, group detail, rosters and Pending
+  Requests are implemented locally. Run the browser suite and verify leaders of
+  group A against every read/write operation on group B before checking this.
 
-**Exit:** W02 works; approval updates roster/inbox once and membership determines
-subsequent private content access server-side.
+**Exit:** W02 works; approval updates the roster/inbox once and membership
+determines subsequent group-specific content access server-side.
 
 The first backend foundation is implemented on `feat/group-membership-foundation`.
-It does not yet satisfy the M4 exit: React My Groups/Pending Requests, group detail
-and roster, archive/restore, broader leader assignment, and notification delivery
-are still required.
+The React group directory, group details, My Groups, pending requests and roster
+are implemented locally; verification is pending. Archive/restore, broader leader
+assignment and notification delivery remain open for the M4 exit.
 
 ## M5 — Community, uploads and moderation
 

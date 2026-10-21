@@ -12,6 +12,11 @@ also require an allowed `Origin`. Account and IP limits apply.
 `GET /api/v1/groups?limit=20&cursor=<group-id>` returns active groups visible to
 the caller, the caller's own membership state, and active member count.
 
+`GET /api/v1/groups/{groupId}/members` returns verified active members' account
+IDs and names. Active members and authorized church-wide or group-scoped managers
+can view the roster. Leadership-group eligibility is checked first. Email,
+phone, and other profile fields are never included.
+
 `POST /api/v1/admin/groups` creates a group and is restricted to Super Admin.
 
 ```json
@@ -55,7 +60,7 @@ Use `decline` for a rejection. The request actor cannot approve their own reques
 Repeated identical decisions return `changed: false`; a different decision after
 the request has already been resolved returns a validation error.
 
-These APIs are the backend foundation only. The React group screens, group detail
-and roster, archive/restore, group leader assignment workflow, and notifications
-are tracked separately in the implementation checklist. No member content feed
+The React group directory, details, My Groups, roster, join/leave, and request
+review screens use these APIs. Archive/restore, broader group leader assignment,
+and notifications remain on the implementation checklist. No member content feed
 or media upload endpoints are implied by group membership.

@@ -3083,6 +3083,30 @@
         }
       }
     },
+    "/api/v1/groups/{groupId}/members": {
+      "get": {
+        "tags": ["Groups"],
+        "summary": "List active group members",
+        "operationId": "ListGroupMembers",
+        "security": [{"bearerAuth": []}],
+        "parameters": [{
+          "name": "groupId",
+          "in": "path",
+          "required": true,
+          "schema": {"type": "string", "format": "uuid"}
+        }],
+        "responses": {
+          "200": {
+            "description": "Verified active members, available to active members and authorized group managers.",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GroupMembersResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "404": {"$ref": "#/components/responses/404"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      }
+    },
     "/api/v1/groups/{groupId}/membership-requests/{accountId}": {
       "patch": {
         "tags": [
@@ -4356,6 +4380,25 @@
               }
             }
           }
+        }
+      },
+      "GroupMembersResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {"$ref": "#/components/schemas/GroupMember"}
+          }
+        }
+      },
+      "GroupMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accountId", "firstName", "lastName"],
+        "properties": {
+          "accountId": {"type": "string", "format": "uuid"},
+          "firstName": {"type": "string"},
+          "lastName": {"type": "string"}
         }
       },
       "MembershipDecisionInput": {

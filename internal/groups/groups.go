@@ -52,6 +52,11 @@ type JoinRequest struct {
 	LastName    string    `json:"lastName"`
 	RequestedAt time.Time `json:"requestedAt"`
 }
+type Member struct {
+	AccountID string `json:"accountId"`
+	FirstName string `json:"firstName"`
+	LastName  string `json:"lastName"`
+}
 type Repository struct{ db *sql.DB }
 type Service struct {
 	db  *sql.DB
@@ -357,6 +362,82 @@ func (s *Service) PendingRequests(ctx context.Context, actor, groupID string) ([
 	}
 	return result, nil
 }
+
+// Members returns only verified, active group members. An active member may
+// view their own group roster; church-wide and scoped group managers may also
+// view it. Leadership audience eligibility is checked before either path.
+func (s *Service) Members(ctx context.Context, actor, groupID string) ([]Member, error) {
+	if !validID(actor) || !validID(groupID) {
+		return nil, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var audience string
+	err = tx.QueryRowContext(ctx, `SELECT audience FROM groups WHERE id=$1 AND archived_at IS NULL`, groupID).Scan(&audience)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if audience == "leadership" {
+		eligible, e := leadershipEligible(ctx, tx, actor)
+		if e != nil {
+			return nil, e
+		}
+		if !eligible {
+			return nil, ErrNotFound
+		}
+	}
+	canManage := false
+	permissionErr := access.CheckTx(ctx, tx, actor, "groups.members.manage", "")
+	if permissionErr == nil {
+		canManage = true
+	} else if !errors.Is(permissionErr, access.ErrForbidden) {
+		return nil, permissionErr
+	}
+	if !canManage {
+		permissionErr = access.CheckTx(ctx, tx, actor, "ministry.members.manage", groupID)
+		if permissionErr == nil {
+			canManage = true
+		} else if !errors.Is(permissionErr, access.ErrForbidden) {
+			return nil, permissionErr
+		}
+	}
+	if !canManage {
+		var active bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM group_memberships WHERE group_id=$1 AND account_id=$2 AND status='active')`, groupID, actor).Scan(&active); err != nil {
+			return nil, err
+		}
+		if !active {
+			return nil, ErrForbidden
+		}
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name FROM group_memberships m JOIN accounts a ON a.id=m.account_id WHERE m.group_id=$1 AND m.status='active' AND a.email_verified_at IS NOT NULL ORDER BY a.first_name,a.last_name,a.id`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []Member{}
+	for rows.Next() {
+		var member Member
+		if err = rows.Scan(&member.AccountID, &member.FirstName, &member.LastName); err != nil {
+			return nil, err
+		}
+		result = append(result, member)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (s *Service) Leave(ctx context.Context, actor, groupID string) error {
 	if !validID(actor) || !validID(groupID) {
 		return ErrInvalid

@@ -153,6 +153,22 @@ func groupRoutes(mux *http.ServeMux, service *groups.Service, sessions *auth.Ses
 		}
 		writeJSON(w, 200, map[string]any{"data": requests})
 	})
+	mux.HandleFunc("GET /api/v1/groups/{groupId}/members", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		members, err := service.Members(r.Context(), actor, r.PathValue("groupId"))
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": members})
+	})
 	mux.HandleFunc("PATCH /api/v1/groups/{groupId}/membership-requests/{accountId}", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {
