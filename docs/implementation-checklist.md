@@ -111,9 +111,28 @@ proof of received email or completed real-provider login.
   church roles/domain permissions remain denied until their protected slices.
 - [ ] **M1.2:** Add role definitions/assignment lifecycle with additive migrations.
   Preserve technical editor/admin assignments without silently making anyone a
-  Super Admin. Resolve first-Super-Admin identity and mapping before live rollout.
+  Super Admin. Definition groundwork is implemented locally in migration 14:
+  eight catalog definitions, four reserved/inactive roles, assignment foreign key,
+  preserved legacy scope constraints and no account/assignment seeds. Protected
+  assignment lifecycle remains pending; this item is not complete. Resolve
+  first-Super-Admin identity and mapping before privileged-role live rollout.
 - [ ] **M1.3:** Implement owner-approved Super Admin bootstrap, last-admin protection,
   fresh reauthentication and MFA for privileged role/recovery/finance actions.
+  Fresh-authentication code is implemented locally: session-bound five-minute
+  password/Google confirmation, atomic audit, protected existing role mutations,
+  and frontend confirmation panels. See [contract](reauthentication.md). The
+  [MFA slice](mfa.md) now adds authenticator enrollment, session-bound verification,
+  encrypted seeds, one-use recovery, regeneration/disable and conditional MFA
+  enforcement on existing role mutations/Google linking. Mandatory privileged-role
+  policy, factor-change alerts, assisted recovery, bootstrap, last-admin invariants
+  and privileged role activation remain open;
+  this milestone is not complete. Local validation passed: full backend race
+  suite plus focused race regressions after the lock-wait correction, global HTTP
+  tests, vet, OpenAPI validation, 18 frontend unit tests, 30 mocked browser scenarios,
+  six real-API browser workflows (including MFA for password/Google-only accounts)
+  and Docker build/smoke verification. See the [MFA evidence](mfa.md#verified-local-checks).
+  No release
+  or staging acceptance is claimed.
 - [ ] **M1.4:** Implement audited role read/grant/revoke and eligible-member lookup.
   Only Super Admin can appoint pastors/admins/finance officers; Staff delegates only
   permitted operational appointments. Prevent self-escalation and scope inflation.

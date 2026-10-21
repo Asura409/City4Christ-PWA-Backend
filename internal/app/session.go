@@ -27,6 +27,10 @@ func requestRefresh(r *http.Request) string {
 }
 func sessionError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, auth.ErrMFARequired):
+		writeError(w, 403, "mfa_required", "Confirm your authenticator or use a recovery code before continuing.", nil)
+	case errors.Is(err, auth.ErrReauthenticationRequired):
+		writeError(w, 403, "reauthentication_required", "Confirm your identity before continuing.", nil)
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		writeError(w, 401, "invalid_credentials", "Email or password is incorrect.", nil)
 	case errors.Is(err, auth.ErrEmailUnverified):

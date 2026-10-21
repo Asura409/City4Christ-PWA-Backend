@@ -56,3 +56,5 @@ Executed checks: race tests passed across all packages with tests (access/app/se
 See [the access audit](access-management-audit.md) for the reproduced concurrency finding and its fix.
 
 The [church permission policy and current-access slice](church-permissions.md) defines scoped capability names and the protected rollout plan. `GET /api/v1/me/access` returns the caller’s effective role-derived permissions for navigation; it does not authorize appointments or replace server checks.
+
+Role grants and revocations now require [fresh session authentication](reauthentication.md). Confirm identity and explicitly resubmit when a mutation returns `403 reauthentication_required`. This does not enable reserved church roles or replace MFA.

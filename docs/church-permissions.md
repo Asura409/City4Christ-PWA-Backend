@@ -2,8 +2,9 @@
 
 The first M1 slice exposes existing effective staff access through
 `GET /api/v1/me/access` and uses it for frontend navigation and staff controls.
-It adds no role assignments, migrations, automatic promotions or new appointment
-powers. Super Admin, Assistant Pastor/Staff and Finance Officer activation remains
+It adds no role assignments, automatic promotions or new appointment powers.
+The subsequent catalog slice adds migration 14 with role definitions only.
+Super Admin, Assistant Pastor/Staff and Finance Officer activation remains
 behind the privileged-security/bootstrap work in M1.2–M1.4.
 
 The owner’s [requirements addendum](requirements/church-operations-addendum.md)
@@ -70,7 +71,7 @@ acquire one of these roles. Membership/visitor state belongs to the member domai
 
 1. Add role definitions and assignment constraints without converting existing
    accounts or expanding technical-role capabilities.
-2. Implement fresh reauthentication, MFA and audited recovery controls. Google-only
+2. Implement [fresh reauthentication](reauthentication.md), MFA and audited recovery controls. Google-only
    accounts reauthenticate with Google and keep no local password by default.
 3. Obtain the owner's explicit first-Super-Admin account approval, then bootstrap
    through the approved operator procedure. Do not infer it from the first signup,
@@ -85,8 +86,26 @@ acquire one of these roles. Membership/visitor state belongs to the member domai
 6. Add eligible-member lookup and User Management UI, then verify every actor,
    target, scope and still-valid session before owner-approved live rollout.
 
-These steps remain open milestone work. No privileged bootstrap or appointment is
-performed by the current-access endpoint.
+Migration 14 implements the definition groundwork for step 1. The
+`role_definitions` table records display names, global/ministry scope, assignment
+availability and delegation policy for the four existing technical roles plus
+four reserved church roles. Its foreign key preserves the connection between
+assignments and known definitions. Existing role/scope constraints and server
+policy remain authoritative; changing catalog metadata alone cannot activate a
+reserved role or grant a permission. No accounts, assignments or audit events are
+seeded. Historical audit names deliberately remain independent of the catalog.
+
+`assignment_enabled` means the role participates in the existing assignment
+model, not that every administrator may grant it. `legacy_access_admin` permits
+the existing editor/scoped-leader delegation; `legacy_operator` retains the
+existing operator-only administrator procedure. `protected_pending` is inactive.
+Verified accounts are not seeded with a Member role: church membership remains a
+separate domain decision.
+
+The migration is forward-only and repeatable through the existing migration
+runner. Deploying it requires no environment change or reset. The protected
+assignment lifecycle and remaining rollout steps stay open milestone work.
+No privileged bootstrap or appointment is performed by the current-access endpoint.
 
 ## Current-access contract
 

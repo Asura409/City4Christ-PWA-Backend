@@ -59,6 +59,7 @@ func (p *Provider) Exchange(ctx context.Context, code, nonce, verifier string) (
 		GivenName       string `json:"given_name"`
 		FamilyName      string `json:"family_name"`
 		AuthorizedParty string `json:"azp"`
+		AuthTime        int64  `json:"auth_time"`
 	}
 	if err := id.Claims(&claims); err != nil {
 		return auth.GoogleIdentity{}, auth.ErrInvalidOIDC
@@ -66,5 +67,9 @@ func (p *Provider) Exchange(ctx context.Context, code, nonce, verifier string) (
 	if (len(id.Audience) > 1 || claims.AuthorizedParty != "") && claims.AuthorizedParty != p.oauth.ClientID {
 		return auth.GoogleIdentity{}, auth.ErrInvalidOIDC
 	}
-	return auth.GoogleIdentity{Subject: id.Subject, Email: claims.Email, EmailVerified: claims.EmailVerified, FirstName: claims.GivenName, LastName: claims.FamilyName}, nil
+	var authenticatedAt time.Time
+	if claims.AuthTime > 0 {
+		authenticatedAt = time.Unix(claims.AuthTime, 0).UTC()
+	}
+	return auth.GoogleIdentity{AuthenticatedAt: authenticatedAt, Subject: id.Subject, Email: claims.Email, EmailVerified: claims.EmailVerified, FirstName: claims.GivenName, LastName: claims.FamilyName}, nil
 }

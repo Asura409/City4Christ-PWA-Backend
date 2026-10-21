@@ -59,12 +59,21 @@ func (s *Service) Check(ctx context.Context, actor, permission, scope string) er
 	return CheckTx(ctx, tx, actor, permission, scope)
 }
 func (s *Service) Grant(ctx context.Context, actor, target string, in Change) (bool, error) {
-	return s.change(ctx, actor, target, in, true)
+	return s.change(ctx, actor, target, in, true, nil)
 }
 func (s *Service) Revoke(ctx context.Context, actor, target string, in Change) (bool, error) {
-	return s.change(ctx, actor, target, in, false)
+	return s.change(ctx, actor, target, in, false, nil)
 }
-func (s *Service) change(ctx context.Context, actor, target string, in Change, grant bool) (bool, error) {
+
+// GrantWithGuard checks session freshness inside the same transaction as the
+// role policy, assignment and audit. Internal operator callers use Grant.
+func (s *Service) GrantWithGuard(ctx context.Context, actor, target string, in Change, guard func(context.Context, *sql.Tx) error) (bool, error) {
+	return s.change(ctx, actor, target, in, true, guard)
+}
+func (s *Service) RevokeWithGuard(ctx context.Context, actor, target string, in Change, guard func(context.Context, *sql.Tx) error) (bool, error) {
+	return s.change(ctx, actor, target, in, false, guard)
+}
+func (s *Service) change(ctx context.Context, actor, target string, in Change, grant bool, guard func(context.Context, *sql.Tx) error) (bool, error) {
 	if actor == target {
 		return false, ErrForbidden
 	}
@@ -75,6 +84,11 @@ func (s *Service) change(ctx context.Context, actor, target string, in Change, g
 	defer tx.Rollback()
 	if err = CheckTx(ctx, tx, actor, "roles.manage", ""); err != nil {
 		return false, err
+	}
+	if guard != nil {
+		if err = guard(ctx, tx); err != nil {
+			return false, err
+		}
 	}
 	in.Reason = strings.TrimSpace(in.Reason)
 	if !validID(target) || !utf8.ValidString(in.Reason) || strings.ContainsRune(in.Reason, 0) || utf8.RuneCountInString(in.Reason) < 1 || utf8.RuneCountInString(in.Reason) > 500 {
