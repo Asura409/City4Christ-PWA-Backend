@@ -23,7 +23,7 @@ func TestDocumentationThroughGlobalApp(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
 				t.Fatal(err)
 			}
-			for _, route := range []string{"/api/v1/members", "/api/v1/admin/accounts/{accountId}/roles", "/api/v1/admin/accounts/{accountId}/roles/revoke", "/api/v1/admin/sermons", "/api/v1/admin/sermons/{sermonId}", "/api/v1/sermons", "/api/v1/sermons/{sermonId}", "/health/live", "/health/ready", "/api/v1/auth/register", "/api/v1/auth/verification/verify", "/api/v1/auth/verification/resend", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/me", "/api/v1/auth/google/start", "/api/v1/auth/google/link", "/api/v1/auth/google/callback"} {
+			for _, route := range []string{"/api/v1/members", "/api/v1/admin/accounts/{accountId}/roles", "/api/v1/admin/accounts/{accountId}/roles/revoke", "/api/v1/admin/sermons", "/api/v1/admin/sermons/{sermonId}", "/api/v1/sermons", "/api/v1/sermons/{sermonId}", "/api/v1/groups", "/api/v1/admin/groups", "/api/v1/groups/{groupId}/membership", "/api/v1/groups/{groupId}/membership-requests", "/api/v1/groups/{groupId}/membership-requests/{accountId}", "/health/live", "/health/ready", "/api/v1/auth/register", "/api/v1/auth/verification/verify", "/api/v1/auth/verification/resend", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/me", "/api/v1/auth/google/start", "/api/v1/auth/google/link", "/api/v1/auth/google/callback"} {
 				if _, ok := spec.Paths[route]; !ok {
 					t.Fatalf("missing contract: %s", route)
 				}
@@ -146,6 +146,26 @@ func TestCurrentAccessContract(t *testing.T) {
 	current := schemas["CurrentAccess"].(map[string]any)["properties"].(map[string]any)
 	if len(current) != 2 || current["roles"] == nil || current["capabilities"] == nil {
 		t.Fatal("access snapshot exposes unexpected fields")
+	}
+}
+
+func TestGroupAudienceContractUsesChurchRoles(t *testing.T) {
+	w := httptest.NewRecorder()
+	New(nil, Config{}).ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	for _, name := range []string{"Group", "CreateGroupInput"} {
+		fields := schemas[name].(map[string]any)["properties"].(map[string]any)
+		if fields["audience"] == nil || fields["visibility"] != nil {
+			t.Fatalf("%s must describe group audience, not private visibility: %+v", name, fields)
+		}
+		values := fields["audience"].(map[string]any)["enum"].([]any)
+		if len(values) != 2 || values[0] != "church" || values[1] != "leadership" {
+			t.Fatalf("unexpected group audiences: %v", values)
+		}
 	}
 }
 
