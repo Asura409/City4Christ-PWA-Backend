@@ -98,11 +98,18 @@ func randomCredential() (string, error) {
 }
 func tokenDigest(token string) []byte { sum := sha256.Sum256([]byte(token)); return sum[:] }
 
+// Start is for trusted in-process callers that have verified authentication.
+// Ordinary Google SSO uses startWithAuthentication without a freshness proof.
 func (s *SessionService) Start(ctx context.Context, accountID string) (SessionTokens, error) {
 	return s.start(ctx, accountID, nil)
 }
 
 func (s *SessionService) start(ctx context.Context, accountID string, expectedHash *string) (SessionTokens, error) {
+	authenticatedAt := s.now().UTC()
+	return s.startWithAuthentication(ctx, accountID, expectedHash, &authenticatedAt)
+}
+
+func (s *SessionService) startWithAuthentication(ctx context.Context, accountID string, expectedHash *string, authenticatedAt *time.Time) (SessionTokens, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SessionTokens{}, err
@@ -122,7 +129,7 @@ func (s *SessionService) start(ctx context.Context, accountID string, expectedHa
 	now := s.now().UTC()
 	expires := now.Add(RefreshLifetime)
 	sid := uuid.NewString()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_sessions(id,account_id,expires_at,created_at) VALUES($1,$2,$3,$4)`, sid, accountID, expires, now); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_sessions(id,account_id,expires_at,created_at,authenticated_at) VALUES($1,$2,$3,$4,$5)`, sid, accountID, expires, now, authenticatedAt); err != nil {
 		return SessionTokens{}, err
 	}
 	tokens, err := s.issue(ctx, tx, accountID, sid, now, expires)

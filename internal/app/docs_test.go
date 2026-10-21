@@ -148,3 +148,84 @@ func TestCurrentAccessContract(t *testing.T) {
 		t.Fatal("access snapshot exposes unexpected fields")
 	}
 }
+
+func TestReauthenticationContractRequiresBearerAndSeparateConfirmation(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	for _, tc := range []struct{ path, method string }{{"/api/v1/auth/reauthentication", "get"}, {"/api/v1/auth/reauthentication/password", "post"}, {"/api/v1/auth/reauthentication/google", "post"}} {
+		entry, ok := paths[tc.path].(map[string]any)
+		if !ok {
+			t.Fatalf("missing reauthentication contract %s", tc.path)
+		}
+		operation := entry[tc.method].(map[string]any)
+		if len(operation["security"].([]any)) != 1 {
+			t.Fatal("missing Bearer requirement")
+		}
+		if _, ok := operation["responses"].(map[string]any)["429"]; !ok {
+			t.Fatal("missing rate limit contract")
+		}
+	}
+}
+
+func TestMFAContractRequiresPrivateBearerRoutes(t *testing.T) {
+	w := httptest.NewRecorder()
+	New(nil, Config{}).ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	for _, suffix := range []string{"", "/enroll", "/confirm", "/verify", "/recovery", "/recovery/regenerate", "/disable"} {
+		path := "/api/v1/auth/mfa" + suffix
+		entry, ok := paths[path].(map[string]any)
+		if !ok {
+			t.Fatal("missing MFA contract", path)
+		}
+		method := "post"
+		if suffix == "" {
+			method = "get"
+		}
+		op := entry[method].(map[string]any)
+		if len(op["security"].([]any)) != 1 {
+			t.Fatal("MFA endpoint missing Bearer security")
+		}
+	}
+}
+
+func TestChurchRoleContract(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec struct {
+		Paths      map[string]map[string]map[string]any `json:"paths"`
+		Components struct {
+			Schemas map[string]map[string]any `json:"schemas"`
+		} `json:"components"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ path, method string }{{"/api/v1/admin/role-candidates", "get"}, {"/api/v1/admin/accounts/{accountId}/church-roles", "get"}, {"/api/v1/admin/accounts/{accountId}/church-roles", "post"}, {"/api/v1/admin/accounts/{accountId}/church-roles/revoke", "post"}} {
+		op := spec.Paths[tc.path][tc.method]
+		if op == nil {
+			t.Fatalf("missing church role contract: %s %s", tc.method, tc.path)
+		}
+		if len(op["security"].([]any)) == 0 {
+			t.Fatal("anonymous protected role contract")
+		}
+	}
+	candidate := spec.Components.Schemas["RoleCandidate"]
+	if candidate == nil {
+		t.Fatal("candidate contract missing")
+	}
+	fields := candidate["properties"].(map[string]any)
+	if len(fields) != 5 || fields["mfaEnabled"] == nil || candidate["additionalProperties"] != false {
+		t.Fatal("candidate privacy contract")
+	}
+}

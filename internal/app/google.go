@@ -76,6 +76,9 @@ func googleRoutes(mux *http.ServeMux, google *auth.GoogleService, c Config) {
 			writeError(w, 400, "invalid_oidc", "Google sign-in could not be completed.", nil)
 			return
 		}
+		if handleGoogleReauthentication(w, r, google, c, cookies[0].Value) {
+			return
+		}
 		tokens, target, err := google.CompleteWithReturn(r.Context(), r.URL.Query().Get("state"), cookies[0].Value, r.URL.Query().Get("code"))
 		if target != "" {
 			if !googleReturnAllowed(c, target) {
@@ -97,6 +100,8 @@ func googleRoutes(mux *http.ServeMux, google *auth.GoogleService, c Config) {
 				code = "registration_closed"
 			case errors.Is(err, auth.ErrInvalidSession):
 				code = "invalid_session"
+			case errors.Is(err, auth.ErrMFARequired):
+				code = "mfa_required"
 			}
 			destination, _ := url.Parse(target)
 			q := destination.Query()

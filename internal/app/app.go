@@ -56,12 +56,16 @@ func New(db *sql.DB, config Config) http.Handler {
 	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
 	accessService := access.NewService(db)
 	accessRoutes(mux, accessService, sessions, limiter, config)
+	churchRoleRoutes(mux, accessService, sessions, limiter, config)
 	currentAccessRoutes(mux, accessService, sessions, limiter, config)
 	var google *auth.GoogleService
 	if sessions != nil && config.GoogleProvider != nil {
 		google = auth.NewGoogleService(db, sessions, config.GoogleProvider, config.RegistrationEnabled, config.Now)
 	}
 	googleRoutes(mux, google, config)
+	reauthenticationRoutes(mux, sessions, google, limiter, config)
+	mfa, _ := auth.NewMFAService(db, sessions, config.VerificationKey)
+	mfaRoutes(mux, mfa, sessions, limiter, config)
 	mux.HandleFunc("GET /health/live", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"status": "ok"}})
 	})

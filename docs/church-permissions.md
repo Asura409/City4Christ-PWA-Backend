@@ -2,9 +2,12 @@
 
 The first M1 slice exposes existing effective staff access through
 `GET /api/v1/me/access` and uses it for frontend navigation and staff controls.
-It adds no role assignments, migrations, automatic promotions or new appointment
-powers. Super Admin, Assistant Pastor/Staff and Finance Officer activation remains
-behind the privileged-security/bootstrap work in M1.2–M1.4.
+It adds no role assignments, automatic promotions or new appointment powers.
+The subsequent catalog slice adds migration 14 with role definitions only.
+Migration17 now activates protected church appointments without assigning any
+account. See [implemented lifecycle](church-role-management.md) for authority,
+mandatory MFA, bootstrap and last-administrator protection. Release and the owner’s
+first real administrator approval remain separate.
 
 The owner’s [requirements addendum](requirements/church-operations-addendum.md)
 controls the target policy. The [current access-management contract](access-management.md)
@@ -30,14 +33,17 @@ An authenticated/verified account is not automatically confirmed church membersh
 
 ## Named capability plan
 
-Only the three permissions in the first table are implemented in the centralized
-role checker today. The second table reserves target names for future domains;
+The baseline permissions in the first table and the protected appointment
+capabilities described below are implemented in the centralized role checker. The second table includes the broader target policy for future domains;
 unknown names currently deny access and are not advertised as usable permissions.
 
 | Implemented permission | Assignment | Exact scope |
 | --- | --- | --- |
-| `sermons.manage` | `content_editor`, legacy `system_administrator` | Global |
-| `roles.manage` | `access_administrator` | Global; existing editor/leader delegation only |
+| `sermons.manage` | `content_editor`, legacy `system_administrator`, Super Admin, Assistant Pastor/Staff | Global |
+| `roles.manage` | `access_administrator`, Super Admin | Global; existing editor/leader delegation only |
+| `roles.read` | Super Admin, Assistant Pastor/Staff | Global; authorized candidate/assignment lookup |
+| `roles.privileged.manage` | Super Admin | Global; protected church appointments only |
+| `roles.operational.manage` | Super Admin, Assistant Pastor/Staff | Global authority to appoint leaders to registered ministry scopes |
 | `ministry.members.manage` | `ministry_leader` | Assigned registered ministry only; ministry routes remain future work |
 
 | Planned capability | Super Admin | Assistant Pastor / Staff | Ministry Leader / task assignee | Member |
@@ -61,8 +67,10 @@ separate from staff-role capabilities. Future group participation, giving, RSVP,
 prayer and messaging also require domain ownership/audience/membership checks;
 this table does not implement those routes or override privacy rules.
 
-Reserved role identifiers for the next lifecycle slice are `super_administrator`,
-`assistant_pastor`, `staff` and `finance_officer`. Keep existing technical roles
+The protected lifecycle activates `super_administrator`,
+`assistant_pastor`, `staff` and `finance_officer`. See the lifecycle contract
+for `roles.read`, `roles.operational.manage`, `roles.privileged.manage` and sermon
+authority. Keep existing technical roles
 until an explicitly approved mapping is ready. A verified account alone does not
 acquire one of these roles. Membership/visitor state belongs to the member domain.
 
@@ -70,7 +78,7 @@ acquire one of these roles. Membership/visitor state belongs to the member domai
 
 1. Add role definitions and assignment constraints without converting existing
    accounts or expanding technical-role capabilities.
-2. Implement fresh reauthentication, MFA and audited recovery controls. Google-only
+2. Implement [fresh reauthentication](reauthentication.md), MFA and audited recovery controls. Google-only
    accounts reauthenticate with Google and keep no local password by default.
 3. Obtain the owner's explicit first-Super-Admin account approval, then bootstrap
    through the approved operator procedure. Do not infer it from the first signup,
@@ -85,8 +93,28 @@ acquire one of these roles. Membership/visitor state belongs to the member domai
 6. Add eligible-member lookup and User Management UI, then verify every actor,
    target, scope and still-valid session before owner-approved live rollout.
 
-These steps remain open milestone work. No privileged bootstrap or appointment is
-performed by the current-access endpoint.
+Migration 14 implements the definition groundwork for step 1. The
+`role_definitions` table records display names, global/ministry scope, assignment
+availability and delegation policy for the four existing technical roles plus
+four reserved church roles. Its foreign key preserves the connection between
+assignments and known definitions. Existing role/scope constraints and server
+policy remain authoritative; changing catalog metadata alone cannot activate a
+reserved role or grant a permission. No accounts, assignments or audit events are
+seeded. Historical audit names deliberately remain independent of the catalog.
+
+`assignment_enabled` means the role participates in the existing assignment
+model, not that every administrator may grant it. `legacy_access_admin` permits
+the existing editor/scoped-leader delegation; `legacy_operator` retains the
+existing operator-only administrator procedure. `protected_pending` is inactive. Migration17 changes the four protected church
+roles to `protected_church`; catalog metadata alone still cannot change server
+authority.
+Verified accounts are not seeded with a Member role: church membership remains a
+separate domain decision.
+
+Migrations remain forward-only and repeatable. Migration17 implements the protected
+assignment lifecycle and singleton operator bootstrap; no environment change or
+reset is needed. Owner-approved live bootstrap and rollout remain pending.
+No privileged bootstrap or appointment is performed by the current-access endpoint.
 
 ## Current-access contract
 
@@ -125,6 +153,10 @@ permissions; logout invalidates late responses. This does not provide realtime
 push of role changes to an already-focused tab. Server denials always take effect
 independently of navigation visibility. Membership-scoped groundwork does not show
 publishing/delegation tools or claim that ministry management is implemented.
+
+The church-role slice extends labels/navigation for the new implemented
+capabilities; it retains exact-scope checks and does not advertise future finance,
+care or group capabilities. See [current lifecycle contract](church-role-management.md).
 
 The authorization boundary follows the
 [OWASP authorization guidance](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html):

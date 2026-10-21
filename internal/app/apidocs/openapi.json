@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.7.0",
+    "version": "1.10.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min."
   },
   "servers": [
@@ -550,7 +550,7 @@
         ],
         "summary": "Begin Google linking",
         "operationId": "BeginGooglelinking",
-        "description": "Requires an allowed Origin and an active Bearer session created within five minutes of login. Explicitly link Google to this account; email must match and be verified. Refreshing a token does not count as a new login. Optional returnTo enables browser completion: callback sets the refresh cookie and redirects to the stored frontend page, without access credentials in the URL or response body. The frontend then POSTs /auth/refresh with credentials. Binding cookie uses SameSite=None when cross-site cookies are enabled, otherwise Lax.",
+        "description": "Requires an allowed Origin and an active Bearer session with password authentication or explicit confirmation within five minutes. Explicitly link Google to this account; email must match and be verified. Use /auth/reauthentication/password or /auth/reauthentication/google when confirmation is stale. Refreshing a token does not renew freshness. Existing sessions from before this migration and ordinary Google SSO without confirmation require confirmation. Optional returnTo enables browser completion: callback sets the refresh cookie and redirects to the stored frontend page, without access credentials in the URL or response body. The frontend then POSTs /auth/refresh with credentials. Binding cookie uses SameSite=None when cross-site cookies are enabled, otherwise Lax. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
         "responses": {
           "200": {
             "description": "Success",
@@ -613,14 +613,40 @@
         ],
         "summary": "Complete Google login",
         "operationId": "CompleteGooglelogin",
-        "description": "Google redirects here with code and state. Requires the matching browser-binding cookie and consumes the flow once. Validates signature, issuer, audience, expiry, nonce and verified email. Never automatically links matching local email: account_link_required means sign in locally and explicitly link. Returns JSON tokens and a refresh cookie, not a frontend redirect. A frontend completion page can subsequently call refresh using the cookie. The browser-binding cookie is cleared.",
+        "description": "Google redirects here with code and state. Requires the matching browser-binding cookie and consumes the flow once. Validates signature, issuer, audience, expiry, nonce and verified email. Never automatically links matching local email: account_link_required means sign in locally and explicitly link. Returns JSON tokens and a refresh cookie, not a frontend redirect. A frontend completion page can subsequently call refresh using the cookie. The browser-binding cookie is cleared. Reauthentication-purpose flows confirm only an existing linked identity and existing active session. They require a recent signed auth_time, never issue or replace application tokens, and cannot be used as login/link flows.",
         "responses": {
           "200": {
-            "description": "Success",
+            "description": "Login/link: session tokens and refresh cookie. Reauthentication: status only, with no application token or refresh-cookie replacement.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionTokens"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SessionTokens"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "data"
+                      ],
+                      "properties": {
+                        "data": {
+                          "type": "object",
+                          "required": [
+                            "status"
+                          ],
+                          "properties": {
+                            "status": {
+                              "type": "string",
+                              "enum": [
+                                "reauthenticated"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
                 }
               }
             },
@@ -1145,7 +1171,7 @@
                 "editTitle": {
                   "value": {
                     "version": 2,
-                    "title": "Living in Faith \u2014 Updated"
+                    "title": "Living in Faith — Updated"
                   }
                 },
                 "unpublish": {
@@ -1195,7 +1221,7 @@
             }
           }
         ],
-        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "description": "Verified active access_administrator or super_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
         "responses": {
           "200": {
             "description": "Success. Repeated identical mutations return changed=false without another audit event.",
@@ -1260,7 +1286,7 @@
             }
           }
         ],
-        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "description": "Verified active access_administrator or super_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet. Requires fresh session authentication (five-minute window), checked and locked in the assignment transaction. A stale session returns 403 reauthentication_required; confirm identity and explicitly resubmit. Protected church appointments use the separate church-roles routes and mandatory MFA. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
         "responses": {
           "200": {
             "description": "Success. Repeated identical mutations return changed=false without another audit event.",
@@ -1342,7 +1368,7 @@
             }
           }
         ],
-        "description": "Verified active access_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet.",
+        "description": "Verified active access_administrator or super_administrator session required. System administrators do not inherit delegation rights. Maximum 30 access-management requests per administrator per minute. Mutations require an allowed Origin and JSON body (16 KiB maximum). The API cannot grant or revoke privileged administrator, finance or care roles. Ministry scopes are operator-registered groundwork; no ministry module exists yet. Requires fresh session authentication (five-minute window), checked and locked in the assignment transaction. A stale session returns 403 reauthentication_required; confirm identity and explicitly resubmit. Protected church appointments use the separate church-roles routes and mandatory MFA. Enrolled accounts additionally require fresh app-specific MFA confirmation; otherwise 403 mfa_required. Google linking checks this again at callback. Provider amr claims do not substitute for the application authenticator.",
         "responses": {
           "200": {
             "description": "Success. Repeated identical mutations return changed=false without another audit event.",
@@ -1691,6 +1717,1091 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reauthentication": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Read my session confirmation status",
+        "operationId": "GetReauthenticationStatus",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Verified active Bearer session required. Query parameters and target account identifiers are rejected. Confirmation belongs only to the current server-side session and expires after five minutes (or earlier session expiry). Refresh does not extend it. Confirmation does not grant any role or satisfy MFA. Maximum 60 requests/account/minute and 120/IP/minute.",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No application access/refresh tokens are issued or rotated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReauthenticationResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reauthentication/password": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Confirm my current password",
+        "operationId": "ConfirmPassword",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Verified active Bearer session required. Query parameters and target account identifiers are rejected. Confirmation belongs only to the current server-side session and expires after five minutes (or earlier session expiry). Refresh does not extend it. Confirmation does not grant any role or satisfy MFA. Allowed Origin and application/json required. Password and Google confirmation share five attempts/account/15 minutes; auth IP limit is 60/minute. Failures return no secrets.",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No application access/refresh tokens are issued or rotated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReauthenticationResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "writeOnly": true
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/reauthentication/google": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Confirm an already-linked Google identity",
+        "operationId": "BeginGoogleReauthentication",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Verified active Bearer session required. Query parameters and target account identifiers are rejected. Confirmation belongs only to the current server-side session and expires after five minutes (or earlier session expiry). Refresh does not extend it. Confirmation does not grant any role or satisfy MFA. Allowed Origin and application/json required. Password and Google confirmation share five attempts/account/15 minutes; auth IP limit is 60/minute. Failures return no secrets. Requests nonce, PKCE S256, one-use state, max_age=0 and essential signed auth_time. Browser binding cookie is Secure and HttpOnly. The existing Google callback validates the already-linked subject and recent auth_time; it never signs up, links an identity or starts a session. Missing/stale auth_time fails closed. Browser completion returns to stored returnTo with reauthentication=complete or auth_error=reauthentication_failed; markers are display hints, not proof. Read status after return. Without returnTo, callback returns a status object. No additional Google redirect URI is needed.",
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No application access/refresh tokens are issued or rotated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoogleStart"
+                }
+              }
+            }
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "returnTo": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 2048,
+                    "description": "Optional exact allowed HTTPS origin with auth.html path, without query or fragment."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Read my authenticator status",
+        "operationId": "GetMFAStatus",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Maximum 60/account/minute and 120/IP/minute. No setup secret, QR or recovery codes are returned. ",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MFAStatus"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/enroll": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Start private authenticator setup",
+        "operationId": "BeginMFAEnrollment",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Exact allowed Origin, JSON and primary authentication within five minutes required. Verification/confirmation/recovery share five attempts/account/15 minutes; setup/regeneration/disable share five management requests/account/15 minutes. Auth IP limit 60/minute. Ten-minute setup is bound to this session. Replaces only pending setup; an active factor cannot be overwritten. Keep seed, URI and QR private; never cache or log this response.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MFAEnrollment"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/confirm": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Activate authenticator with a valid setup code",
+        "operationId": "ConfirmMFAEnrollment",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Exact allowed Origin, JSON and primary authentication within five minutes required. Verification/confirmation/recovery share five attempts/account/15 minutes; setup/regeneration/disable share five management requests/account/15 minutes. Auth IP limit 60/minute. Requires the initiating session, enrollment ID and one-use valid TOTP. Atomically activates the factor, verifies this session and returns ten recovery codes once.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MFARecoveryCodes"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "enrollmentId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{6}$"
+                  }
+                },
+                "required": [
+                  "enrollmentId",
+                  "code"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/verify": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Verify an authenticator code for this session",
+        "operationId": "VerifyMFA",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Exact allowed Origin, JSON and primary authentication within five minutes required. Verification/confirmation/recovery share five attempts/account/15 minutes; setup/regeneration/disable share five management requests/account/15 minutes. Auth IP limit 60/minute. Six-digit SHA1 TOTP with 30-second periods and one-step clock tolerance. Counter replay is prevented across all sessions. Proof lasts at most five minutes, bounded by primary freshness/session expiry.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MFAStatus"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{6}$"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/recovery": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Use a single-use recovery code",
+        "operationId": "RecoverMFA",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Exact allowed Origin, JSON and primary authentication within five minutes required. Verification/confirmation/recovery share five attempts/account/15 minutes; setup/regeneration/disable share five management requests/account/15 minutes. Auth IP limit 60/minute. Consumes exactly one code atomically, clears previous MFA proofs and verifies this session. Does not renew primary authentication, disable MFA or bypass account password/Google confirmation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MFAStatus"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "recoveryCode": {
+                    "type": "string",
+                    "minLength": 43,
+                    "maxLength": 43
+                  }
+                },
+                "required": [
+                  "recoveryCode"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/recovery/regenerate": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Replace all recovery codes",
+        "operationId": "RegenerateMFARecovery",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Exact allowed Origin, JSON and primary authentication within five minutes required. Verification/confirmation/recovery share five attempts/account/15 minutes; setup/regeneration/disable share five management requests/account/15 minutes. Auth IP limit 60/minute. Requires fresh primary and MFA confirmation. Invalidates all previous recovery codes and other session MFA proofs. Returned codes are shown once.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/MFARecoveryCodes"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/disable": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Disable authenticator protection",
+        "operationId": "DisableMFA",
+        "description": "Active verified Bearer session required; no query parameters or target IDs accepted. TOTP protects sensitive actions, not ordinary first-factor login in this slice. No administrator is appointed. Exact allowed Origin, JSON and primary authentication within five minutes required. Verification/confirmation/recovery share five attempts/account/15 minutes; setup/regeneration/disable share five management requests/account/15 minutes. Auth IP limit 60/minute. Requires fresh primary and MFA confirmation. Deletes the factor, pending secret, codes and all MFA proofs atomically with audit. Mandatory privileged-role MFA policy is future work.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "description": "mfa_protected_role: remove protected church appointments through authorized role management before disabling MFA."
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Private no-store response. No access or refresh tokens are issued.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "disabled"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/church-roles": {
+      "get": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "ListChurchRoleAssignments",
+        "summary": "Read a target account’s current assignments",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoleAssignment"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Church-role read permission is required."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "GrantChurchRole",
+        "summary": "Grant a protected church role or scoped leader appointment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected. Every mutation additionally requires fresh primary identity confirmation and mandatory current-session application MFA, rechecked in the assignment transaction after locks. Super Admin alone can grant/revoke the four global church roles; Assistant Pastor/Staff can appoint registered-scope ministry leaders only. Protected-role grant targets must be verified and MFA-enrolled. No self-grant; only Super Admin self-resignation is allowed when another verified MFA-enrolled Super Admin remains. Changes and audit commit atomically. Confirm identity/MFA then explicitly resubmit; never automatically replay a mutation. This route does not bootstrap administrators or create ministries.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changed"
+                      ],
+                      "properties": {
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Forbidden role delegation, missing/stale identity or MFA, self-escalation, or disallowed Origin."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          },
+          "409": {
+            "description": "last_administrator: this operation would remove the last effective Super Admin."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChurchRoleChange"
+              },
+              "examples": {
+                "staff": {
+                  "value": {
+                    "role": "staff",
+                    "scope": "",
+                    "reason": "Approved church staff appointment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/accounts/{accountId}/church-roles/revoke": {
+      "post": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "RevokeChurchRole",
+        "summary": "Revoke a church role or scoped ministry appointment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected. Every mutation additionally requires fresh primary identity confirmation and mandatory current-session application MFA, rechecked in the assignment transaction after locks. Super Admin alone can grant/revoke the four global church roles; Assistant Pastor/Staff can appoint registered-scope ministry leaders only. Protected-role grant targets must be verified and MFA-enrolled. No self-grant; only Super Admin self-resignation is allowed when another verified MFA-enrolled Super Admin remains. Changes and audit commit atomically. Confirm identity/MFA then explicitly resubmit; never automatically replay a mutation. This route does not bootstrap administrators or create ministries.",
+        "responses": {
+          "200": {
+            "description": "Success. Repeated identical mutations return changed=false without another audit event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changed"
+                      ],
+                      "properties": {
+                        "changed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Forbidden role delegation, missing/stale identity or MFA, self-escalation, or disallowed Origin."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
+          },
+          "409": {
+            "description": "last_administrator: this operation would remove the last effective Super Admin."
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChurchRoleChange"
+              },
+              "examples": {
+                "staff": {
+                  "value": {
+                    "role": "staff",
+                    "scope": "",
+                    "reason": "Approved church staff appointment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/role-candidates": {
+      "get": {
+        "tags": [
+          "Access management"
+        ],
+        "operationId": "SearchRoleCandidates",
+        "summary": "Search verified accounts for an explicit role appointment",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 100
+            },
+            "description": "Literal case-insensitive name or email substring; wildcard characters are escaped."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Previous nextCursor, with the same query."
+          }
+        ],
+        "description": "Verified active Bearer session. roles.read permits Super Admin, Assistant Pastor and Staff lookup. Limits shared across church-role routes: 30/account/minute and 120/IP/minute. Responses are no-store. Unknown or duplicate query parameters are rejected.",
+        "responses": {
+          "200": {
+            "description": "Minimal verified account candidates. No phone, address, giving or prayer details. A candidate may lack MFA; protected-role grants will reject that target until enrollment is confirmed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RoleCandidate"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string",
+                          "description": "Canonical UUID cursor or empty when no further page exists."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed JSON or unknown field"
+          },
+          "401": {
+            "description": "Missing, expired or revoked session"
+          },
+          "403": {
+            "description": "Church-role read permission is required."
+          },
+          "422": {
+            "description": "Invalid target, role, scope or reason"
+          },
+          "429": {
+            "description": "Administrator request limit reached"
+          },
+          "503": {
+            "description": "Unavailable; mutation rolls back if audit fails"
           }
         }
       }
@@ -2489,7 +3600,10 @@
             "enum": [
               "sermons.manage",
               "roles.manage",
-              "ministry.members.manage"
+              "ministry.members.manage",
+              "roles.read",
+              "roles.operational.manage",
+              "roles.privileged.manage"
             ]
           },
           "scope": {
@@ -2530,6 +3644,185 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/CurrentAccess"
+          }
+        }
+      },
+      "ReauthenticationStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "fresh",
+          "freshUntil",
+          "passwordAvailable",
+          "googleAvailable"
+        ],
+        "properties": {
+          "fresh": {
+            "type": "boolean"
+          },
+          "freshUntil": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "Server-side session deadline, or null when confirmation is required."
+          },
+          "passwordAvailable": {
+            "type": "boolean"
+          },
+          "googleAvailable": {
+            "type": "boolean",
+            "description": "An existing Google identity and a configured provider are required."
+          }
+        }
+      },
+      "ReauthenticationResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReauthenticationStatus"
+          }
+        }
+      },
+      "MFAStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "pending",
+          "freshUntil",
+          "recoveryCodesRemaining"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "pending": {
+            "type": "boolean"
+          },
+          "freshUntil": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "recoveryCodesRemaining": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10
+          }
+        }
+      },
+      "MFAEnrollment": {
+        "type": "object",
+        "required": [
+          "id",
+          "secret",
+          "uri",
+          "qrImage",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "secret": {
+            "type": "string",
+            "description": "Private manual setup key. Returned once for this setup; never store in browser storage or send to third parties."
+          },
+          "uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "qrImage": {
+            "type": "string",
+            "description": "Private data:image/png;base64 QR image generated locally."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MFARecoveryCodes": {
+        "type": "object",
+        "required": [
+          "recoveryCodes"
+        ],
+        "properties": {
+          "recoveryCodes": {
+            "type": "array",
+            "minItems": 10,
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 43,
+              "maxLength": 43
+            },
+            "description": "One-time display of high-entropy single-use recovery codes. Only digests are persisted."
+          }
+        }
+      },
+      "ChurchRoleChange": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "role",
+          "reason"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "super_administrator",
+              "assistant_pastor",
+              "staff",
+              "finance_officer",
+              "ministry_leader"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "description": "Empty for church-wide roles; registered canonical nonzero ministry UUID for ministry_leader.",
+            "default": ""
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "RoleCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "email",
+          "mfaEnabled"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "mfaEnabled": {
+            "type": "boolean",
+            "description": "Confirmed application authenticator is enrolled; contains no setup secret or session proof."
           }
         }
       }

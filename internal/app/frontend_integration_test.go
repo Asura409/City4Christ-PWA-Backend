@@ -39,9 +39,22 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	}
 	server := httptest.NewUnstartedServer(nil)
 	origin := "https://" + server.Listener.Addr().String()
-	api := New(db, Config{RegistrationEnabled: true, VerificationKey: key, AppOrigin: origin})
+	config := Config{RegistrationEnabled: true, VerificationKey: key, AppOrigin: origin, GoogleProvider: &browserReauthenticationProvider{}}
+	api := New(db, config)
+	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key})
+	if err != nil {
+		t.Fatal(err)
+	}
 	files := http.FileServer(http.Dir(dist))
+	scenarioIPs := &browserScenarioIPs{}
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		scenarioIPs.apply(r)
+		if browserChurchRoleFixture(w, r, db) {
+			return
+		}
+		if browserReauthenticationFixture(w, r, db, sessions, config) {
+			return
+		}
 		switch {
 		case r.URL.Path == "/js/config.js":
 			w.Header().Set("Content-Type", "text/javascript")
@@ -103,7 +116,11 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "npm", "exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs")
+	args := []string{"exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs", "--output", filepath.Join(t.TempDir(), "browser-results")}
+	if pattern := os.Getenv("FRONTEND_E2E_GREP"); pattern != "" {
+		args = append(args, "--grep", pattern)
+	}
+	cmd := exec.CommandContext(ctx, "npm", args...)
 	cmd.Dir = filepath.Dir(dist)
 	cmd.Env = append(os.Environ(), "E2E_BASE_URL="+origin)
 	output, err := cmd.CombinedOutput()

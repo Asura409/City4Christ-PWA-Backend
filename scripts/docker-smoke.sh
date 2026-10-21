@@ -26,6 +26,8 @@ docker run --rm --network "$suffix" -e DATABASE_URL="$url" -e VERIFICATION_KEY_B
 docker exec "$db" psql -U smoke -d smoke -v ON_ERROR_STOP=1 -c "INSERT INTO accounts(email,first_name,last_name) VALUES ('preserve@example.org','Smoke','Test')" >/dev/null
 docker run --rm --network "$suffix" -e DATABASE_URL="$url" -e VERIFICATION_KEY_BASE64="$key" "$image" /app/api migrate
 test "$(docker exec "$db" psql -U smoke -d smoke -tAc "SELECT count(*) FROM accounts WHERE email='preserve@example.org'")" = 1
+test "$(docker exec "$db" psql -U smoke -d smoke -tAc "SELECT count(*) FROM church_role_bootstrap")" = 0
+test "$(docker exec "$db" psql -U smoke -d smoke -tAc "SELECT count(*) FROM account_roles WHERE role='super_administrator'")" = 0
 docker run -d --name "$api" --network "$suffix" -p 127.0.0.1::10000 -e DATABASE_URL="$url" -e VERIFICATION_KEY_BASE64="$key" -e APP_ORIGIN=https://smoke.example "$image" /app/api migrate-and-serve >/dev/null
 endpoint="http://$(docker port "$api" 10000/tcp)"
 for attempt in {1..60}; do
@@ -37,6 +39,10 @@ curl --fail --silent "$endpoint/docs/" >/dev/null
 curl --fail --silent "$endpoint/openapi.json" >/dev/null
 curl --fail --silent "$endpoint/api/v1/sermons" >/dev/null
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/me/access")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/auth/reauthentication")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/auth/mfa")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/admin/role-candidates?query=Smoke")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/admin/accounts/11111111-1111-4111-8111-111111111111/church-roles")" = 401
 curl --fail --silent "$endpoint/docs/swagger-ui-bundle.js" >/dev/null
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/auth/register")" = 403
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/admin/sermons")" = 401

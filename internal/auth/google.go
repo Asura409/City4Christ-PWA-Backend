@@ -23,6 +23,7 @@ var (
 type GoogleIdentity struct {
 	Subject, Email, FirstName, LastName string
 	EmailVerified                       bool
+	AuthenticatedAt                     time.Time
 }
 type GoogleProvider interface {
 	AuthURL(state, nonce, verifier string) string
@@ -68,16 +69,19 @@ func (s *GoogleService) BeginWithReturn(ctx context.Context, browser, access, re
 			return GoogleFlow{}, err
 		}
 		// Refreshing an access token does not constitute password/provider reauthentication.
-		var authenticatedAt time.Time
-		if err := s.db.QueryRowContext(ctx, `SELECT created_at FROM auth_sessions WHERE id=$1`, sid).Scan(&authenticatedAt); err != nil {
+		var authenticatedAt *time.Time
+		if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(reauthenticated_at,authenticated_at) FROM auth_sessions WHERE id=$1`, sid).Scan(&authenticatedAt); err != nil {
 			return GoogleFlow{}, err
 		}
-		if now.Sub(authenticatedAt) >= 5*time.Minute {
+		if authenticatedAt == nil || authenticatedAt.After(now) || now.Sub(*authenticatedAt) >= ReauthenticationLifetime {
 			return GoogleFlow{}, ErrInvalidSession
 		}
 		accountID = &a.ID
 		sessionID = &sid
 		expires = minTime(expires, authenticatedAt.Add(5*time.Minute))
+		if err := s.sessions.RequireSensitive(ctx, access); err != nil {
+			return GoogleFlow{}, err
+		}
 	}
 	state, err := randomCredential()
 	if err != nil {
@@ -106,7 +110,7 @@ func (s *GoogleService) CompleteWithReturn(ctx context.Context, state, browser, 
 	var nonce, verifier string
 	var accountID, sessionID *string
 	// Atomic deletion ensures exactly one callback can exchange the authorization code.
-	err := s.db.QueryRowContext(ctx, `DELETE FROM google_oidc_flows WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>$3 RETURNING nonce,pkce_verifier,link_account_id,link_session_id,return_to`, tokenDigest(state), tokenDigest(browser), s.now().UTC()).Scan(&nonce, &verifier, &accountID, &sessionID, &returnTo)
+	err := s.db.QueryRowContext(ctx, `DELETE FROM google_oidc_flows WHERE state_digest=$1 AND browser_digest=$2 AND expires_at>$3 AND reauth_session_id IS NULL RETURNING nonce,pkce_verifier,link_account_id,link_session_id,return_to`, tokenDigest(state), tokenDigest(browser), s.now().UTC()).Scan(&nonce, &verifier, &accountID, &sessionID, &returnTo)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SessionTokens{}, returnTo, ErrInvalidOIDC
 	}
@@ -126,7 +130,7 @@ func (s *GoogleService) CompleteWithReturn(ctx context.Context, state, browser, 
 	if err != nil {
 		return SessionTokens{}, returnTo, err
 	}
-	tokens, err := s.sessions.Start(ctx, id)
+	tokens, err := s.sessions.startWithAuthentication(ctx, id, nil, nil)
 	return tokens, returnTo, err
 }
 func googleName(value, fallback string) string {
@@ -154,12 +158,25 @@ func (s *GoogleService) resolve(ctx context.Context, identity GoogleIdentity, li
 	}
 	if linkAccount != nil {
 		var email string
+		var primaryAt *time.Time
+		var sessionExpiry time.Time
+		var lockedID string
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 FOR SHARE`, *linkAccount).Scan(&lockedID); err != nil {
+			return "", err
+		}
 		// Lock the authorizing session so logout/replay cannot race the link decision.
-		err := tx.QueryRowContext(ctx, `SELECT a.email FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND s.created_at>$4 AND a.email_verified_at IS NOT NULL FOR UPDATE OF s`, *linkSession, *linkAccount, now, now.Add(-5*time.Minute)).Scan(&email)
+		err := tx.QueryRowContext(ctx, `SELECT a.email,COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND COALESCE(s.reauthenticated_at,s.authenticated_at)>$4 AND COALESCE(s.reauthenticated_at,s.authenticated_at)<=$3 AND a.email_verified_at IS NOT NULL FOR UPDATE OF s`, *linkSession, *linkAccount, now, now.Add(-5*time.Minute)).Scan(&email, &primaryAt, &sessionExpiry)
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrInvalidSession
 		}
 		if err != nil {
+			return "", err
+		}
+		now = s.now().UTC()
+		if primaryAt == nil || primaryAt.After(now) || !now.Before(primaryAt.Add(ReauthenticationLifetime)) || !now.Before(sessionExpiry) {
+			return "", ErrInvalidSession
+		}
+		if err := s.sessions.requireMFASessionTx(ctx, tx, *linkAccount, *linkSession, false); err != nil {
 			return "", err
 		}
 		if email != identity.Email {

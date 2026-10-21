@@ -12,9 +12,20 @@ type roleRule struct {
 	ministry         bool
 }
 
-// Only implemented policy belongs here. Reserved church roles and future
-// finance/care/group actions remain denied until their protected flows exist.
+// Only implemented policy belongs here. Future finance/care/group actions
+// remain denied until their domain flows and authorization boundaries exist.
 var roleRules = [...]roleRule{
+	{role: "super_administrator", permission: "roles.read"},
+	{role: "super_administrator", permission: "roles.operational.manage"},
+	{role: "super_administrator", permission: "roles.privileged.manage"},
+	{role: "super_administrator", permission: "roles.manage"},
+	{role: "super_administrator", permission: "sermons.manage"},
+	{role: "assistant_pastor", permission: "roles.read"},
+	{role: "assistant_pastor", permission: "roles.operational.manage"},
+	{role: "assistant_pastor", permission: "sermons.manage"},
+	{role: "staff", permission: "roles.read"},
+	{role: "staff", permission: "roles.operational.manage"},
+	{role: "staff", permission: "sermons.manage"},
 	{role: "content_editor", permission: "sermons.manage"},
 	{role: "system_administrator", permission: "sermons.manage"},
 	{role: "access_administrator", permission: "roles.manage"},

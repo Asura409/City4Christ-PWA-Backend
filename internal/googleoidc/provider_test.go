@@ -25,7 +25,7 @@ func TestOIDCAdapterValidatesSignedTokensNonceAndPKCE(t *testing.T) {
 		t.Fatal(err)
 	}
 	verifier := oauth2.GenerateVerifier()
-	claims := map[string]any{"sub": "subject", "email": "google@example.invalid", "email_verified": true, "given_name": "Google", "family_name": "Tester", "aud": "client", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": "nonce"}
+	claims := map[string]any{"sub": "subject", "email": "google@example.invalid", "email_verified": true, "given_name": "Google", "family_name": "Tester", "aud": "client", "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "nonce": "nonce", "auth_time": time.Now().Unix()}
 	var base string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -67,7 +67,7 @@ func TestOIDCAdapterValidatesSignedTokensNonceAndPKCE(t *testing.T) {
 		t.Fatal("authorization lacks state/nonce/PKCE")
 	}
 	id, err := provider.Exchange(context.Background(), "code", "nonce", verifier)
-	if err != nil || id.Subject != "subject" || !id.EmailVerified {
+	if err != nil || id.Subject != "subject" || !id.EmailVerified || id.AuthenticatedAt.IsZero() {
 		t.Fatalf("verified identity: %+v %v", id, err)
 	}
 	for _, tc := range []struct {

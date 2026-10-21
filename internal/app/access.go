@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"time"
@@ -12,6 +14,8 @@ import (
 func accessRoutes(mux *http.ServeMux, service *access.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
 	fail := func(w http.ResponseWriter, err error) {
 		switch {
+		case errors.Is(err, auth.ErrMFARequired), errors.Is(err, auth.ErrReauthenticationRequired), errors.Is(err, auth.ErrInvalidSession):
+			sessionError(w, err)
 		case errors.Is(err, access.ErrForbidden):
 			writeError(w, 403, "forbidden", "Access administrator permission is required; self-assignment is prohibited.", nil)
 		case errors.Is(err, access.ErrInvalid):
@@ -68,9 +72,13 @@ func accessRoutes(mux *http.ServeMux, service *access.Service, sessions *auth.Se
 			var changed bool
 			var err error
 			if grant {
-				changed, err = service.Grant(r.Context(), actor, r.PathValue("accountId"), in)
+				changed, err = service.GrantWithGuard(r.Context(), actor, r.PathValue("accountId"), in, func(ctx context.Context, tx *sql.Tx) error {
+					return sessions.RequireSensitiveTx(ctx, tx, requestAccess(r))
+				})
 			} else {
-				changed, err = service.Revoke(r.Context(), actor, r.PathValue("accountId"), in)
+				changed, err = service.RevokeWithGuard(r.Context(), actor, r.PathValue("accountId"), in, func(ctx context.Context, tx *sql.Tx) error {
+					return sessions.RequireSensitiveTx(ctx, tx, requestAccess(r))
+				})
 			}
 			if err != nil {
 				fail(w, err)

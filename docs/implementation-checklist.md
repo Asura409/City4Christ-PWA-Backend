@@ -20,7 +20,7 @@ when its exit gate has evidence. No dates or provider spend are assumed.
 - [x] **B4:** Public sermon catalog/detail and staff draft/edit/publish/unpublish/
   schedule with version checks and audit. Progress, private notes and live remain.
 - [x] **B5:** Limited technical-role delegation, scoped authorization groundwork
-  and audit. The new church-role hierarchy is not implemented yet.
+  and audit. Protected church-role lifecycle is implemented locally; live bootstrap/release remains pending.
 - [x] **B6:** Go/PostgreSQL, forward migrations, Docker, required GitHub CI,
   Render staging and a Vercel frontend with `API_URL`.
 - [x] **B7:** Modular connected frontend pages and desktop/mobile Playwright checks,
@@ -107,24 +107,37 @@ proof of received email or completed real-provider login.
 
 - [x] **M1.1:** Define the [named capability policy](church-permissions.md),
   global/ministry/own/task scope boundaries, protected delegation and finance/care
-  separation. Only the existing technical-role capabilities are active; reserved
-  church roles/domain permissions remain denied until their protected slices.
-- [ ] **M1.2:** Add role definitions/assignment lifecycle with additive migrations.
-  Preserve technical editor/admin assignments without silently making anyone a
-  Super Admin. Resolve first-Super-Admin identity and mapping before live rollout.
-- [ ] **M1.3:** Implement owner-approved Super Admin bootstrap, last-admin protection,
-  fresh reauthentication and MFA for privileged role/recovery/finance actions.
-- [ ] **M1.4:** Implement audited role read/grant/revoke and eligible-member lookup.
-  Only Super Admin can appoint pastors/admins/finance officers; Staff delegates only
-  permitted operational appointments. Prevent self-escalation and scope inflation.
+  separation. Protected church appointment capabilities are now implemented locally as
+  described below; unimplemented finance/care/group/event capabilities remain denied.
+- [x] **M1.2:** Local role definitions/assignment lifecycle is implemented with
+  additive migrations14–17, preserving legacy roles and scoped assignments.
+  Migration17 activates protected definitions without appointing any account.
+  See [church-role management](church-role-management.md). Real rollout remains
+  separate; existing access administrators never become Super Admin implicitly.
+- [ ] **M1.3:** Fresh password/Google confirmation and app MFA are implemented;
+  protected church-role mutations now require both proofs transactionally.
+  Verified/enrolled target checks, MFA-disable prevention, explicit operator-only
+  one-time bootstrap and concurrent last-admin protection are implemented locally.
+  Self-resignation requires another effective Super Admin. Factor-change alerts,
+  assisted recovery and owner-approved first real administrator/bootstrap acceptance
+  remain open. No real account has been promoted and this milestone is not closed.
+- [x] **M1.4:** Local audited protected role read/grant/revoke and bounded verified
+  candidate lookup are implemented. Only Super Admin appoints pastors/admins/finance;
+  Assistant Pastor/Staff appoint registered-scope ministry leaders only. Legacy
+  delegation remains limited. Unknown future domain capabilities remain denied.
 - [x] **M1.5:** Implement current-role snapshots and frontend gating/refresh.
   Local real-API desktop/mobile tests confirm same-JWT grant visibility, hiding
   after revocation and server denial. Race tests passed for access/app/sermons;
   16 frontend unit tests, 20 mocked browser scenarios, four real-API workflows,
   vet, contract validation and Docker smoke checks passed. Release verification
-  is separate; new church-role activation remains M1.2–M1.4.
-- [ ] **M1.6:** Add User Management/role-change UI and test every actor/target/scope,
-  concurrent last-admin changes, rollback and role revocation with a still-valid JWT.
+  is separate; new church-role release and staging acceptance remain separately gated.
+- [ ] **M1.6:** The local role-change UI now has authorized candidate search,
+  separate protected appointments, explicit confirmations, security panels and
+  stale-selection protection, preserving the React interface and legacy controls.
+  Repository/service/global HTTP tests cover actor/scope boundaries, concurrent
+  last-admin changes, audit rollback and same-JWT revocation; desktop/mobile
+  browser integration is implemented. Owner-approved staging bootstrap and manual
+  acceptance remain pending; broader member administration belongs to M2.
 
 **Exit:** W01 works end to end; members/leaders/staff cannot promote unauthorized
 roles, and no real account gains privileged access without the approved procedure.
@@ -376,3 +389,19 @@ them; do not claim that a queued check, merge or deploy has completed.
 | 2026-10-20 | M0.1 | [PR #6 merged](https://github.com/Asura409/City4Christ-PWA-Backend/pull/6); [main CI passed](https://github.com/Asura409/City4Christ-PWA-Backend/actions/runs/39414728216) | Required checks include disposable PostgreSQL race tests, Docker build and migration smoke |
 | 2026-10-20 | M0.2 | Fresh `SELECT 1` with `sslmode=verify-full` passed; worker active; API readiness healthy | No new test email sent; fresh OTP receipt and interactive Google acceptance remain open |
 | 2026-10-20 | M0.3 (partial) | Vercel and GitHub preflights returned 204; lookalike origin returned 403; readiness healthy | Render management tools were unavailable in this resumed session; deployment identity was not directly queried |
+
+
+### Protected church-role implementation — local evidence (21 October2026)
+
+Parallel tracks implemented access services, migration/MFA safeguards, operator
+CLI and frontend controls; the parent integrated HTTP/OpenAPI and independently
+reviewed the security boundary. All changes remain local, with no real bootstrap.
+Full backend normal tests and targeted access/app/auth race tests passed. Frontend
+unit/build checks passed24 cases; final mocked desktop/mobile checks passed50;
+real global-app workflows with disposable PostgreSQL passed10. Docker build and
+disposable migration/route/shutdown smoke passed. Vet, Swagger configuration,
+formatting/whitespace, documentation links and OpenAPI1.10 validation passed
+(with four preexisting contract warnings). See [full contract](church-role-management.md).
+
+Staging release, owner-approved first Super Admin, real-provider/device acceptance,
+factor-change alerts and assisted recovery remain explicit remaining gates.

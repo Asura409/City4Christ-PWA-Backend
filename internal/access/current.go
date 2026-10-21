@@ -21,7 +21,7 @@ func (s *Service) Current(ctx context.Context, actor string) (CurrentAccess, err
 	seen := map[Capability]bool{}
 	for _, assignment := range assignments {
 		capabilities := capabilitiesFor(assignment)
-		if len(capabilities) == 0 {
+		if len(capabilities) == 0 && !(assignment.Role == "finance_officer" && assignment.Scope == "") {
 			continue
 		}
 		result.Roles = append(result.Roles, assignment)
