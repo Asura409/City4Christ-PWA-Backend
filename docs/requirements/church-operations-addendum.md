@@ -131,7 +131,7 @@ Welcome Team using a durable outbox.
 Keep identity verification and account claiming secure: never silently attach an
 existing email to a new caller, bypass OTP, email plaintext passwords or give staff
 access to optional private prayer details by default. A new-member list is not an
-automatic grant of private group-chat access. Support duplicate submissions safely.
+automatic grant of leadership-only group-chat access. Support duplicate submissions safely.
 
 ### W07 — Give tithes/offerings and obtain a receipt
 

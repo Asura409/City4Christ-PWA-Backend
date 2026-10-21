@@ -60,6 +60,32 @@ slice still requires the repository/service/HTTP/global-app TDD sequence above.
 
 ## Milestone overview
 
+### Owner-directed product priority update (21 October 2026)
+
+The owner has moved member-facing functionality ahead of member/family/visitor
+onboarding. Keep the existing milestone IDs below for references, but follow this
+delivery order:
+
+1. Groups and membership requests/decisions, using existing verified accounts.
+2. Community posts and shared media attachments, then extend sermon publishing to
+   support images, audio and uploaded video alongside existing YouTube links.
+3. Prayer wall with its own visibility and anonymity controls.
+4. Durable direct and group messaging, then realtime delivery.
+5. Giving in a payment sandbox; live checkout remains blocked until a provider,
+   currency and webhook/reconciliation rules are approved.
+6. Member, family and visitor onboarding after these member-facing features.
+
+Group membership precedes group-specific posts and chats. Each slice keeps
+its server-side audience/ownership checks and React interface. Media bytes stay
+outside PostgreSQL behind a private object-storage adapter with short-lived signed
+URLs; do not enable uploads until file-size/type limits, public/private access and
+the storage provider are settled. Sermon and post attachments must use the same
+media policy. Push notifications are not a prerequisite for durable group or
+message state; record in-app events transactionally and add delivery separately.
+
+This priority update supersedes the default milestone order in the table and the
+paragraph below; onboarding is deferred rather than cancelled.
+
 | Milestone | Deliverable | Depends on | Owner requirements |
 | --- | --- | --- | --- |
 | M0 | Stabilize deployed auth and email infrastructure | Existing baseline | Existing auth, S04 |
@@ -77,9 +103,9 @@ slice still requires the repository/service/HTTP/global-app TDD sequence above.
 | M12 | Giving sandbox, ledger, receipts and finance dashboards | M1–M3 | W07, S01–S05 |
 | M13 | Security, resilience and production release | Completed release scope | Entire PRD and addendum |
 
-This is the default sequence. Groups, events and attendance form the next coherent
-church-operations increment after roles/member/notification foundations. Giving has
-its own sandbox/live gate and must not delay unrelated beta feedback. A reduced MVP
+The table preserves the original milestone IDs and dependencies for traceability.
+Use the owner-directed priority update above for current sequencing. Giving keeps
+its sandbox/live gate and must not delay unrelated beta feedback. A reduced MVP
 must explicitly record deferred features rather than marking them complete.
 
 ## M0 — Stabilize the foundation
@@ -187,19 +213,27 @@ is durable and observable. Provider failure never reports a false successful sen
 
 ## M4 — Groups / ministries and membership
 
-- [ ] **M4.1:** Implement group lifecycle, visibility/join policy, scopes, multiple
-  leader assignments and roster/membership records; align existing ministry scopes.
-- [ ] **M4.2:** Implement authorized group list/detail, join/request/leave and
-  pending-request review; reject cross-group or inactive-leader access.
-- [ ] **M4.3:** Implement atomic accept/decline decisions, unique active membership,
-  safe concurrent decisions and recipient notifications through M3.
+- [x] **M4.1 (foundation):** Add church/leadership audience and join policies,
+  verified-member records, group-scoped access scopes, and audit events. Group archive/detail and
+  leader appointment lifecycle remain open.
+- [x] **M4.2 (foundation):** Add authenticated visible-group listing, join/request,
+  leave, and pending-request review. Private groups are hidden from outsiders;
+  leader review checks the exact group scope.
+- [x] **M4.3 (backend decision):** Approve/decline transitions and audit writes are
+  transactional and repeat-safe; PostgreSQL tests cover racing approve/decline
+  calls. M3 recipient notifications remain open.
 - [ ] **M4.4:** Implement church-wide Staff/Super Admin oversight with audit and
-  approved group create/archive/restore behavior; no automatic private-channel access.
+  approved group create/archive/restore behavior; no automatic leadership-group access.
 - [ ] **M4.5:** Connect My Groups, rosters and Pending Requests in the frontend;
   test leaders of group A against every read/write operation on group B.
 
 **Exit:** W02 works; approval updates roster/inbox once and membership determines
 subsequent private content access server-side.
+
+The first backend foundation is implemented on `feat/group-membership-foundation`.
+It does not yet satisfy the M4 exit: React My Groups/Pending Requests, group detail
+and roster, archive/restore, broader leader assignment, and notification delivery
+are still required.
 
 ## M5 — Community, uploads and moderation
 
