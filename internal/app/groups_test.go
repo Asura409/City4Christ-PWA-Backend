@@ -84,6 +84,30 @@ func TestGroupsThroughGlobalApp(t *testing.T) {
 	if w = request("PATCH", "/api/v1/groups/"+id+"/membership-requests/"+member, adminToken, `{"decision":"approve","reason":"Reviewed"}`, "https://api.example"); w.Code != 200 || !strings.Contains(w.Body.String(), `"changed":true`) {
 		t.Fatalf("approve: %d %s", w.Code, w.Body.String())
 	}
+	if w = request("GET", "/api/v1/groups/"+id+"/members", otherToken, "", ""); w.Code != 403 {
+		t.Fatalf("nonmember roster: %d %s", w.Code, w.Body.String())
+	}
+	if w = request("GET", "/api/v1/groups/"+id+"/members", memberToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"firstName":"Group"`) {
+		t.Fatalf("member roster: %d %s", w.Code, w.Body.String())
+	}
+	leader, leaderToken := actor("")
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,'ministry_leader',$2)`, leader, id); err != nil {
+		t.Fatal(err)
+	}
+	if w = request("GET", "/api/v1/groups/"+id+"/members", leaderToken, "", ""); w.Code != 200 {
+		t.Fatalf("scoped leader roster: %d %s", w.Code, w.Body.String())
+	}
+	other := request("POST", "/api/v1/admin/groups", adminToken, `{"name":"Prayer Team","description":"Church prayer team","audience":"church","joinPolicy":"approval"}`, "https://api.example")
+	if other.Code != 201 {
+		t.Fatalf("create second group: %d %s", other.Code, other.Body.String())
+	}
+	var otherID string
+	if err := db.QueryRow(`SELECT id FROM groups WHERE name='Prayer Team'`).Scan(&otherID); err != nil {
+		t.Fatal(err)
+	}
+	if w = request("GET", "/api/v1/groups/"+otherID+"/members", leaderToken, "", ""); w.Code != 403 {
+		t.Fatalf("cross-group leader roster: %d %s", w.Code, w.Body.String())
+	}
 	if w = request("GET", "/api/v1/groups", memberToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"active"`) {
 		t.Fatalf("list groups: %d %s", w.Code, w.Body.String())
 	}

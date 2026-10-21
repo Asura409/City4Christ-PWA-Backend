@@ -137,6 +137,13 @@ func TestGroupAudiencesAndAuthorization(t *testing.T) {
 	if request, e := service.Join(ctx, ministryHead, leadership.ID); e != nil || request.Status != "pending" {
 		t.Fatalf("ministry head should request leadership membership: %+v %v", request, e)
 	}
+	if _, err = service.Decide(ctx, admin, leadership.ID, ministryHead, DecisionInput{Decision: "approve", Reason: "Leadership appointment"}); err != nil {
+		t.Fatalf("approve leadership member: %v", err)
+	}
+	leadershipRoster, err := service.Members(ctx, ministryHead, leadership.ID)
+	if err != nil || len(leadershipRoster) != 1 || leadershipRoster[0].AccountID != ministryHead {
+		t.Fatalf("eligible ministry leader should read leadership roster: %+v %v", leadershipRoster, err)
+	}
 	staff := "77777777-7777-4777-8777-777777777777"
 	if _, err = db.Exec(`INSERT INTO accounts(id,email,first_name,last_name,email_verified_at) VALUES($1,'staff@example.invalid','Church','Staff',now())`, staff); err != nil {
 		t.Fatal(err)
@@ -150,6 +157,9 @@ func TestGroupAudiencesAndAuthorization(t *testing.T) {
 	}
 	if _, err = service.PendingRequests(ctx, staff, leadership.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("staff read leadership-group requests by guessed ID: %v", err)
+	}
+	if _, err = service.Members(ctx, staff, leadership.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("staff read leadership-group roster by guessed ID: %v", err)
 	}
 	if _, err = service.Decide(ctx, staff, leadership.ID, ministryHead, DecisionInput{Decision: "approve", Reason: "No leadership access"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("staff decided leadership-group request by guessed ID: %v", err)
