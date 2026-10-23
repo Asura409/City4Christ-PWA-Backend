@@ -156,7 +156,7 @@ func TestPublishingInputAndMediaValidation(t *testing.T) {
 	ctx := context.Background()
 	staff := editor(t, db, "content_editor")
 	service := NewService(NewRepository(db), func() time.Time { return now })
-	base := DraftInput{Title: "Title", Speaker: "Speaker", PreachedAt: now}
+	base := DraftInput{Title: "Title", Speaker: "Speaker", PreachedAt: now, ImageURL: "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"}
 	for _, url := range []string{"http://youtu.be/dQw4w9WgXcQ", "https://www.youtube.com.evil.example/watch?v=dQw4w9WgXcQ", "https://user:pass@www.youtube.com/watch?v=dQw4w9WgXcQ", "https://127.0.0.1/video", "javascript:alert(1)", "https://www.youtube.com/watch?v=dQw4w9WgXcQ&v=abcdefghijk", "https://youtu.be/bad", "https://youtu.be/dQw4w9WgXcQ#fragment", "https://www.youtube.com:443/watch?v=dQw4w9WgXcQ"} {
 		bad := base
 		bad.VideoURL = url
@@ -190,11 +190,43 @@ func TestPublishingInputAndMediaValidation(t *testing.T) {
 	if _, err = db.Exec(`UPDATE sermons SET video_url='https://evil.example' WHERE id=$1`, draft.ID); err == nil {
 		t.Fatal("database accepted unsafe video reference")
 	}
+	if _, err = db.Exec(`UPDATE sermons SET image_url='https://evil.example/photo-1' WHERE id=$1`, draft.ID); err == nil {
+		t.Fatal("database accepted unsafe image reference")
+	}
 	if _, err = db.Exec(`UPDATE accounts SET email_verified_at=NULL WHERE id=$1`, staff); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = service.CreateDraft(ctx, staff, base); !errors.Is(err, ErrForbidden) {
 		t.Fatal("unverified account's role granted publishing")
+	}
+}
+
+func TestSermonImageURLsAreRestrictedToHTTPSUnsplashCDN(t *testing.T) {
+	base := DraftInput{
+		Title: "A message", Speaker: "Demo Pastor", PreachedAt: time.Date(2026, 10, 21, 10, 0, 0, 0, time.UTC),
+		ImageURL: "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80",
+	}
+	normalized, err := normalizeDraft(base)
+	if err != nil || normalized.ImageURL != base.ImageURL {
+		t.Fatalf("valid Unsplash image URL: got %q, %v", normalized.ImageURL, err)
+	}
+	for _, imageURL := range []string{
+		"http://images.unsplash.com/photo-123",
+		"https://images.unsplash.com.evil.example/photo-123",
+		"https://user@images.unsplash.com/photo-123",
+		"https://images.unsplash.com:443/photo-123",
+		"https://images.unsplash.com/photo-123?bad=\"quote\"",
+		"https://images.unsplash.com/photo-123#fragment",
+		"javascript:alert(1)",
+		"https://images.unsplash.com/",
+	} {
+		input := base
+		input.ImageURL = imageURL
+		_, err := normalizeDraft(input)
+		var validation *ValidationError
+		if !errors.As(err, &validation) || validation.Fields["imageUrl"] == "" {
+			t.Errorf("image URL %q accepted or missing field error: %v", imageURL, err)
+		}
 	}
 }
 

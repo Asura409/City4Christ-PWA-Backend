@@ -17,7 +17,9 @@ IDs and names. Active members and authorized church-wide or group-scoped manager
 can view the roster. Leadership-group eligibility is checked first. Email,
 phone, and other profile fields are never included.
 
-`POST /api/v1/admin/groups` creates a group and is restricted to Super Admin.
+`POST /api/v1/admin/groups` creates a church-audience group for Super Admin,
+Assistant Pastor, and Staff. Only Super Admin can create the leadership-audience
+group. Creation is audited. The church can have only one active leadership group.
 
 ```json
 {
@@ -60,7 +62,28 @@ Use `decline` for a rejection. The request actor cannot approve their own reques
 Repeated identical decisions return `changed: false`; a different decision after
 the request has already been resolved returns a validation error.
 
-The React group directory, details, My Groups, roster, join/leave, and request
-review screens use these APIs. Archive/restore, broader group leader assignment,
-and notifications remain on the implementation checklist. No member content feed
-or media upload endpoints are implied by group membership.
+Staff managers use `GET /api/v1/admin/groups` to list church groups. Add
+`?includeArchived=true` to include archived groups. The leadership-audience group
+is omitted from the response unless the actor is Super Admin, Assistant Pastor,
+or an assigned Ministry Leader. Members cannot use this management route.
+
+`PATCH /api/v1/admin/groups/{groupId}` accepts `{"status":"archived",
+"reason":"Ministry paused"}` or status `active` to restore. Only Super Admin,
+Assistant Pastor, and Staff can transition church groups; the leadership group
+remains Super Admin only. Transitions are repeat-safe and write a reasoned audit
+event in the same transaction. Archiving removes the group from member reads and
+join requests but preserves its roster and leader assignments for restoration.
+
+`GET /api/v1/admin/groups/{groupId}/leaders` returns the appointed leaders'
+verified names and account IDs. Staff cannot query leadership-group leaders.
+Appointment/removal uses the existing `/api/v1/admin/accounts/{accountId}/church-roles`
+and `/revoke` routes with role `ministry_leader` and scope set to the group UUID.
+Those mutations retain their fresh-identity and mandatory app-MFA checks and
+write the access audit. The React group administration screen links these flows
+to each group; role IDs and protected-group visibility are always checked by the
+API.
+
+The React group directory, details, My Groups, roster, join/leave, request
+review, and staff administration screens use these APIs. Notifications remain
+open. No member content feed or media upload endpoints are implied by group
+membership.

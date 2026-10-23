@@ -32,6 +32,7 @@ type DraftInput struct {
 	Topic      string    `json:"topic"`
 	PreachedAt time.Time `json:"preachedAt"`
 	VideoURL   string    `json:"videoUrl"`
+	ImageURL   string    `json:"imageUrl"`
 }
 type EditorialSermon struct {
 	ID string `json:"id"`
@@ -49,11 +50,13 @@ type UpdateInput struct {
 	Topic      *string    `json:"topic"`
 	PreachedAt *time.Time `json:"preachedAt"`
 	VideoURL   *string    `json:"videoUrl"`
+	ImageURL   *string    `json:"imageUrl"`
 	Status     *string    `json:"status"`
 	PublishAt  *time.Time `json:"publishAt"`
 }
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+var imageURLPattern = regexp.MustCompile(`^https://images[.]unsplash[.]com/photo-[A-Za-z0-9_-]+([?][A-Za-z0-9_.=&%+-]*)?$`)
 
 func normalizeVideo(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
@@ -88,6 +91,21 @@ func normalizeVideo(raw string) (string, error) {
 	}
 	return "https://www.youtube.com/watch?v=" + id, nil
 }
+
+func normalizeImage(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	if len(raw) > 2048 {
+		return "", ErrInvalidInput
+	}
+	u, err := url.Parse(raw)
+	if err != nil || !imageURLPattern.MatchString(raw) || u.Scheme != "https" || u.Host != "images.unsplash.com" || u.User != nil || u.Port() != "" || u.Fragment != "" || !strings.HasPrefix(u.Path, "/photo-") {
+		return "", ErrInvalidInput
+	}
+	return u.String(), nil
+}
 func normalizeDraft(input DraftInput) (DraftInput, error) {
 	for _, f := range []struct {
 		value    *string
@@ -108,6 +126,10 @@ func normalizeDraft(input DraftInput) (DraftInput, error) {
 	input.VideoURL, err = normalizeVideo(input.VideoURL)
 	if err != nil {
 		return DraftInput{}, invalidField("videoUrl", "Use an HTTPS YouTube watch/youtu.be URL, or leave this field empty.")
+	}
+	input.ImageURL, err = normalizeImage(input.ImageURL)
+	if err != nil {
+		return DraftInput{}, invalidField("imageUrl", "Use an HTTPS image URL hosted on images.unsplash.com, or leave this field empty.")
 	}
 	return input, nil
 }
@@ -135,7 +157,7 @@ func (s *Service) Update(ctx context.Context, actorID, id string, input UpdateIn
 	if input.Version < 1 {
 		return EditorialSermon{}, invalidField("version", "Supply the current positive version from the editor response.")
 	}
-	if input.Title == nil && input.Summary == nil && input.Speaker == nil && input.Series == nil && input.Topic == nil && input.PreachedAt == nil && input.VideoURL == nil && input.Status == nil {
+	if input.Title == nil && input.Summary == nil && input.Speaker == nil && input.Series == nil && input.Topic == nil && input.PreachedAt == nil && input.VideoURL == nil && input.ImageURL == nil && input.Status == nil {
 		return EditorialSermon{}, invalidField("body", "Supply at least one editable field or publication status.")
 	}
 	now := s.now().UTC()

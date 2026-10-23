@@ -11,6 +11,7 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/groups"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/posts"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/profiles"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/sermons"
 	"github.com/google/uuid"
@@ -54,6 +55,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	profileService := profiles.NewService(profiles.NewRepository(db))
 	profileRoutes(mux, profileService, sessions, limiter, config)
 	directoryRoutes(mux, profileService, sessions, limiter, config)
+	postRoutes(mux, posts.NewService(posts.NewRepository(db)), sessions, limiter, config)
 	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
 	groupRoutes(mux, groups.NewService(groups.NewRepository(db), config.Now), sessions, limiter, config)
 	accessService := access.NewService(db)

@@ -45,11 +45,11 @@ An empty catalog returns `data: []`. An empty `nextCursor` marks the final page.
 
 ## Scope and next slices
 
-This slice includes the `sermons` table, publication/filter indexes, repository, validated service, global routes, and OpenAPI documentation. Series and topic are optional labels represented by empty strings when absent; separate managed series records are deferred.
+This slice includes the `sermons` table, publication/filter indexes, repository, validated service, global routes, and OpenAPI documentation. Series and topic are optional labels represented by empty strings when absent; separate managed series records are deferred. Optional YouTube links and Unsplash image URLs are returned by the catalog, with React rendering a thumbnail and privacy-enhanced video player.
 
 No content is automatically seeded or published. There is no public content-write route. Authorized writes are available through the [editor workflow](sermon-publishing.md); no account receives permission automatically. This migration applies forward only and does not alter existing accounts or auth records.
 
-[Editor roles, audited publishing and canonical YouTube links](sermon-publishing.md) are implemented in the next slice. GET `/series`, playback progress, private notes and other media providers remain future work. No media is fetched or streamed by the API.
+[Editor roles, audited publishing and validated media links](sermon-publishing.md) are implemented in the next slice. GET `/series`, playback progress, private notes and other media providers remain future work. No media is fetched or streamed by the API.
 
 ## Executed TDD
 

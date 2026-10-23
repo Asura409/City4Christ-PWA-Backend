@@ -223,8 +223,11 @@ is durable and observable. Provider failure never reports a false successful sen
 - [x] **M4.3 (backend decision):** Approve/decline transitions and audit writes are
   transactional and repeat-safe; PostgreSQL tests cover racing approve/decline
   calls. M3 recipient notifications remain open.
-- [ ] **M4.4:** Implement church-wide Staff/Super Admin oversight with audit and
-  approved group create/archive/restore behavior; no automatic leadership-group access.
+- [x] **M4.4:** Implement React group administration and church-wide group
+  create/archive/restore for Staff, Assistant Pastors, and Super Admins. Creation
+  and reasoned lifecycle transitions are audited transactionally; leadership
+  group visibility remains role-gated and creation/restoration remains Super
+  Admin only. Verified with PostgreSQL app/service tests and desktop/mobile UI tests.
 - [ ] **M4.5:** React directory, My Groups, group detail, rosters and Pending
   Requests are implemented locally. Run the browser suite and verify leaders of
   group A against every read/write operation on group B before checking this.
@@ -233,9 +236,9 @@ is durable and observable. Provider failure never reports a false successful sen
 determines subsequent group-specific content access server-side.
 
 The first backend foundation is implemented on `feat/group-membership-foundation`.
-The React group directory, group details, My Groups, pending requests and roster
-are implemented locally; verification is pending. Archive/restore, broader leader
-assignment and notification delivery remain open for the M4 exit.
+The React group directory, group details, My Groups, pending requests, roster,
+and staff group oversight are implemented locally. M4.5 still requires the
+full cross-group read/write boundary audit; membership notifications remain open.
 
 ## M5 — Community, uploads and moderation
 

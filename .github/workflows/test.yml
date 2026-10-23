@@ -28,6 +28,8 @@ jobs:
           node-version: '22'
       - name: Verify Swagger editor methods and session configuration
         run: node scripts/test-swagger-config.cjs
+      - name: Test additive demo sermon seeder
+        run: node --test scripts/seed-demo-sermons.test.mjs
       - name: Check formatting
         run: test -z "$(gofmt -l .)"
       - name: Vet
