@@ -23,7 +23,7 @@ services:
           name: city4christ-staging-api
           envVarKey: RENDER_EXTERNAL_URL
       - key: CORS_ORIGINS
-        value: https://zeetechdot.github.io,https://city4christ-pwa.vercel.app
+        value: https://zeetechdot.github.io,https://city4christ-pwa.vercel.app,https://city4christ-pwa-git-feat-group-oversight-asura409s-projects.vercel.app
       - key: REFRESH_COOKIE_SAME_SITE
         value: none
       - key: REGISTRATION_ENABLED

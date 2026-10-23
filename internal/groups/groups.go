@@ -28,6 +28,7 @@ type Group struct {
 	JoinPolicy       string    `json:"joinPolicy"`
 	MembershipStatus string    `json:"membershipStatus,omitempty"`
 	MemberCount      int       `json:"memberCount"`
+	Archived         bool      `json:"archived,omitempty"`
 	CreatedAt        time.Time `json:"createdAt"`
 }
 type Membership struct {
@@ -38,6 +39,10 @@ type Membership struct {
 }
 type CreateInput struct{ Name, Description, Audience, JoinPolicy string }
 type DecisionInput struct{ Decision, Reason string }
+type LifecycleInput struct {
+	Status string `json:"status"`
+	Reason string `json:"reason"`
+}
 type Options struct {
 	Limit  int
 	Cursor string
@@ -90,7 +95,11 @@ func (s *Service) Create(ctx context.Context, actor string, in CreateInput) (Gro
 		return Group{}, err
 	}
 	defer tx.Rollback()
-	if err = access.CheckTx(ctx, tx, actor, "groups.create", ""); err != nil {
+	permission := "groups.manage"
+	if in.Audience == "leadership" {
+		permission = "groups.create"
+	}
+	if err = access.CheckTx(ctx, tx, actor, permission, ""); err != nil {
 		if errors.Is(err, access.ErrForbidden) {
 			return Group{}, ErrForbidden
 		}
@@ -117,10 +126,197 @@ func (s *Service) Create(ctx context.Context, actor string, in CreateInput) (Gro
 	if _, err = tx.ExecContext(ctx, `INSERT INTO access_scopes(id,kind) VALUES($1,'ministry')`, id); err != nil {
 		return Group{}, err
 	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO group_audit_events(group_id,actor_id,action) VALUES($1,$2,'created')`, id, actor); err != nil {
+		return Group{}, err
+	}
 	if err = tx.Commit(); err != nil {
 		return Group{}, err
 	}
 	return g, nil
+}
+
+// AdminList returns church groups to staff managers. The leadership audience
+// remains hidden unless the actor is explicitly leadership-eligible.
+func (s *Service) AdminList(ctx context.Context, actor string, includeArchived bool) ([]Group, error) {
+	if !validID(actor) {
+		return nil, ErrForbidden
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err = access.CheckTx(ctx, tx, actor, "groups.manage", ""); err != nil {
+		if errors.Is(err, access.ErrForbidden) {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	var leadership bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND ((role IN ('super_administrator','assistant_pastor') AND scope='') OR role='ministry_leader'))`, actor).Scan(&leadership); err != nil {
+		return nil, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT g.id,g.name,g.description,g.audience,g.join_policy,count(m.account_id)::int,g.archived_at IS NOT NULL,g.created_at FROM groups g LEFT JOIN group_memberships m ON m.group_id=g.id AND m.status='active' WHERE ($1 OR g.archived_at IS NULL) AND (g.audience='church' OR $2) GROUP BY g.id ORDER BY g.created_at,g.id`, includeArchived, leadership)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := []Group{}
+	for rows.Next() {
+		var group Group
+		if err = rows.Scan(&group.ID, &group.Name, &group.Description, &group.Audience, &group.JoinPolicy, &group.MemberCount, &group.Archived, &group.CreatedAt); err != nil {
+			return nil, err
+		}
+		result = append(result, group)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// Leaders returns names for currently appointed leaders of an active church
+// group. Existing church-role APIs own appointment mutations and step-up auth.
+func (s *Service) Leaders(ctx context.Context, actor, groupID string) ([]Member, error) {
+	if !validID(actor) || !validID(groupID) {
+		return nil, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var audience string
+	err = tx.QueryRowContext(ctx, `SELECT audience FROM groups WHERE id=$1 AND archived_at IS NULL`, groupID).Scan(&audience)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if audience == "leadership" {
+		eligible, e := leadershipEligible(ctx, tx, actor)
+		if e != nil {
+			return nil, e
+		}
+		if !eligible {
+			return nil, ErrNotFound
+		}
+	}
+	if err = access.CheckTx(ctx, tx, actor, "groups.manage", ""); err != nil {
+		if errors.Is(err, access.ErrForbidden) {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.role='ministry_leader' AND r.scope=$1 AND a.email_verified_at IS NOT NULL ORDER BY a.first_name,a.last_name,a.id`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	leaders := []Member{}
+	for rows.Next() {
+		var leader Member
+		if err = rows.Scan(&leader.AccountID, &leader.FirstName, &leader.LastName); err != nil {
+			return nil, err
+		}
+		leaders = append(leaders, leader)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return leaders, nil
+}
+
+// Archive and Restore are repeat-safe and keep membership/leader assignments
+// intact so a restored ministry resumes with its previous roster and leaders.
+func (s *Service) Archive(ctx context.Context, actor, groupID, reason string) (bool, error) {
+	return s.setArchived(ctx, actor, groupID, reason, true)
+}
+
+func (s *Service) Restore(ctx context.Context, actor, groupID, reason string) (bool, error) {
+	return s.setArchived(ctx, actor, groupID, reason, false)
+}
+
+func (s *Service) setArchived(ctx context.Context, actor, groupID, reason string, archive bool) (bool, error) {
+	reason = strings.TrimSpace(reason)
+	if !validID(actor) || !validID(groupID) || !utf8.ValidString(reason) || strings.ContainsRune(reason, 0) || utf8.RuneCountInString(reason) < 1 || utf8.RuneCountInString(reason) > 500 {
+		return false, ErrInvalid
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	var audience string
+	var archived bool
+	err = tx.QueryRowContext(ctx, `SELECT audience,archived_at IS NOT NULL FROM groups WHERE id=$1 FOR UPDATE`, groupID).Scan(&audience, &archived)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	if err != nil {
+		return false, err
+	}
+	permission := "groups.manage"
+	if audience == "leadership" {
+		permission = "groups.create"
+	}
+	if err = access.CheckTx(ctx, tx, actor, permission, ""); err != nil {
+		if errors.Is(err, access.ErrForbidden) {
+			return false, ErrForbidden
+		}
+		return false, err
+	}
+	if archived == archive {
+		if err = tx.Commit(); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	if !archive && audience == "leadership" {
+		if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtext('city4christ:single-leadership-group'))`); err != nil {
+			return false, err
+		}
+		var existing bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM groups WHERE audience='leadership' AND archived_at IS NULL AND id<>$1)`, groupID).Scan(&existing); err != nil {
+			return false, err
+		}
+		if existing {
+			return false, ErrConflict
+		}
+	}
+	status := "archived"
+	if !archive {
+		status = "restored"
+	}
+	var result sql.Result
+	if archive {
+		result, err = tx.ExecContext(ctx, `UPDATE groups SET archived_at=$2 WHERE id=$1`, groupID, s.now())
+	} else {
+		result, err = tx.ExecContext(ctx, `UPDATE groups SET archived_at=NULL WHERE id=$1`, groupID)
+	}
+	if err != nil {
+		return false, err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	if changed == 1 {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO group_audit_events(group_id,actor_id,action,reason) VALUES($1,$2,$3,$4)`, groupID, actor, status, reason); err != nil {
+			return false, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return false, err
+	}
+	return changed == 1, nil
 }
 func (s *Service) List(ctx context.Context, actor string, opt Options) (Page, error) {
 	if !validID(actor) || opt.Limit < 1 || opt.Limit > 100 || (opt.Cursor != "" && !validID(opt.Cursor)) {

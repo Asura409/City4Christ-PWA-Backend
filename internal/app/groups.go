@@ -103,6 +103,83 @@ func groupRoutes(mux *http.ServeMux, service *groups.Service, sessions *auth.Ses
 		}
 		writeJSON(w, 201, map[string]any{"data": group})
 	})
+	mux.HandleFunc("GET /api/v1/admin/groups", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil || len(q) > 1 {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		includeArchived := false
+		for name, values := range q {
+			if name != "includeArchived" || len(values) != 1 {
+				groupError(w, groups.ErrInvalid)
+				return
+			}
+		}
+		if values, exists := q["includeArchived"]; exists {
+			if len(values) != 1 || (values[0] != "true" && values[0] != "false") {
+				groupError(w, groups.ErrInvalid)
+				return
+			}
+			includeArchived = values[0] == "true"
+		}
+		managed, err := service.AdminList(r.Context(), actor, includeArchived)
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": managed})
+	})
+	mux.HandleFunc("GET /api/v1/admin/groups/{groupId}/leaders", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		leaders, err := service.Leaders(r.Context(), actor, r.PathValue("groupId"))
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": leaders})
+	})
+	mux.HandleFunc("PATCH /api/v1/admin/groups/{groupId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[groups.LifecycleInput](w, r)
+		if !ok {
+			return
+		}
+		var changed bool
+		var err error
+		switch in.Status {
+		case "archived":
+			changed, err = service.Archive(r.Context(), actor, r.PathValue("groupId"), in.Reason)
+		case "active":
+			changed, err = service.Restore(r.Context(), actor, r.PathValue("groupId"), in.Reason)
+		default:
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": map[string]bool{"changed": changed}})
+	})
 	mux.HandleFunc("POST /api/v1/groups/{groupId}/membership", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {

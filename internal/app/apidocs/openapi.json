@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.11.0",
+    "version": "1.13.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -42,7 +42,7 @@
     },
     {
       "name": "Groups",
-      "description": "Church-wide groups and a leadership-only group, with authenticated membership approval."
+      "description": "Church-wide groups with scoped leadership and audited staff lifecycle management."
     }
   ],
   "paths": {
@@ -1008,7 +1008,8 @@
                   "value": {
                     "title": "Living in Faith",
                     "speaker": "Pastor Joy",
-                    "preachedAt": "2026-10-17T12:00:00Z"
+                    "preachedAt": "2026-10-17T12:00:00Z",
+                    "imageUrl": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"
                   }
                 }
               }
@@ -1175,7 +1176,7 @@
                 "editTitle": {
                   "value": {
                     "version": 2,
-                    "title": "Living in Faith — Updated"
+                    "title": "Living in Faith \u2014 Updated"
                   }
                 },
                 "unpublish": {
@@ -2462,7 +2463,7 @@
           "Access management"
         ],
         "operationId": "ListChurchRoleAssignments",
-        "summary": "Read a target account’s current assignments",
+        "summary": "Read a target account\u2019s current assignments",
         "security": [
           {
             "bearerAuth": []
@@ -2866,6 +2867,53 @@
       }
     },
     "/api/v1/admin/groups": {
+      "get": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "List groups for authorized staff management",
+        "operationId": "ListManagedGroups",
+        "description": "Requires groups.manage. Staff cannot see the leadership audience. includeArchived=true includes archived church groups. Ministry Leader assignments can be managed through the existing church-role appointment routes, which require fresh identity and MFA confirmation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "includeArchived",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Managed groups",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManagedGroupListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      },
       "post": {
         "tags": [
           "Groups"
@@ -2921,7 +2969,123 @@
             }
           }
         },
-        "description": "Only a Super Admin can create groups. The church allows one leadership-audience group; all other groups use the church audience."
+        "description": "Super Admin, Assistant Pastor, or Staff can create church-audience groups. Only Super Admin can create the single leadership-audience group. Creation is audited."
+      }
+    },
+    "/api/v1/admin/groups/{groupId}": {
+      "patch": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "Archive or restore a group",
+        "operationId": "SetGroupLifecycle",
+        "description": "Requires groups.manage for church groups and Super Admin for the leadership audience. Transitions are idempotent, reasoned and audited. Archiving hides the group from member routes while preserving its roster and leader assignments for restoration.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupLifecycleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lifecycle transition result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupLifecycleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/groups/{groupId}/leaders": {
+      "get": {
+        "tags": [
+          "Groups"
+        ],
+        "summary": "List appointed group leaders",
+        "operationId": "ListGroupLeaders",
+        "description": "Requires groups.manage. Only verified names and account IDs are returned. Leadership-audience eligibility applies before the manager check. Appointment and removal use the protected church-role routes, including fresh identity and MFA confirmation.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verified appointed leaders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMembersResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
       }
     },
     "/api/v1/groups/{groupId}/membership": {
@@ -3085,25 +3249,50 @@
     },
     "/api/v1/groups/{groupId}/members": {
       "get": {
-        "tags": ["Groups"],
+        "tags": [
+          "Groups"
+        ],
         "summary": "List active group members",
         "operationId": "ListGroupMembers",
-        "security": [{"bearerAuth": []}],
-        "parameters": [{
-          "name": "groupId",
-          "in": "path",
-          "required": true,
-          "schema": {"type": "string", "format": "uuid"}
-        }],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Verified active members, available to active members and authorized group managers.",
-            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GroupMembersResponse"}}}
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMembersResponse"
+                }
+              }
+            }
           },
-          "401": {"$ref": "#/components/responses/401"},
-          "403": {"$ref": "#/components/responses/403"},
-          "404": {"$ref": "#/components/responses/404"},
-          "503": {"$ref": "#/components/responses/503"}
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
         }
       }
     },
@@ -3174,6 +3363,158 @@
           },
           "503": {
             "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/posts": {
+      "get": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "List church posts",
+        "operationId": "ListChurchPosts",
+        "description": "Returns the authenticated member feed, newest first. Cursor pagination is stable across posts with matching timestamps.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Church feed page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChurchPost"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Invalid or repeated query parameter or cursor"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Publish a church post",
+        "operationId": "CreateChurchPost",
+        "description": "Creates a text-only post visible to authenticated church members. Requires an allowed Origin and JSON body. Posts are limited to 5,000 Unicode characters.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChurchPostInput"
+              },
+              "example": {
+                "body": "Welcome everyone to Sunday service."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Post created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChurchPost"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Standard API error response"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "413": {
+            "description": "Standard API error response"
+          },
+          "415": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Post body is empty or exceeds 5,000 characters"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
           }
         }
       }
@@ -3612,6 +3953,11 @@
             "type": "string",
             "format": "uri",
             "description": "Optional canonical YouTube watch URL. Omitted when no video is set."
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "description": "Optional Unsplash CDN image URL. Omitted when no image is set."
           }
         },
         "additionalProperties": false
@@ -3658,6 +4004,13 @@
             "maxLength": 2048,
             "description": "Optional HTTPS YouTube watch or youtu.be link. Empty clears the video. Saved as a canonical watch URL; tracking/start parameters are discarded. No server-side video fetching.",
             "example": ""
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048,
+            "description": "Optional HTTPS image URL on images.unsplash.com. Empty clears it; no server-side fetch is performed.",
+            "example": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"
           }
         }
       },
@@ -3675,7 +4028,8 @@
           "publishedAt",
           "videoUrl",
           "version",
-          "status"
+          "status",
+          "imageUrl"
         ],
         "properties": {
           "id": {
@@ -3723,6 +4077,10 @@
               "published",
               "scheduled"
             ]
+          },
+          "imageUrl": {
+            "type": "string",
+            "description": "HTTPS Unsplash CDN URL, or empty string when absent."
           }
         }
       },
@@ -3794,6 +4152,14 @@
             "format": "date-time",
             "nullable": true,
             "description": "Required future UTC instant when status is scheduled; forbidden with other statuses. Microsecond precision."
+          },
+          "imageUrl": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048,
+            "description": "Optional HTTPS image URL on images.unsplash.com. Empty clears it; no server-side fetch is performed.",
+            "example": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80",
+            "nullable": true
           }
         },
         "description": "Supply version plus at least one field to change. Omitted or null optional fields are ignored; use empty strings to clear optional text/video fields. PublishedAt and roles cannot be supplied."
@@ -4232,6 +4598,10 @@
           "memberCount": {
             "type": "integer"
           },
+          "archived": {
+            "type": "boolean",
+            "description": "Present only in management lists when true."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -4260,6 +4630,61 @@
             "properties": {
               "nextCursor": {
                 "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "ManagedGroupListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            }
+          }
+        }
+      },
+      "GroupLifecycleInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "reason"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "GroupLifecycleResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "changed"
+            ],
+            "properties": {
+              "changed": {
+                "type": "boolean"
               }
             }
           }
@@ -4387,18 +4812,31 @@
         "properties": {
           "data": {
             "type": "array",
-            "items": {"$ref": "#/components/schemas/GroupMember"}
+            "items": {
+              "$ref": "#/components/schemas/GroupMember"
+            }
           }
         }
       },
       "GroupMember": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["accountId", "firstName", "lastName"],
+        "required": [
+          "accountId",
+          "firstName",
+          "lastName"
+        ],
         "properties": {
-          "accountId": {"type": "string", "format": "uuid"},
-          "firstName": {"type": "string"},
-          "lastName": {"type": "string"}
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          }
         }
       },
       "MembershipDecisionInput": {
@@ -4431,6 +4869,56 @@
                 "type": "boolean"
               }
             }
+          }
+        }
+      },
+      "CreateChurchPostInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000,
+            "description": "Plain text post body."
+          }
+        }
+      },
+      "ChurchPost": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "authorId",
+          "firstName",
+          "lastName",
+          "body",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }

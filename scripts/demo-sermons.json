@@ -1,0 +1,67 @@
+[
+  {
+    "title": "[DEMO] A Hope That Holds",
+    "summary": "Preview-only sermon copy about finding steady hope through seasons of uncertainty. This is fictional interface-testing content, not an actual City4Christ recording or announcement.",
+    "speaker": "City4Christ Demo Library",
+    "series": "Preview Library",
+    "topic": "Hope",
+    "preachedAt": "2026-10-18T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"
+  },
+  {
+    "title": "[DEMO] Faith for the Next Step",
+    "summary": "Preview-only sermon copy about trusting God with the next faithful decision. This is fictional interface-testing content, not an actual City4Christ recording or announcement.",
+    "speaker": "City4Christ Demo Library",
+    "series": "Preview Library",
+    "topic": "Faith",
+    "preachedAt": "2026-10-11T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1766386795034-da17ad2781d9?auto=format&fit=crop&w=1200&q=80"
+  },
+  {
+    "title": "[DEMO] The Word That Guides Us",
+    "summary": "Preview-only sermon copy about building a daily practice of reading Scripture with patience and care. This is fictional interface-testing content, not an actual City4Christ recording or announcement.",
+    "speaker": "City4Christ Demo Library",
+    "series": "Preview Library",
+    "topic": "Scripture",
+    "preachedAt": "2026-10-04T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1650065214337-0692c52dba94?auto=format&fit=crop&w=1200&q=80"
+  },
+  {
+    "title": "[DEMO] Worship as a Shared Practice",
+    "summary": "Preview-only sermon copy about worship, service, and belonging in a church community. This is fictional interface-testing content, not an actual City4Christ recording or announcement.",
+    "speaker": "City4Christ Demo Library",
+    "series": "Preview Library",
+    "topic": "Worship",
+    "preachedAt": "2026-09-27T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1786291694535-1a6f4534ced4?auto=format&fit=crop&w=1200&q=80"
+  },
+  {
+    "title": "[DEMO] Learning to Pray Together",
+    "summary": "Preview-only sermon copy about prayer as a practice of listening, care, and encouragement. This is fictional interface-testing content, not an actual City4Christ recording or announcement.",
+    "speaker": "City4Christ Demo Library",
+    "series": "Preview Library",
+    "topic": "Prayer",
+    "preachedAt": "2026-09-20T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1752667842815-1b23f0b179df?auto=format&fit=crop&w=1200&q=80"
+  },
+  {
+    "title": "[DEMO] Psalms — BibleProject video preview",
+    "summary": "External BibleProject video included only to preview the video player. This resource is not produced by City4Christ.",
+    "speaker": "BibleProject (external demo resource)",
+    "series": "External Video Preview",
+    "topic": "Psalms",
+    "preachedAt": "2026-09-13T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1777497478187-52e38a650caa?auto=format&fit=crop&w=1200&q=80",
+    "videoUrl": "https://www.youtube.com/watch?v=dpny22k_7uk"
+  },
+  {
+    "title": "[DEMO] Book of Psalms overview — BibleProject",
+    "summary": "External BibleProject overview included only to preview a second video card. This resource is not produced by City4Christ.",
+    "speaker": "BibleProject (external demo resource)",
+    "series": "External Video Preview",
+    "topic": "Psalms",
+    "preachedAt": "2026-09-06T10:00:00Z",
+    "imageUrl": "https://images.unsplash.com/photo-1650065214337-0692c52dba94?auto=format&fit=crop&w=1200&q=80",
+    "videoUrl": "https://www.youtube.com/watch?v=j9phNEaPrv8"
+  }
+]

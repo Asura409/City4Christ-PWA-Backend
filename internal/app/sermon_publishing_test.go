@@ -92,7 +92,7 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	if sample.Code != 200 {
 		t.Fatalf("Swagger publish example failed: %d %s", sample.Code, sample.Body.String())
 	}
-	body := `{"title":"Faith","speaker":"Pastor Joy","summary":"A message","preachedAt":"2026-10-11T14:00:00Z","videoUrl":"https://youtu.be/dQw4w9WgXcQ"}`
+	body := `{"title":"Faith","speaker":"Pastor Joy","summary":"A message","preachedAt":"2026-10-11T14:00:00Z","videoUrl":"https://youtu.be/dQw4w9WgXcQ","imageUrl":"https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"}`
 	for _, tc := range []struct {
 		token, origin string
 		want          int
@@ -107,6 +107,7 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 		status      int
 	}{
 		{`{"title":"Faith","speaker":"Speaker","preachedAt":"2026-10-17T12:00:00Z","videoUrl":"string"}`, "videoUrl", 422},
+		{`{"title":"Faith","speaker":"Speaker","preachedAt":"2026-10-17T12:00:00Z","imageUrl":"https://evil.example/photo-123"}`, "imageUrl", 422},
 		{`{"id":"response-only"}`, "id", 400},
 	} {
 		w := request("POST", "/api/v1/admin/sermons", editor.AccessToken, tc.body, origin)
@@ -145,7 +146,7 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	if w = request("PATCH", "/api/v1/admin/sermons/"+id, editor.AccessToken, `{"version":1,"status":"published"}`, origin); w.Code != 200 {
 		t.Fatalf("publish: %d %s", w.Code, w.Body.String())
 	}
-	if w = request("GET", "/api/v1/sermons/"+id, "", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "youtube.com/watch?v=") {
+	if w = request("GET", "/api/v1/sermons/"+id, "", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "youtube.com/watch?v=") || !strings.Contains(w.Body.String(), "images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1") {
 		t.Fatal("published media unavailable")
 	}
 	if w = request("PATCH", "/api/v1/admin/sermons/"+id, editor.AccessToken, `{"version":1,"title":"Stale"}`, origin); w.Code != 409 {

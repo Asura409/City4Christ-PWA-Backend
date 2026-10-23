@@ -44,4 +44,6 @@ See [the member directory](docs/member-directory.md) for authenticated name sear
 
 See [frontend browser integration](docs/frontend-browser-integration.md) for Google browser completion and optional Playwright checks through the real app with disposable PostgreSQL. The frontend checkout is an independent repository.
 
+See [church community posts](docs/posts.md) for the authenticated church-wide text feed and its current API contract and scope.
+
 See [church permissions and current-access snapshots](docs/church-permissions.md) for role-derived navigation, exact ministry scopes and the protected church-role rollout plan.

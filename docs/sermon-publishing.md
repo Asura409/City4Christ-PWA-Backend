@@ -22,7 +22,8 @@ Create a draft:
   "series": "Foundations",
   "topic": "Faith",
   "preachedAt": "2026-10-11T14:00:00Z",
-  "videoUrl": "https://youtu.be/AbCdEf12345"
+  "videoUrl": "https://youtu.be/AbCdEf12345",
+  "imageUrl": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"
 }
 ```
 
@@ -60,9 +61,11 @@ If another update committed first, return 409 `version_conflict` without modifyi
 
 ## Media policy
 
-This slice supports public HTTPS YouTube watch and youtu.be links only. Links normalize to `https://www.youtube.com/watch?v=VIDEO_ID`, where the ID has the supported eleven-character YouTube form. Start/tracking parameters are discarded. Credentials, ports, fragments, lookalike hosts and other providers are rejected. The database independently constrains stored URLs to the canonical form.
+Videos support public HTTPS YouTube watch and youtu.be links. Links normalize to `https://www.youtube.com/watch?v=VIDEO_ID`, where the ID has the supported eleven-character YouTube form. Start/tracking parameters are discarded. Credentials, ports, fragments, lookalike hosts and other providers are rejected. The database independently constrains stored URLs to the canonical form. The React sermon detail embeds the link using YouTube's privacy-enhanced `youtube-nocookie.com` host and retains a separate watch link.
 
-No request fetches, probes, embeds raw HTML or streams the supplied video. The frontend decides how to display the canonical link. Validation confirms the URL format, not that a video exists, belongs to the church, or remains accessible. videoUrl is optional and omitted from public responses when absent. Audio, Vimeo, private media and uploads require later explicit adapters/access policy.
+Optional `imageUrl` accepts only HTTPS `images.unsplash.com/photo-*` URLs. The application does not fetch the image; browsers load it directly under the frontend CSP. Empty values clear the image. The frontend checks the host again before rendering it. Keep the image URL and use only photos permitted for your content; the staging demo photos and their credits are listed in [demo-sermons.md](demo-sermons.md).
+
+Neither image nor video is downloaded, probed, proxied or stored as a file by the API. Validation checks URL format, not that media remains available or that the linked content belongs to the church. Replace demo material with church-approved content before public launch. Audio, other providers, private media and uploads require later explicit adapters/access policy.
 
 ## Authorization and audit operations
 
@@ -70,7 +73,11 @@ Only an approved database operator may provision staff roles outside this API. A
 
 Every successful create/edit/publication writes `sermon_audit_events` in the same transaction as the sermon change. Audit records contain actor, sermon, action, version, status at the time and UTC timestamp. They omit the sermon body, tokens and credentials. Audit insertion failure rolls back the change; row locks and version checks prevent lost updates. The API exposes no audit-edit/delete route. Foreign keys retain actor/sermon references, so future account-deletion and retention workflows must account for audit retention.
 
-Migration 00008 adds roles, version/media columns and audit records forward-only. Existing sermons retain metadata and get version 1 with no video. No roles or content are seeded, and no staging reset is performed.
+Migration 00008 adds roles, version/video columns and audit records. Migration 00020 adds the optional image URL. Existing sermons retain their metadata and receive an empty image URL. No roles or demo content are seeded by migrations, and no staging reset is performed.
+
+## Demo content
+
+`node scripts/seed-demo-sermons.mjs` prints a dry-run plan. To add the six clearly labeled demo records to staging, set `CITY4CHRIST_API_URL`, `CITY4CHRIST_APP_ORIGIN`, and `CITY4CHRIST_ACCESS_TOKEN` in the current shell, then pass `--apply`. The token must belong to a verified content editor. The script only targets this staging API or a loopback development server, creates and publishes through the audited API, skips exact published title matches, and never edits or deletes existing records. It does not store or print the bearer token. See [demo-sermons.md](demo-sermons.md) for content/source details and a safe invocation.
 
 ## Executed verification
 

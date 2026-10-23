@@ -8,11 +8,11 @@ import (
 	"time"
 )
 
-const editorialColumns = "id,title,summary,speaker,series,topic,preached_at,published_at,video_url,version"
+const editorialColumns = "id,title,summary,speaker,series,topic,preached_at,published_at,video_url,image_url,version"
 
 func scanEditorial(row scanner, now time.Time) (EditorialSermon, error) {
 	var s EditorialSermon
-	err := row.Scan(&s.ID, &s.Title, &s.Summary, &s.Speaker, &s.Series, &s.Topic, &s.PreachedAt, &s.PublishedAt, &s.VideoURL, &s.Version)
+	err := row.Scan(&s.ID, &s.Title, &s.Summary, &s.Speaker, &s.Series, &s.Topic, &s.PreachedAt, &s.PublishedAt, &s.VideoURL, &s.ImageURL, &s.Version)
 	s.PreachedAt = s.PreachedAt.UTC()
 	if s.PublishedAt != nil {
 		utc := s.PublishedAt.UTC()
@@ -45,7 +45,7 @@ func (r *Repository) createDraft(ctx context.Context, actorID string, input Draf
 	if err = checkEditor(ctx, tx, actorID); err != nil {
 		return EditorialSermon{}, err
 	}
-	result, err := scanEditorial(tx.QueryRowContext(ctx, `INSERT INTO sermons(title,summary,speaker,series,topic,preached_at,video_url) VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING `+editorialColumns, input.Title, input.Summary, input.Speaker, input.Series, input.Topic, input.PreachedAt, input.VideoURL), now)
+	result, err := scanEditorial(tx.QueryRowContext(ctx, `INSERT INTO sermons(title,summary,speaker,series,topic,preached_at,video_url,image_url) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING `+editorialColumns, input.Title, input.Summary, input.Speaker, input.Series, input.Topic, input.PreachedAt, input.VideoURL, input.ImageURL), now)
 	if err != nil {
 		return EditorialSermon{}, err
 	}
@@ -94,7 +94,7 @@ func (r *Repository) update(ctx context.Context, actorID, id string, patch Updat
 	for _, f := range []struct {
 		target *string
 		value  *string
-	}{{&current.Title, patch.Title}, {&current.Summary, patch.Summary}, {&current.Speaker, patch.Speaker}, {&current.Series, patch.Series}, {&current.Topic, patch.Topic}, {&current.VideoURL, patch.VideoURL}} {
+	}{{&current.Title, patch.Title}, {&current.Summary, patch.Summary}, {&current.Speaker, patch.Speaker}, {&current.Series, patch.Series}, {&current.Topic, patch.Topic}, {&current.VideoURL, patch.VideoURL}, {&current.ImageURL, patch.ImageURL}} {
 		if f.value != nil {
 			*f.target = *f.value
 		}
@@ -119,6 +119,7 @@ func (r *Repository) update(ctx context.Context, actorID, id string, patch Updat
 		{&current.Series, patch.Series, normalized.Series},
 		{&current.Topic, patch.Topic, normalized.Topic},
 		{&current.VideoURL, patch.VideoURL, normalized.VideoURL},
+		{&current.ImageURL, patch.ImageURL, normalized.ImageURL},
 	} {
 		if f.supplied != nil {
 			*f.target = f.normalized
@@ -146,7 +147,7 @@ func (r *Repository) update(ctx context.Context, actorID, id string, patch Updat
 			action = "scheduled"
 		}
 	}
-	result, err := scanEditorial(tx.QueryRowContext(ctx, `UPDATE sermons SET title=$2,summary=$3,speaker=$4,series=$5,topic=$6,preached_at=$7,published_at=$8,video_url=$9,version=version+1 WHERE id=$1 RETURNING `+editorialColumns, id, current.Title, current.Summary, current.Speaker, current.Series, current.Topic, current.PreachedAt, current.PublishedAt, current.VideoURL), now)
+	result, err := scanEditorial(tx.QueryRowContext(ctx, `UPDATE sermons SET title=$2,summary=$3,speaker=$4,series=$5,topic=$6,preached_at=$7,published_at=$8,video_url=$9,image_url=$10,version=version+1 WHERE id=$1 RETURNING `+editorialColumns, id, current.Title, current.Summary, current.Speaker, current.Series, current.Topic, current.PreachedAt, current.PublishedAt, current.VideoURL, current.ImageURL), now)
 	if err != nil {
 		return EditorialSermon{}, err
 	}
