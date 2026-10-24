@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -83,11 +84,12 @@ func New(db *sql.DB, config Config) http.Handler {
 		writeJSON(w, http.StatusOK, map[string]any{"data": map[string]string{"status": "ok"}})
 	})
 	browser := browserPolicy(mux, config, limiter)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	withRequestID := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Generate server-controlled correlation IDs; never reflect arbitrary input.
 		w.Header().Set("X-Request-Id", uuid.NewString())
 		browser.ServeHTTP(w, r)
 	})
+	return requestLogging(slog.Default(), withRequestID)
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {
