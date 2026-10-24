@@ -8,7 +8,7 @@ SwaggerUIBundle.presets = { apis: {} };
 const context = { window: {}, SwaggerUIBundle };
 vm.runInNewContext(fs.readFileSync('internal/app/apidocs/init.js', 'utf8'), context);
 context.window.onload();
-for (const method of ['get', 'post', 'patch']) {
+for (const method of ['get', 'post', 'patch', 'put', 'delete']) {
   assert.ok(options.supportedSubmitMethods.includes(method), `${method} must support Try it out`);
 }
 assert.equal(options.url, '/openapi.json');

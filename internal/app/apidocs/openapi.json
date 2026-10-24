@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.13.0",
+    "version": "1.14.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -43,6 +43,26 @@
     {
       "name": "Groups",
       "description": "Church-wide groups with scoped leadership and audited staff lifecycle management."
+    },
+    {
+      "name": "Prayer Wall",
+      "description": "Authenticated prayer requests with community, group-member, and owner-only privacy scopes."
+    },
+    {
+      "name": "Events",
+      "description": "Public published church-wide event listing and detail; no attendee identity is exposed."
+    },
+    {
+      "name": "Event management",
+      "description": "Super Admin, Assistant Pastor and Staff event editing and publication through events.manage."
+    },
+    {
+      "name": "Messaging",
+      "description": "Private direct conversations for verified church members."
+    },
+    {
+      "name": "Notifications",
+      "description": "Private in-app notices scoped to the signed-in member."
     }
   ],
   "paths": {
@@ -1176,7 +1196,7 @@
                 "editTitle": {
                   "value": {
                     "version": 2,
-                    "title": "Living in Faith \u2014 Updated"
+                    "title": "Living in Faith — Updated"
                   }
                 },
                 "unpublish": {
@@ -2463,7 +2483,7 @@
           "Access management"
         ],
         "operationId": "ListChurchRoleAssignments",
-        "summary": "Read a target account\u2019s current assignments",
+        "summary": "Read a target account’s current assignments",
         "security": [
           {
             "bearerAuth": []
@@ -3515,6 +3535,1253 @@
           },
           "503": {
             "description": "Standard API error response"
+          }
+        }
+      }
+    },
+    "/api/v1/prayer/requests": {
+      "get": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "List visible prayer requests",
+        "operationId": "ListPrayerRequests",
+        "description": "Requires a verified member Bearer token. Community requests are visible to signed-in members; group requests only to active group members; private requests only to their owner. No staff bypass. Returns up to 100 items with an opaque nextCursor.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "open",
+                "answered"
+              ],
+              "default": "open"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible requests and next cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PrayerRequest"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Create a prayer request",
+        "operationId": "CreatePrayerRequest",
+        "description": "Requires a verified member Bearer token and allowed Origin. Group requests require active membership. Private requests are owner-only. Body is plain text up to 3,000 characters.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrayerRequestInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/prayer/requests/{requestId}": {
+      "get": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Get visible prayer request",
+        "operationId": "GetPrayerRequest",
+        "description": "Hidden or inaccessible requests return 404. Private requests are visible only to their owner; group requests only to active group members. Anonymous authors are shown as Anonymous except to their owner, who sees You and isOwner=true.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prayer request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerRequest"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Mark own request answered or archive it",
+        "operationId": "UpdatePrayerRequestStatus",
+        "description": "Only the owner may change status to answered or archived. Repeating the same status is idempotent. Archived requests are hidden.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrayerRequestStatusInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status change result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerRequestStatusResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/prayer/requests/{requestId}/prayed": {
+      "put": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Acknowledge that you prayed",
+        "operationId": "AcknowledgePrayerRequest",
+        "description": "Requires visibility of an open request. Repeated acknowledgements by the same member are idempotent.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledgement result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerAcknowledgementResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "List published church-wide events",
+        "operationId": "ListEvents",
+        "description": "Returns at most 100 published church-wide events. Public reads never include attendee identities. A supplied bearer token adds only the caller’s RSVP attendeeCount.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/events/{eventId}": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Get published event",
+        "operationId": "GetEvent",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ]
+      }
+    },
+    "/api/v1/events/{eventId}/rsvp": {
+      "post": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Create or update own event RSVP",
+        "operationId": "RSVPEvent",
+        "description": "One RSVP per authenticated account. attendeeCount includes the account holder and guests, from 1 through 10. Capacity is checked transactionally; full events return 409 event_full. Requires an allowed browser Origin.",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventRSVPInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Events"
+        ],
+        "summary": "Cancel own event RSVP",
+        "operationId": "CancelEventRSVP",
+        "description": "Can be cancelled before the event starts. Cancellation releases reserved capacity. Requires an allowed browser Origin.",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/events": {
+      "get": {
+        "tags": [
+          "Event management"
+        ],
+        "summary": "List event drafts and published events",
+        "operationId": "ListManagedEvents",
+        "description": "Requires events.manage (Super Admin, Assistant Pastor or Staff).",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Event management"
+        ],
+        "summary": "Create event draft",
+        "operationId": "CreateEvent",
+        "description": "Creates a church-wide draft. Publish it through the update endpoint. Requires events.manage and an allowed browser Origin.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEventInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/events/{eventId}": {
+      "patch": {
+        "tags": [
+          "Event management"
+        ],
+        "summary": "Update, publish or cancel event",
+        "operationId": "UpdateEvent",
+        "description": "Full replacement of editable event fields using the current version. Capacity cannot be reduced below booked attendeeCount. Cancelled events cannot be restored. Requires events.manage and an allowed browser Origin.",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateEventInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/conversations": {
+      "get": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "List your direct conversations",
+        "operationId": "ListDirectConversations",
+        "description": "Returns only conversations in which the authenticated verified member participates. Partner email addresses and private account fields are never included.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Participant-only conversation list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/DirectConversation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "Start or reopen a one-to-one conversation",
+        "operationId": "CreateDirectConversation",
+        "description": "Any verified member may start a conversation with another verified member by account ID. Repeating the same pair returns the existing conversation. There is no staff access to private conversations.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateConversationInput"
+              },
+              "example": {
+                "recipientId": "22222222-2222-4222-8222-222222222222"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The conversation already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectConversationResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Conversation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectConversationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Standard API error response"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed or the account is not verified"
+          },
+          "404": {
+            "description": "Recipient account not found or conversation unavailable"
+          },
+          "413": {
+            "description": "Standard API error response"
+          },
+          "415": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Invalid recipient ID or self-conversation"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/messages": {
+      "get": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "Read direct message history",
+        "operationId": "ListDirectMessages",
+        "description": "Only conversation participants can read history. Messages are returned in ascending sequence order; use nextBeforeSequence to page toward older messages.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "beforeSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0,
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Participant-only message page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectMessagePageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "404": {
+            "description": "Conversation not found or caller is not a participant"
+          },
+          "422": {
+            "description": "Invalid path or pagination parameter"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "Send a direct message",
+        "operationId": "SendDirectMessage",
+        "description": "Only a conversation participant can send. The clientMessageId makes retries idempotent; reusing it with different content returns 409. Message bodies are not written to request logs.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendDirectMessageInput"
+              },
+              "example": {
+                "clientMessageId": "7219a6ea-b436-48ca-9d75-b2b8f5dd18ef",
+                "body": "Good morning. How can I pray with you today?"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotent retry of an already accepted message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectMessageResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Message created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectMessageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Standard API error response"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed or account is not verified"
+          },
+          "404": {
+            "description": "Conversation not found or caller is not a participant"
+          },
+          "409": {
+            "description": "clientMessageId was already used with different content"
+          },
+          "413": {
+            "description": "Standard API error response"
+          },
+          "415": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Invalid message ID or body"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/read": {
+      "put": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "Advance your read receipt",
+        "operationId": "MarkDirectConversationRead",
+        "description": "Advances the caller's monotonic read cursor through the supplied message. Omit or send an empty throughMessageId to mark the latest message read. Only participants can update their own receipt.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadInput"
+              },
+              "example": {
+                "throughMessageId": "77777777-7777-4777-8777-777777777777"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated participant receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadReceiptResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Standard API error response"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed or account is not verified"
+          },
+          "404": {
+            "description": "Conversation or message not found, or caller is not a participant"
+          },
+          "413": {
+            "description": "Standard API error response"
+          },
+          "415": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Invalid message ID"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "List my notifications",
+        "operationId": "ListMyNotifications",
+        "description": "Returns only the authenticated member’s notifications, newest first. Cursor pagination is stable. The API does not allow clients to create notifications.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/unread-count": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get my unread notification count",
+        "operationId": "GetMyUnreadNotificationCount",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationUnreadCountResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/{notificationId}/read": {
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark my notification read",
+        "operationId": "MarkMyNotificationRead",
+        "description": "Idempotently marks a notification belonging to the caller as read. Notifications belonging to another account return 404. Requires an allowed Origin.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "notificationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationReadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
           }
         }
       }
@@ -4921,6 +6188,665 @@
             "format": "date-time"
           }
         }
+      },
+      "PrayerRequestInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body",
+          "visibility"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 3000
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "community",
+              "group",
+              "private"
+            ]
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Required when visibility is group; prohibited otherwise."
+          },
+          "anonymous": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "PrayerRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "body",
+          "visibility",
+          "anonymous",
+          "status",
+          "author",
+          "isOwner",
+          "createdAt",
+          "prayerCount",
+          "hasPrayed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "community",
+              "group",
+              "private"
+            ]
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "answered"
+            ]
+          },
+          "author": {
+            "type": "string",
+            "description": "Display name, Anonymous, or You."
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "prayerCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "hasPrayed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PrayerRequestStatusInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "archived"
+            ]
+          }
+        }
+      },
+      "PrayerRequestStatusResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "changed"
+        ],
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PrayerAcknowledgementResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "changed"
+        ],
+        "properties": {
+          "changed": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreateEventInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "description",
+          "location",
+          "startsAt",
+          "timeZone"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 5000
+          },
+          "location": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "RFC3339 instant; the server stores it in UTC."
+          },
+          "timeZone": {
+            "type": "string",
+            "description": "Valid IANA timezone, for example Africa/Lagos."
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000,
+            "nullable": true,
+            "description": "Null or omitted means unlimited capacity."
+          }
+        }
+      },
+      "UpdateEventInput": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CreateEventInput"
+          },
+          {
+            "type": "object",
+            "required": [
+              "status",
+              "version"
+            ],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": [
+                  "draft",
+                  "published",
+                  "cancelled"
+                ]
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        ]
+      },
+      "EventRSVPInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "attendeeCount"
+        ],
+        "properties": {
+          "attendeeCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Total reserved seats for the account holder and guests."
+          }
+        }
+      },
+      "EventRSVP": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "attendeeCount",
+          "updatedAt"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attendeeCount": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChurchEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "description",
+          "location",
+          "startsAt",
+          "timeZone",
+          "attendeeCount",
+          "status",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": "integer",
+            "nullable": true
+          },
+          "attendeeCount": {
+            "type": "integer",
+            "description": "Total reserved seats including guests."
+          },
+          "myAttendeeCount": {
+            "type": "integer",
+            "description": "Only present for the authenticated caller; never includes another account’s data."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "cancelled"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateConversationInput": {
+        "type": "object",
+        "required": [
+          "recipientId"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "recipientId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "SendDirectMessageInput": {
+        "type": "object",
+        "required": [
+          "clientMessageId",
+          "body"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
+          }
+        }
+      },
+      "MarkReadInput": {
+        "type": "object",
+        "required": [],
+        "additionalProperties": false,
+        "properties": {
+          "throughMessageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional. Omit or use an empty string to mark the latest message read."
+          }
+        }
+      },
+      "DirectMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "conversationId",
+          "senderId",
+          "clientMessageId",
+          "body",
+          "sequence",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DirectConversation": {
+        "type": "object",
+        "required": [
+          "id",
+          "partnerId",
+          "partnerFirstName",
+          "partnerLastName",
+          "unreadCount",
+          "myLastReadSequence",
+          "partnerReadSequence",
+          "createdAt"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "partnerFirstName": {
+            "type": "string"
+          },
+          "partnerLastName": {
+            "type": "string"
+          },
+          "lastMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DirectMessage"
+              }
+            ],
+            "nullable": true
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "myLastReadSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "partnerReadSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ReadReceipt": {
+        "type": "object",
+        "required": [
+          "conversationId",
+          "lastReadSequence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "conversationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lastReadSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "lastReadAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "DirectConversationResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DirectConversation"
+          }
+        }
+      },
+      "DirectMessageResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/DirectMessage"
+          }
+        }
+      },
+      "DirectMessagePageResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectMessage"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "nextBeforeSequence"
+            ],
+            "properties": {
+              "nextBeforeSequence": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "ReadReceiptResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ReadReceipt"
+          }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "body",
+          "createdAt",
+          "readAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "resourcePath": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationListResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "nextCursor"
+            ],
+            "properties": {
+              "nextCursor": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationUnreadCountResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "unreadCount"
+            ],
+            "properties": {
+              "unreadCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "NotificationReadResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "changed"
+            ],
+            "properties": {
+              "changed": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
       }
     },
     "responses": {

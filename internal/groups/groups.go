@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/notifications"
 	"github.com/google/uuid"
 )
 
@@ -428,8 +429,8 @@ func (s *Service) Decide(ctx context.Context, actor, groupID, target string, in 
 		return false, err
 	}
 	defer tx.Rollback()
-	var audience string
-	err = tx.QueryRowContext(ctx, `SELECT audience FROM groups WHERE id=$1 AND archived_at IS NULL`, groupID).Scan(&audience)
+	var groupName, audience string
+	err = tx.QueryRowContext(ctx, `SELECT name,audience FROM groups WHERE id=$1 AND archived_at IS NULL`, groupID).Scan(&groupName, &audience)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, ErrNotFound
 	}
@@ -467,15 +468,9 @@ func (s *Service) Decide(ctx context.Context, actor, groupID, target string, in 
 		status = "declined"
 		action = "declined"
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE group_memberships SET status=$3,decided_at=$4,decided_by=$5 WHERE group_id=$1 AND account_id=$2 AND status='pending'`, groupID, target, status, s.now(), actor)
-	if err != nil {
-		return false, err
-	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, err
-	}
-	if n == 0 {
+	var requestedAt time.Time
+	err = tx.QueryRowContext(ctx, `UPDATE group_memberships SET status=$3,decided_at=$4,decided_by=$5 WHERE group_id=$1 AND account_id=$2 AND status='pending' RETURNING requested_at`, groupID, target, status, s.now(), actor).Scan(&requestedAt)
+	if errors.Is(err, sql.ErrNoRows) {
 		var current string
 		err = tx.QueryRowContext(ctx, `SELECT status FROM group_memberships WHERE group_id=$1 AND account_id=$2`, groupID, target).Scan(&current)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -489,7 +484,21 @@ func (s *Service) Decide(ctx context.Context, actor, groupID, target string, in 
 		}
 		return false, ErrInvalid
 	}
+	if err != nil {
+		return false, err
+	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO group_audit_events(group_id,actor_id,target_id,action,reason) VALUES($1,$2,$3,$4,$5)`, groupID, actor, target, action, in.Reason); err != nil {
+		return false, err
+	}
+	noticeKind, noticeTitle, noticeBody := "group.join_approved", "Your request was approved", "You are now a member of "+groupName+"."
+	if in.Decision == "decline" {
+		noticeKind, noticeTitle, noticeBody = "group.join_declined", "Your request was declined", "Your request to join "+groupName+" was declined."
+	}
+	dedupeKey := "group-decision:" + groupID + ":" + target + ":" + requestedAt.UTC().Format(time.RFC3339Nano) + ":" + action
+	if _, err = notifications.NewRepository(s.db).CreateTx(ctx, tx, notifications.CreateInput{
+		AccountID: target, Kind: noticeKind, Title: noticeTitle, Body: noticeBody,
+		ResourcePath: "/#/groups/" + groupID, DedupKey: dedupeKey,
+	}); err != nil {
 		return false, err
 	}
 	if err = tx.Commit(); err != nil {

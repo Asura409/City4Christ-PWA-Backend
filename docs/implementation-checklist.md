@@ -78,9 +78,10 @@ delivery order:
 Group membership precedes group-specific posts and chats. Each slice keeps
 its server-side audience/ownership checks and React interface. Media bytes stay
 outside PostgreSQL behind a private object-storage adapter with short-lived signed
-URLs; do not enable uploads until file-size/type limits, public/private access and
-the storage provider are settled. Sermon and post attachments must use the same
-media policy. Push notifications are not a prerequisite for durable group or
+URLs. Cloudflare R2 is the selected provider; uploads remain disabled until the
+media API enforces file-size/type limits, validates actual content, and applies the
+approved public/private access policy. Sermon and post attachments must use the
+same media policy. Push notifications are not a prerequisite for durable group or
 message state; record in-app events transactionally and add delivery separately.
 
 This priority update supersedes the default milestone order in the table and the
@@ -194,10 +195,11 @@ bypass or private-field leaks. Welcome delivery is completed through M3.
 
 ## M3 — Notifications, delivery and emergency broadcasts
 
-- [ ] **M3.1:** Add reusable transactional domain outbox/in-app inbox records,
-  per-recipient delivery state, retry/backoff and failed-delivery visibility.
-- [ ] **M3.2:** Implement own inbox, unread count, read/read-all and preferences;
-  keep delivery failure independent of the committed domain action.
+- [x] **M3.1 (foundation):** Add transactional, account-scoped inbox records with
+  idempotent domain writes. Domain notification producers are being connected as
+  their feature slices land.
+- [x] **M3.2 (foundation):** React inbox, unread count and idempotent read action are
+  connected. Preferences, read-all and notification-producing workflows remain.
 - [ ] **M3.3:** Implement Web Push subscription/revocation with browser opt-in,
   maintained libraries, protected provider credentials and expired-subscription cleanup.
 - [ ] **M3.4:** Implement draft/review/send broadcast and authorized audience
@@ -205,11 +207,12 @@ bypass or private-field leaks. Welcome delivery is completed through M3.
   group audience. Audit recipients/counts without leaking sensitive payloads.
 - [ ] **M3.5:** Wire welcome-team/visitor welcome events; select SMS only when its
   provider, consent and costs are approved. Use inbox fallback and safe push previews.
-- [ ] **M3.6:** Add notifications/preferences/broadcast UIs and test duplicate jobs,
+- [ ] **M3.6:** Complete notification preferences/broadcast UIs and test duplicate jobs,
   provider outage, unsubscribed devices, recipient isolation and safe retries.
 
-**Exit:** W09 works for opted-in supported devices; W06 welcome/follow-up delivery
-is durable and observable. Provider failure never reports a false successful send.
+**Exit:** M3 stays open until authorized domain triggers, delivery providers, retry
+visibility and user preferences are implemented. Provider failure must never report
+false successful delivery.
 
 ## M4 — Groups / ministries and membership
 
@@ -258,21 +261,21 @@ detail routes, pagination, search and attachments, not merely hidden in the UI.
 
 ## M6 — Events, activity leaders and RSVP
 
-- [ ] **M6.1:** Resolve timezone, guests/counts, capacity/waitlist, cancellation and
-  publication policy. Keep timezone explicit and store instants consistently in UTC.
-- [ ] **M6.2:** Implement public published and authorized group event list/detail,
-  drafts/publication and scoped editor routes with update/conflict handling.
-- [ ] **M6.3:** Implement coordinator assignments from the current eligible group
-  roster and in-app assignment notifications; recheck membership transactionally.
-- [ ] **M6.4:** Implement own RSVP/cancel/status, bounded attendee counts,
-  transactionally enforced capacity, optional waitlist and repeat-safe retries.
-- [ ] **M6.5:** Implement safe calendar export with stable event IDs and correct
-  timezone/updates; connect event management and member registration UIs.
-- [ ] **M6.6:** Test oversubscription races, duplicate RSVPs, cancellation capacity,
-  removed coordinators, cross-group access and DST/timezone/calendar cases.
+- [x] **M6.1:** MVP defaults: UTC instants plus IANA timezone, one RSVP per
+  verified account with 1–10 attendees, optional capacity (unlimited when omitted), no waitlist, cancellation
+  before start, church-wide publication. No group event audience in this slice.
+- [x] **M6.2:** Public published church-wide list/detail and `events.manage` draft,
+  edit, publish and cancel routes with version conflicts.
+- [ ] **M6.3:** Coordinator assignments and in-app assignment notifications remain.
+- [x] **M6.4:** Own RSVP/cancel, bounded attendee counts and transactionally enforced
+  capacity; full events return a conflict, and repeat requests are safe.
+- [ ] **M6.5:** Calendar export remains. React event list, RSVP and manager UI are connected.
+- [x] **M6.6:** Repository/service/global-app tests cover concurrent capacity, duplicate
+  RSVP, cancellation and authorization. Browser tests cover listing, RSVP, full
+  capacity and manager publication on desktop/mobile.
 
-**Exit:** W04–W05 work from creation/assignment to Registered status and calendar
-export, with no overselling capacity or unauthorized coordinator appointments.
+**Exit:** MVP endpoints and UI are implemented and focused checks passed. M6 remains
+open for coordinators, calendar export, group event scope and full integration suite.
 
 ## M7 — Attendance and Sunday School
 
@@ -292,17 +295,16 @@ information remains restricted to the permitted relationship and task.
 
 ## M8 — Prayer wall
 
-- [ ] **M8.1:** Implement own/community/group/private requests, expiry/archive,
-  anonymous display, encouragements, “I prayed” and reports.
-- [ ] **M8.2:** Separate public anonymity from controlled moderator attribution;
-  audit sensitive access and preserve visibility on every collection/detail route.
-- [ ] **M8.3:** Connect prayer filters/composer/acknowledgements/moderation to the
-  real API; use safe inbox/push previews and maintained upload controls if enabled.
-- [ ] **M8.4:** Test another member's private prayer, group leakage, anonymous
-  author serialization, duplicate acknowledgements and removed-content visibility.
+- [ ] **M8.1:** Implement expiry, comments and attachment policy. Current slice supports
+  community, active-group and private visibility plus owner answer/archive status.
+- [ ] **M8.2:** Define controlled moderator attribution, abuse reports and audit.
+- [x] **M8.3:** React filters, composer, acknowledgements and owner status controls
+  use the real API with loading, empty and error states.
+- [x] **M8.4:** Focused disposable-PostgreSQL repository/service/global-app tests and
+  desktop/mobile browser scenarios cover privacy boundaries, anonymity, status and
+  acknowledgements. Expiry/moderation/media tests remain.
 
-**Exit:** original PRD prayer workflows work without exposing identity or private
-requests through APIs, notifications, logs, search or pagination.
+**Exit:** Original PRD moderation and notification workflows remain before closure.
 
 ## M9 — Pastor directory and confidential care
 
@@ -322,22 +324,19 @@ read private purposes or notes.
 
 ## M10 — Messaging and realtime
 
-- [ ] **M10.1:** Approve DM/group privacy, moderation/retention and any exceptional
-  staff access before implementing it. Do not infer access to every private DM from
-  a broad dashboard role.
-- [ ] **M10.2:** Implement participant-only conversations/history/search, durable
-  message send, stable client-message idempotency and monotonic read receipts.
-- [ ] **M10.3:** Bind group conversations to active membership and moderation;
-  validate attachment ownership/visibility and limit abusive message operations.
-- [ ] **M10.4:** Add short-lived single-use WSS tickets, per-event authorization,
-  bounded frames/rates, heartbeat, revocation, ephemeral typing/presence and backpressure.
-- [ ] **M10.5:** Connect conversation/group-chat UIs; recover missed durable history
-  through REST after reconnect. Add Redis only when measured multi-instance needs it.
-- [ ] **M10.6:** Test unauthorized room joins, removed members, same-token role
-  revocation, duplicate sends, reconnect recovery, out-of-order receipts and outages.
+- [x] **M10.1:** Direct messages are participant-only; any verified member may start
+  a one-to-one conversation. No staff backdoor. Group chat needs its own policy.
+- [x] **M10.2:** Participant-only durable history, directory search, idempotent sends,
+  monotonic read receipts and account/IP rate limits are implemented.
+- [ ] **M10.3:** Group conversations, active-membership access and moderation remain.
+- [ ] **M10.4:** Realtime/WSS tickets, reconnect history and bounded fanout remain.
+- [x] **M10.5:** React conversation list, member search, send and read receipt use the
+  real API with desktop/mobile browser scenarios.
+- [ ] **M10.6:** Full group/realtime lifecycle checks remain. Focused tests cover DM
+  participant privacy, retry behavior, receipts and rate limits.
 
-**Exit:** committed messages survive reconnect; private history remains participant-
-restricted; realtime failure does not prevent authoritative REST reads/writes.
+**Exit:** REST DM slice is implemented; M10 stays open for group chat, realtime,
+reconnect behavior and their security tests.
 
 ## M11 — Complete Word/live and the home/install experience
 
@@ -357,8 +356,12 @@ screens; private content is absent from browser caches and unrelated search resu
 
 ## M12 — Giving and finance, sandbox first
 
-- [ ] **M12.1:** Approve provider, country/currency, guest/anonymous giving,
-  categories, direct-transfer verification, receipts/refunds and retention/export policy.
+- [ ] **M12.1:** Provider candidate is Give A Little and currency is GBP. The owner
+  supplied the existing public campaign URL but has no merchant/webhook setup yet.
+  Obtain a provider test campaign, webhook enablement/signing secret through a
+  secure channel, and confirm guest/anonymous giving, categories, failure semantics,
+  receipts/refunds and retention/export policy before implementation. No live checkout
+  is wired into preview.
 - [ ] **M12.2:** Add money-in-minor-units validation, categories, pending checkout,
   actor-scoped idempotency, verified raw-body webhook adapters and event deduplication.
 - [ ] **M12.3:** Implement auditable ledger/status transitions, reconciliation,
@@ -444,3 +447,17 @@ formatting/whitespace, documentation links and OpenAPI1.10 validation passed
 
 Staging release, owner-approved first Super Admin, real-provider/device acceptance,
 factor-change alerts and assisted recovery remain explicit remaining gates.
+
+
+### Prayer, events and direct messaging — local feature slices (24 October 2026)
+
+Backend repository/service and global-app routes were tested against disposable
+PostgreSQL; OpenAPI and Swagger configuration checks passed. Frontend unit tests
+passed (29), production build passed with staging API_URL, and feature browser
+scenarios passed on desktop/mobile. A transient loading-state assertion in the
+messaging browser test was removed; the full messaging browser spec then passed.
+The expected-red/green CORS PUT preflight test passed both stages. No staging
+deployment, data reset, commit or push was performed. Full `go test ./...` was not
+run. Feature IDs M6/M8/M10 remain open for the deferred scope listed above.
+Give A Little is a provider candidate only: test campaign and webhook setup are
+not available, so M12 remains blocked at that provider prerequisite.

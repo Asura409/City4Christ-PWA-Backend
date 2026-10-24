@@ -11,8 +11,12 @@ import (
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/events"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/groups"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/messaging"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/notifications"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/posts"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/prayer"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/profiles"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/sermons"
 	"github.com/google/uuid"
@@ -57,8 +61,12 @@ func New(db *sql.DB, config Config) http.Handler {
 	profileRoutes(mux, profileService, sessions, limiter, config)
 	directoryRoutes(mux, profileService, sessions, limiter, config)
 	postRoutes(mux, posts.NewService(posts.NewRepository(db)), sessions, limiter, config)
+	eventRoutes(mux, events.NewService(events.NewRepository(db), config.Now), sessions, limiter, config)
 	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
 	groupRoutes(mux, groups.NewService(groups.NewRepository(db), config.Now), sessions, limiter, config)
+	prayerRoutes(mux, prayer.NewService(prayer.NewRepository(db)), sessions, limiter, config)
+	directMessagingRoutes(mux, messaging.NewService(messaging.NewRepository(db), config.Now), sessions, limiter, config)
+	notificationRoutes(mux, notifications.NewService(notifications.NewRepository(db), config.Now), sessions, limiter, config)
 	accessService := access.NewService(db)
 	accessRoutes(mux, accessService, sessions, limiter, config)
 	churchRoleRoutes(mux, accessService, sessions, limiter, config)

@@ -80,6 +80,10 @@ func TestGroupCreationMembershipApprovalAndLeave(t *testing.T) {
 	if err != nil || changed {
 		t.Fatalf("repeat decision must be idempotent: changed=%v err=%v", changed, err)
 	}
+	var approvalNotices int
+	if err = db.QueryRow(`SELECT count(*) FROM notifications WHERE account_id=$1 AND kind='group.join_approved' AND title='Your request was approved' AND resource_path=$2`, member, "/#/groups/"+group.ID).Scan(&approvalNotices); err != nil || approvalNotices != 1 {
+		t.Fatalf("approval inbox notices=%d err=%v, want one deduplicated notice", approvalNotices, err)
+	}
 
 	page, err = service.List(ctx, member, Options{Limit: 20})
 	if err != nil || len(page.Items) != 1 || page.Items[0].MembershipStatus != "active" || page.Items[0].MemberCount != 1 {

@@ -52,3 +52,7 @@ See [frontend browser integration](docs/frontend-browser-integration.md) for Goo
 See [church community posts](docs/posts.md) for the authenticated church-wide text feed and its current API contract and scope.
 
 See [church permissions and current-access snapshots](docs/church-permissions.md) for role-derived navigation, exact ministry scopes and the protected church-role rollout plan.
+
+See [church events](docs/events.md), [prayer wall](docs/prayer-wall.md), and [direct messaging](docs/messaging.md) for the connected API contracts and current scope.
+
+See [in-app notifications](docs/notifications.md) for the private inbox API and current delivery scope.
