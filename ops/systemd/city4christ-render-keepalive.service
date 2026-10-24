@@ -1,0 +1,15 @@
+[Unit]
+Description=Check City4Christ Render API liveness
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+Group=ubuntu
+ExecStart=/usr/bin/curl --disable --fail --silent --show-error --connect-timeout 10 --max-time 75 --output /dev/null --write-out "City4Christ liveness HTTP %%{http_code}\\n" https://city4christ-staging-api.onrender.com/health/live
+TimeoutStartSec=90
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
