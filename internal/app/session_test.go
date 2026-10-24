@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -15,6 +16,10 @@ import (
 )
 
 func TestSessionRoutesThroughGlobalApp(t *testing.T) {
+	var requestLogs bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&requestLogs, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
 	db := testpg.New(t)
 	ctx := context.Background()
 	if err := database.Migrate(ctx, db); err != nil {
@@ -55,6 +60,12 @@ func TestSessionRoutesThroughGlobalApp(t *testing.T) {
 	w := request("POST", "/api/v1/auth/login", loginBody, "", nil, frontend)
 	if w.Code != 200 {
 		t.Fatalf("login %d %s", w.Code, w.Body.String())
+	}
+	if requestID := w.Header().Get("X-Request-Id"); requestID == "" || !strings.Contains(requestLogs.String(), requestID) || !strings.Contains(requestLogs.String(), `"path":"/api/v1/auth/login"`) {
+		t.Fatalf("global app did not log login request metadata: %s", requestLogs.String())
+	}
+	if strings.Contains(requestLogs.String(), "sufficiently long password") || strings.Contains(requestLogs.String(), "http@example.invalid") {
+		t.Fatal("global app request logs leaked login credentials")
 	}
 	var body struct {
 		Data struct {

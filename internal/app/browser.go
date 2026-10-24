@@ -102,7 +102,7 @@ func browserPolicy(next http.Handler, c Config, limiter *auth.RateLimiter) http.
 				writeError(w, 403, "origin_not_allowed", "Origin is not allowed.", nil)
 				return
 			}
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(204)
