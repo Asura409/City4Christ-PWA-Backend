@@ -1,0 +1,95 @@
+name: Deploy API to Hostinger VPS
+
+on:
+  workflow_run:
+    workflows: [Test]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: city4christ-hostinger-api-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      vars.VPS_DEPLOY_ENABLED == 'true' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: hostinger-vps
+    steps:
+      - name: Download the smoke-tested image from that Test run
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.event.workflow_run.id }}
+          name: city4christ-api-${{ github.event.workflow_run.head_sha }}
+          path: ${{ runner.temp }}/city4christ-api-image
+
+      - name: Validate deployment settings and prepare SSH
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VPS_HOST" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+            echo "Actions variable VPS_HOST must be a hostname or IPv4 address." >&2
+            exit 1
+          fi
+          if [[ ! "$VPS_USER" =~ ^[a-z_][a-zA-Z0-9_-]*$ ]]; then
+            echo "Actions variable VPS_USER is missing or invalid." >&2
+            exit 1
+          fi
+          if [[ -z "$VPS_SSH_PRIVATE_KEY" || -z "$VPS_SSH_KNOWN_HOSTS" ]]; then
+            echo "Set VPS_SSH_PRIVATE_KEY and VPS_SSH_KNOWN_HOSTS in the hostinger-vps environment." >&2
+            exit 1
+          fi
+          ssh_dir=$(mktemp -d)
+          chmod 700 "$ssh_dir"
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > "$ssh_dir/id_deploy"
+          printf '%s\n' "$VPS_SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+          chmod 600 "$ssh_dir/id_deploy" "$ssh_dir/known_hosts"
+          echo "SSH_DIR=$ssh_dir" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Send the exact smoke-tested image to the restricted deploy command
+        env:
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "GitHub did not provide a full commit SHA." >&2
+            exit 1
+          fi
+          bundle="$RUNNER_TEMP/city4christ-api-image/city4christ-api.tar.gz"
+          if [[ ! -s "$bundle" || ! -s "$bundle.sha256" ]]; then
+            echo "The tested Docker image artifact is missing." >&2
+            exit 1
+          fi
+          (cd "$(dirname "$bundle")" && sha256sum --check city4christ-api.tar.gz.sha256)
+          destination="$VPS_USER@$VPS_HOST"
+          ssh_options=(-i "$SSH_DIR/id_deploy" -o IdentitiesOnly=yes -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$SSH_DIR/known_hosts")
+          ssh "${ssh_options[@]}" "$destination" "deploy $DEPLOY_SHA" < "$bundle"
+        shell: bash
+
+      - name: Remove temporary SSH material
+        if: always()
+        run: |
+          if [[ -n "${SSH_DIR:-}" && -d "$SSH_DIR" ]]; then
+            rm -rf -- "$SSH_DIR"
+          fi
+        shell: bash
