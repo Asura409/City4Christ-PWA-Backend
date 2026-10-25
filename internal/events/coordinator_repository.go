@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func (r *Repository) assignCoordinatorTx(ctx context.Context, tx *sql.Tx, actor, eventID, groupID, accountID string, now time.Time) (Coordinator, error) {
+func (r *Repository) assignCoordinatorTx(ctx context.Context, tx *sql.Tx, actor, eventID, groupID, accountID string, now time.Time) (Coordinator, int64, bool, error) {
 	var item Coordinator
 	err := tx.QueryRowContext(ctx, `INSERT INTO event_coordinators(event_id,group_id,account_id,assigned_by,assigned_at)
 		VALUES($1,$2,$3,$4,$5)
@@ -18,15 +18,16 @@ func (r *Repository) assignCoordinatorTx(ctx context.Context, tx *sql.Tx, actor,
 	if errors.Is(err, sql.ErrNoRows) {
 		err = tx.QueryRowContext(ctx, `SELECT event_id,group_id,account_id,assigned_at FROM event_coordinators WHERE event_id=$1 AND account_id=$2`, eventID, accountID).
 			Scan(&item.EventID, &item.GroupID, &item.AccountID, &item.AssignedAt)
-		return item, err
+		return item, 0, false, err
 	}
 	if err != nil {
-		return Coordinator{}, err
+		return Coordinator{}, 0, false, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO event_coordinator_audit_events(event_id,group_id,account_id,actor_id,action,occurred_at) VALUES($1,$2,$3,$4,'assigned',$5)`, eventID, groupID, accountID, actor, now); err != nil {
-		return Coordinator{}, err
+	var auditID int64
+	if err = tx.QueryRowContext(ctx, `INSERT INTO event_coordinator_audit_events(event_id,group_id,account_id,actor_id,action,occurred_at) VALUES($1,$2,$3,$4,'assigned',$5) RETURNING id`, eventID, groupID, accountID, actor, now).Scan(&auditID); err != nil {
+		return Coordinator{}, 0, false, err
 	}
-	return item, nil
+	return item, auditID, true, nil
 }
 
 func (r *Repository) coordinators(ctx context.Context, eventID string, admin bool) ([]Coordinator, error) {

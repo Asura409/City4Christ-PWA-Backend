@@ -36,6 +36,23 @@ func TestServiceAssignsCoordinatorsOnlyFromAuthorizedActiveChurchGroup(t *testin
 	if _, err = service.AssignCoordinator(ctx, leader, draft.ID, groupID, firstMember); err != nil {
 		t.Fatalf("leader assigning active own-group member: %v", err)
 	}
+	if _, err = service.AssignCoordinator(ctx, leader, draft.ID, groupID, firstMember); err != nil {
+		t.Fatalf("idempotent coordinator assignment: %v", err)
+	}
+	var notificationCount int
+	var kind, title, body, resourcePath string
+	if err = db.QueryRow(`SELECT count(*) FROM notifications WHERE account_id=$1`, firstMember).Scan(&notificationCount); err != nil {
+		t.Fatal(err)
+	}
+	if notificationCount != 1 {
+		t.Fatalf("assignment notifications = %d, want exactly one", notificationCount)
+	}
+	if err = db.QueryRow(`SELECT kind,title,body,resource_path FROM notifications WHERE account_id=$1`, firstMember).Scan(&kind, &title, &body, &resourcePath); err != nil {
+		t.Fatal(err)
+	}
+	if kind != "event.coordinator_assigned" || title != "Event coordinator assigned" || body != "You have been assigned to coordinate: "+draft.Title || resourcePath != "/#/events" {
+		t.Fatalf("assignment notification = (%q,%q,%q,%q)", kind, title, body, resourcePath)
+	}
 	if _, err = service.AssignCoordinator(ctx, leader, draft.ID, otherGroupID, creator); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("leader assigned outside own scope: %v", err)
 	}
