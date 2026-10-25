@@ -1,5 +1,7 @@
 github.com/alexedwards/argon2id v1.0.0 h1:wJzDx66hqWX7siL/SRUmgz3F8YMrd/nfX/xHHcQQP0w=
 github.com/alexedwards/argon2id v1.0.0/go.mod h1:tYKkqIjzXvZdzPvADMWOEZ+l6+BD6CtBXMj5fnJppiw=
+github.com/arran4/golang-ical v0.3.8 h1:2Y1Yo0MG4zBZxU17iZo+34Z9aLF4z0/5s2ToVBT0VEQ=
+github.com/arran4/golang-ical v0.3.8/go.mod h1:OnguFgjN0Hmx8jzpmWcC+AkHio94ujmLHKoaef7xQh8=
 github.com/aws/aws-sdk-go-v2 v1.47.4 h1:bTvk6UdSSSvaQsfLVj1JRDEEqj/PDRwGf1KanaRzau0=
 github.com/aws/aws-sdk-go-v2 v1.47.4/go.mod h1:XkrjAZvr705Nytv6PkPUhoSB2W9+vVHBp5oAWpkh8Ak=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.24 h1:t7FxqJ5KHDeKceyD4HtGaG6z7hMSeVGjs5/4c+L5ArM=
@@ -35,6 +37,8 @@ github.com/go-jose/go-jose/v4 v4.1.4 h1:moDMcTHmvE6Groj34emNPLs/qtYXRVcd6S7NHbHz
 github.com/go-jose/go-jose/v4 v4.1.4/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
 github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
+github.com/google/go-cmp v0.6.0 h1:ofyhxvXcZhMsU5ulbFiLKl/XBFqE1GSq7atu8tAmTRI=
+github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
 github.com/jackc/pgpassfile v1.0.0 h1:/6Hmqy13Ss2zCq62VdNG8tM1wchn8zjSGOBJ6icpsIM=

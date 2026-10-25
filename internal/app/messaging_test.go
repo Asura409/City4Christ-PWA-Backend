@@ -120,7 +120,7 @@ func TestMessagingOpenAPIRequiresBearerForEveryRoute(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
 	var spec struct {
-		Paths map[string]map[string]map[string]any `json:"paths"`
+		Paths map[string]json.RawMessage `json:"paths"`
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
 		t.Fatal(err)
@@ -129,11 +129,19 @@ func TestMessagingOpenAPIRequiresBearerForEveryRoute(t *testing.T) {
 		"/api/v1/conversations":                           {"get", "post"},
 		"/api/v1/conversations/{conversationId}/messages": {"get", "post"},
 		"/api/v1/conversations/{conversationId}/read":     {"put"},
+		"/api/v1/group-conversations":                     {"get"},
+		"/api/v1/groups/{groupId}/messages":               {"get", "post"},
+		"/api/v1/groups/{groupId}/messages/{messageId}":   {"delete"},
+		"/api/v1/groups/{groupId}/read":                   {"put"},
 	}
 	for path, methods := range want {
+		var pathItem map[string]json.RawMessage
+		if err := json.Unmarshal(spec.Paths[path], &pathItem); err != nil {
+			t.Fatalf("decode path %s: %v", path, err)
+		}
 		for _, method := range methods {
-			operation := spec.Paths[path][method]
-			if operation == nil {
+			var operation map[string]any
+			if err := json.Unmarshal(pathItem[method], &operation); err != nil || len(operation) == 0 {
 				t.Fatalf("missing contract %s %s", method, path)
 			}
 			security, ok := operation["security"].([]any)
@@ -141,5 +149,102 @@ func TestMessagingOpenAPIRequiresBearerForEveryRoute(t *testing.T) {
 				t.Fatalf("%s %s lacks bearer security", method, path)
 			}
 		}
+	}
+}
+
+func TestGroupMessagingRoutesEnforceCurrentMembershipAndModerate(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	key := bytes.Repeat([]byte{51}, 32)
+	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := func(email string) (string, string) {
+		t.Helper()
+		var id string
+		if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES($1,'Group','Member',now()) RETURNING id`, email).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		tokens, err := sessions.Start(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id, tokens.AccessToken
+	}
+	memberID, memberToken := account("http-group-chat-member@example.invalid")
+	leaderID, leaderToken := account("http-group-chat-leader@example.invalid")
+	_, outsiderToken := account("http-group-chat-outsider@example.invalid")
+	groupID := "33333333-3333-4333-8333-333333333333"
+	if _, err = db.Exec(`INSERT INTO groups(id,name,description,audience,join_policy,created_by) VALUES($1,'Choir','','church','open',$2)`, groupID, memberID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO access_scopes(id,kind) VALUES($1,'ministry')`, groupID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO group_memberships(group_id,account_id,status) VALUES($1,$2,'active'),($1,$3,'active')`, groupID, memberID, leaderID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,'ministry_leader',$2)`, leaderID, groupID); err != nil {
+		t.Fatal(err)
+	}
+	h := New(db, Config{VerificationKey: key, AppOrigin: "https://api.example.invalid"})
+	request := func(method, path, token, body string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.RemoteAddr = "192.0.2.12:1234"
+		r.Header.Set("Origin", "https://api.example.invalid")
+		if body != "" {
+			r.Header.Set("Content-Type", "application/json")
+		}
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := request("GET", "/api/v1/group-conversations", "", ""); w.Code != 401 {
+		t.Fatalf("anonymous list = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", "/api/v1/group-conversations", memberToken, ""); w.Code != 200 || !strings.Contains(w.Body.String(), groupID) {
+		t.Fatalf("member group list = %d %s", w.Code, w.Body.String())
+	}
+	groupMessages := "/api/v1/groups/" + groupID + "/messages"
+	body := `{"clientMessageId":"7219a6ea-b436-48ca-9d75-b2b8f5dd18ef","body":"Choir rehearsal is at six."}`
+	if w := request("POST", groupMessages, memberToken, body); w.Code != 201 {
+		t.Fatalf("send = %d %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Data []struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	created := request("GET", groupMessages, memberToken, "")
+	if created.Code != 200 || json.Unmarshal(created.Body.Bytes(), &response) != nil || len(response.Data) == 0 || response.Data[0].ID == "" {
+		t.Fatalf("history = %d %s", created.Code, created.Body.String())
+	}
+	messageID := response.Data[0].ID
+	if w := request("POST", groupMessages, outsiderToken, body); w.Code != 404 {
+		t.Fatalf("nonmember send = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", groupMessages, outsiderToken, ""); w.Code != 404 {
+		t.Fatalf("nonmember history = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", groupMessages+"/"+messageID, leaderToken, ""); w.Code != 204 {
+		t.Fatalf("group leader moderation = %d %s", w.Code, w.Body.String())
+	}
+	redacted := request("GET", groupMessages, memberToken, "")
+	if redacted.Code != 200 || strings.Contains(redacted.Body.String(), "Choir rehearsal is at six") || !strings.Contains(redacted.Body.String(), `"deleted":true`) {
+		t.Fatalf("moderated body not redacted = %d %s", redacted.Code, redacted.Body.String())
+	}
+	if _, err = db.Exec(`UPDATE group_memberships SET status='left' WHERE group_id=$1 AND account_id=$2`, groupID, memberID); err != nil {
+		t.Fatal(err)
+	}
+	if w := request("GET", groupMessages, memberToken, ""); w.Code != 404 {
+		t.Fatalf("former member history = %d %s", w.Code, w.Body.String())
 	}
 }

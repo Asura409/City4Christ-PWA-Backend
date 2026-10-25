@@ -159,4 +159,75 @@ func prayerRoutes(mux *http.ServeMux, service *prayer.Service, sessions *auth.Se
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"data": result})
 	})
+	mux.HandleFunc("POST /api/v1/prayer/requests/{requestId}/reports", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeErrorFor(w, prayer.ErrInvalid)
+			return
+		}
+		input, ok := decodeJSON[prayer.ReportInput](w, r)
+		if !ok {
+			return
+		}
+		item, err := service.Report(r.Context(), actor, r.PathValue("requestId"), input)
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"data": item})
+	})
+	mux.HandleFunc("GET /api/v1/prayer/reports", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			writeErrorFor(w, prayer.ErrInvalid)
+			return
+		}
+		for key, values := range q {
+			if (key != "limit" && key != "status") || len(values) != 1 {
+				writeErrorFor(w, prayer.ErrInvalid)
+				return
+			}
+		}
+		options := prayer.Options{Status: q.Get("status")}
+		if q.Has("limit") {
+			options.Limit, err = strconv.Atoi(q.Get("limit"))
+			if err != nil {
+				writeErrorFor(w, prayer.ErrInvalid)
+				return
+			}
+		}
+		page, err := service.ListReports(r.Context(), actor, options)
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": page.Items})
+	})
+	mux.HandleFunc("PATCH /api/v1/prayer/reports/{reportId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeErrorFor(w, prayer.ErrInvalid)
+			return
+		}
+		input, ok := decodeJSON[prayer.ReviewInput](w, r)
+		if !ok {
+			return
+		}
+		changed, err := service.ReviewReport(r.Context(), actor, r.PathValue("reportId"), input)
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": prayer.StatusResult{Changed: changed}})
+	})
 }

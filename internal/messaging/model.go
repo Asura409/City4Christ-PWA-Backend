@@ -40,3 +40,35 @@ type SendResult struct {
 	Message   Message `json:"message"`
 	Duplicate bool    `json:"duplicate"`
 }
+
+type GroupConversation struct {
+	GroupID            string        `json:"groupId"`
+	GroupName          string        `json:"groupName"`
+	Audience           string        `json:"audience"`
+	LastMessage        *GroupMessage `json:"lastMessage,omitempty"`
+	UnreadCount        int           `json:"unreadCount"`
+	MyLastReadSequence int64         `json:"myLastReadSequence"`
+	CanModerate        bool          `json:"canModerate"`
+}
+
+type GroupMessage struct {
+	ID              string    `json:"id"`
+	GroupID         string    `json:"groupId"`
+	SenderID        string    `json:"senderId"`
+	ClientMessageID string    `json:"clientMessageId"`
+	Body            string    `json:"body"`
+	Sequence        int64     `json:"sequence"`
+	CreatedAt       time.Time `json:"createdAt"`
+	Deleted         bool      `json:"deleted"`
+}
+
+type GroupMessagePage struct {
+	Items              []GroupMessage `json:"items"`
+	NextBeforeSequence int64          `json:"nextBeforeSequence,omitempty"`
+}
+
+type GroupReadReceipt struct {
+	GroupID          string     `json:"groupId"`
+	LastReadSequence int64      `json:"lastReadSequence"`
+	LastReadAt       *time.Time `json:"lastReadAt,omitempty"`
+}

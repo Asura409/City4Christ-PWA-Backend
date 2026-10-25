@@ -4,6 +4,7 @@ go 1.27.0
 
 require (
 	github.com/alexedwards/argon2id v1.0.0
+	github.com/arran4/golang-ical v0.3.8
 	github.com/aws/aws-sdk-go-v2 v1.47.4
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.10
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.5

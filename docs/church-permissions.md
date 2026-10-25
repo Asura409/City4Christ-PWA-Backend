@@ -45,6 +45,7 @@ unknown names currently deny access and are not advertised as usable permissions
 | `roles.privileged.manage` | Super Admin | Global; protected church appointments only |
 | `roles.operational.manage` | Super Admin, Assistant Pastor/Staff | Global authority to appoint leaders to registered ministry scopes |
 | `ministry.members.manage` | `ministry_leader` | Assigned registered ministry only; ministry routes remain future work |
+| `prayer.moderate` | Super Admin, Assistant Pastor/Staff, scoped `ministry_leader` | Community scope for global roles; active assigned group only for group leaders; Super Admin also group-wide |
 
 | Planned capability | Super Admin | Assistant Pastor / Staff | Ministry Leader / task assignee | Member |
 | --- | --- | --- | --- | --- |
@@ -54,6 +55,7 @@ unknown names currently deny access and are not advertised as usable permissions
 | `groups.create` / `groups.archive` | Global | Explicit additional delegation only | No implicit grant | No |
 | `ministry.members.manage` | Church-wide oversight after activation | Church-wide oversight after activation | Assigned ministry only | No |
 | `groups.content.moderate` | Global, audited | Global, audited | Assigned ministry only | Own content/reporting policy |
+| `prayer.moderate` | Community and church groups, never private requests | Community requests only | Assigned active group only | No moderation |
 | `events.manage` / `events.coordinators.assign` | Global | Church-wide | Assigned ministry; coordinator must be eligible in its roster | Own RSVP only |
 | `attendance.read` / `attendance.check_in` | Global | Church-wide | Explicit service/task assignment | Own records/permitted self-check-in |
 | `broadcasts.send` | Global | Church-wide | No church-wide broadcast | No |
@@ -64,8 +66,9 @@ unknown names currently deny access and are not advertised as usable permissions
 
 Public sermons and existing authenticated own-profile/directory access remain
 separate from staff-role capabilities. Future group participation, giving, RSVP,
-prayer and messaging also require domain ownership/audience/membership checks;
-this table does not implement those routes or override privacy rules.
+prayer reports use `prayer.moderate` plus request visibility and current membership;
+private requests stay owner-only for every role. Direct messaging and other future
+domains still require their own ownership/audience checks.
 
 The protected lifecycle activates `super_administrator`,
 `assistant_pastor`, `staff` and `finance_officer`. See the lifecycle contract

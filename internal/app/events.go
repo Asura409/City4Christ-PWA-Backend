@@ -100,6 +100,75 @@ func eventRoutes(mux *http.ServeMux, service *events.Service, sessions *auth.Ses
 		}
 		writeJSON(w, 200, map[string]any{"data": result})
 	})
+	mux.HandleFunc("GET /api/v1/events/{eventId}/calendar.ics", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			eventError(w, events.ErrInvalid)
+			return
+		}
+		calendar, err := service.Calendar(r.Context(), r.PathValue("eventId"))
+		if err != nil {
+			eventError(w, err)
+			return
+		}
+		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="city4christ-event.ics"`)
+		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(calendar)
+	})
+	mux.HandleFunc("GET /api/v1/events/{eventId}/coordinators", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.RawQuery != "" {
+			eventError(w, events.ErrInvalid)
+			return
+		}
+		if _, ok := authorize(w, r, false); !ok {
+			return
+		}
+		result, err := service.Coordinators(r.Context(), r.PathValue("eventId"))
+		if err != nil {
+			eventError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": result})
+	})
+	mux.HandleFunc("PUT /api/v1/events/{eventId}/coordinators", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			eventError(w, events.ErrInvalid)
+			return
+		}
+		input, ok := decodeJSON[struct {
+			GroupID   string `json:"groupId"`
+			AccountID string `json:"accountId"`
+		}](w, r)
+		if !ok {
+			return
+		}
+		result, err := service.AssignCoordinator(r.Context(), actor, r.PathValue("eventId"), input.GroupID, input.AccountID)
+		if err != nil {
+			eventError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": result})
+	})
+	mux.HandleFunc("DELETE /api/v1/events/{eventId}/coordinators/{accountId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			eventError(w, events.ErrInvalid)
+			return
+		}
+		if err := service.RemoveCoordinator(r.Context(), actor, r.PathValue("eventId"), r.PathValue("accountId")); err != nil {
+			eventError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.HandleFunc("POST /api/v1/admin/events", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {

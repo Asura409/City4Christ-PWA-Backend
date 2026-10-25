@@ -147,6 +147,13 @@ func TestEventsThroughGlobalAppWithCapacityAndRoleBoundaries(t *testing.T) {
 	if w = request("GET", "/api/v1/events/"+id, "", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Church Picnic") {
 		t.Fatalf("public event detail: %d %s", w.Code, w.Body.String())
 	}
+	calendar := request("GET", "/api/v1/events/"+id+"/calendar.ics", "", "", "")
+	if calendar.Code != 200 || !strings.Contains(calendar.Header().Get("Content-Type"), "text/calendar") || !strings.Contains(calendar.Body.String(), "BEGIN:VCALENDAR") || !strings.Contains(calendar.Body.String(), "UID:"+id+"@city4christ.org") {
+		t.Fatalf("public calendar export: %d headers=%v body=%s", calendar.Code, calendar.Header(), calendar.Body.String())
+	}
+	if w = request("GET", "/api/v1/events/"+id+"/coordinators", memberToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"data":[]`) {
+		t.Fatalf("empty public coordinator list: %d %s", w.Code, w.Body.String())
+	}
 	if w = request("POST", "/api/v1/events/"+id+"/rsvp", memberToken, `{"attendeeCount":2}`, "https://api.example"); w.Code != 200 {
 		t.Fatalf("member RSVP: %d %s", w.Code, w.Body.String())
 	}
@@ -176,6 +183,102 @@ func TestEventsThroughGlobalAppWithCapacityAndRoleBoundaries(t *testing.T) {
 	}
 }
 
+func TestEventCoordinatorRoutesThroughGlobalAppEnforceGroupScope(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	key := []byte(strings.Repeat("c", 32))
+	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := func(email string) (string, string) {
+		t.Helper()
+		var id string
+		if e := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES($1,'Event','Person',now()) RETURNING id`, email).Scan(&id); e != nil {
+			t.Fatal(e)
+		}
+		tokens, e := sessions.Start(ctx, id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return id, tokens.AccessToken
+	}
+	adminID, adminToken := account("coord-admin@example.invalid")
+	leaderID, leaderToken := account("coord-leader@example.invalid")
+	memberID, memberToken := account("coord-member@example.invalid")
+	groupID := "44444444-4444-4444-8444-444444444444"
+	if _, err = db.Exec(`INSERT INTO groups(id,name,audience,join_policy,created_by) VALUES($1,'Choir','church','approval',$2)`, groupID, adminID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO access_scopes(id,kind) VALUES($1,'ministry')`, groupID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,'staff',''),($2,'ministry_leader',$3)`, adminID, leaderID, groupID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO group_memberships(group_id,account_id,status) VALUES($1,$2,'active')`, groupID, memberID); err != nil {
+		t.Fatal(err)
+	}
+	h := New(db, Config{VerificationKey: key, AppOrigin: "https://api.example"})
+	request := func(method, path, token, body, origin string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		if body != "" {
+			r.Header.Set("Content-Type", "application/json")
+		}
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		if origin != "" {
+			r.Header.Set("Origin", origin)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	startsAt := time.Now().UTC().Add(48 * time.Hour).Truncate(time.Second)
+	body, _ := json.Marshal(map[string]any{"title": "Choir Anniversary", "description": "Songs, worship and fellowship", "location": "Main Hall", "startsAt": startsAt.Format(time.RFC3339), "timeZone": "Africa/Lagos"})
+	created := request("POST", "/api/v1/admin/events", adminToken, string(body), "https://api.example")
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create draft: %d %s", created.Code, created.Body.String())
+	}
+	var event struct {
+		Data events.Event `json:"data"`
+	}
+	if err = json.Unmarshal(created.Body.Bytes(), &event); err != nil {
+		t.Fatal(err)
+	}
+	update, _ := json.Marshal(map[string]any{"title": event.Data.Title, "description": event.Data.Description, "location": event.Data.Location, "startsAt": event.Data.StartsAt, "timeZone": event.Data.TimeZone, "status": "published", "version": event.Data.Version})
+	if w := request("PATCH", "/api/v1/admin/events/"+event.Data.ID, adminToken, string(update), "https://api.example"); w.Code != 200 {
+		t.Fatalf("publish: %d %s", w.Code, w.Body.String())
+	}
+	assignment, _ := json.Marshal(map[string]string{"groupId": groupID, "accountId": memberID})
+	if w := request("PUT", "/api/v1/events/"+event.Data.ID+"/coordinators", leaderToken, string(assignment), "https://api.example"); w.Code != 200 {
+		t.Fatalf("group leader assignment: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", "/api/v1/events/"+event.Data.ID+"/coordinators", memberToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"firstName":"Event"`) || !strings.Contains(w.Body.String(), `"groupName":"Choir"`) {
+		t.Fatalf("public coordinator listing: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", "/api/v1/events/"+event.Data.ID+"/coordinators/"+memberID, leaderToken, "", "https://api.example"); w.Code != 204 {
+		t.Fatalf("group leader removal: %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestEventCoordinatorPreflightAllowsPUT(t *testing.T) {
+	handler := browserPolicy(http.NotFoundHandler(), Config{AppOrigin: "https://api.example"}, nil)
+	r := httptest.NewRequest(http.MethodOptions, "/api/v1/events/11111111-1111-4111-8111-111111111111/coordinators", nil)
+	r.Header.Set("Origin", "https://api.example")
+	r.Header.Set("Access-Control-Request-Method", http.MethodPut)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Code != http.StatusNoContent || !strings.Contains(w.Header().Get("Access-Control-Allow-Methods"), "PUT") {
+		t.Fatalf("PUT preflight status=%d methods=%q", w.Code, w.Header().Get("Access-Control-Allow-Methods"))
+	}
+}
+
 func TestEventsOpenAPIContract(t *testing.T) {
 	h := New(nil, Config{})
 	w := httptest.NewRecorder()
@@ -186,7 +289,7 @@ func TestEventsOpenAPIContract(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/api/v1/events", "/api/v1/events/{eventId}", "/api/v1/events/{eventId}/rsvp", "/api/v1/admin/events", "/api/v1/admin/events/{eventId}"} {
+	for _, path := range []string{"/api/v1/events", "/api/v1/events/{eventId}", "/api/v1/events/{eventId}/rsvp", "/api/v1/events/{eventId}/coordinators", "/api/v1/events/{eventId}/coordinators/{accountId}", "/api/v1/events/{eventId}/calendar.ics", "/api/v1/admin/events", "/api/v1/admin/events/{eventId}"} {
 		if spec.Paths[path] == nil {
 			t.Errorf("events API contract missing %s", path)
 		}
