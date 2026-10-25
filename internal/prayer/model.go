@@ -13,6 +13,7 @@ type Request struct {
 	Author      string     `json:"author"`
 	IsOwner     bool       `json:"isOwner"`
 	CreatedAt   time.Time  `json:"createdAt"`
+	ExpiresAt   time.Time  `json:"expiresAt"`
 	AnsweredAt  *time.Time `json:"answeredAt,omitempty"`
 	PrayerCount int        `json:"prayerCount"`
 	HasPrayed   bool       `json:"hasPrayed"`
@@ -47,4 +48,33 @@ type Acknowledgement struct {
 
 type StatusResult struct {
 	Changed bool `json:"changed"`
+}
+
+// Report deliberately omits reporter and author identity. Moderators receive
+// only the request content they are authorized to review.
+type Report struct {
+	ID                string    `json:"id"`
+	RequestID         string    `json:"requestId"`
+	RequestBody       string    `json:"requestBody"`
+	RequestVisibility string    `json:"requestVisibility"`
+	GroupID           string    `json:"groupId,omitempty"`
+	Anonymous         bool      `json:"anonymous"`
+	Reason            string    `json:"reason"`
+	Details           string    `json:"details,omitempty"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"createdAt"`
+}
+
+type ReportInput struct {
+	Reason  string `json:"reason"`
+	Details string `json:"details,omitempty"`
+}
+
+type ReviewInput struct {
+	Decision string `json:"decision"`
+	Reason   string `json:"reason"`
+}
+
+type ReportPage struct {
+	Items []Report `json:"items"`
 }

@@ -63,6 +63,10 @@
     {
       "name": "Notifications",
       "description": "Private in-app notices scoped to the signed-in member."
+    },
+    {
+      "name": "Group Messaging",
+      "description": "Durable group conversations with current membership checks."
     }
   ],
   "paths": {
@@ -3752,7 +3756,18 @@
           "503": {
             "$ref": "#/components/responses/503"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       },
       "patch": {
         "tags": [
@@ -3825,7 +3840,18 @@
           "503": {
             "$ref": "#/components/responses/503"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     },
     "/api/v1/prayer/requests/{requestId}/prayed": {
@@ -3898,7 +3924,18 @@
           "503": {
             "$ref": "#/components/responses/503"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     },
     "/api/v1/events": {
@@ -4784,6 +4821,720 @@
             "$ref": "#/components/responses/503"
           }
         }
+      }
+    },
+    "/api/v1/events/{eventId}/calendar.ics": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "operationId": "DownloadEventCalendar",
+        "summary": "Download event calendar file",
+        "description": "Published event export. DTSTART is an absolute UTC instant and the calendar carries the event IANA timezone metadata. UID is stable across downloads.",
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "RFC 5545 iCalendar file",
+            "content": {
+              "text/calendar": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/api/v1/events/{eventId}/coordinators": {
+      "get": {
+        "tags": [
+          "Events"
+        ],
+        "operationId": "ListEventCoordinators",
+        "summary": "List event coordinators",
+        "description": "Verified church members can see coordinator names and their church group. Inactive/archived group memberships are excluded. No private account fields are returned.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Coordinator list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EventCoordinator"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Event management"
+        ],
+        "operationId": "AssignEventCoordinator",
+        "summary": "Assign an event coordinator",
+        "description": "Requires events.manage globally or ministry.members.manage for this exact group scope. The target must be a verified active member of a non-archived church group. Assignment is rechecked transactionally.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignEventCoordinatorInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Coordinator assigned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EventCoordinator"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          }
+        }
+      }
+    },
+    "/api/v1/events/{eventId}/coordinators/{accountId}": {
+      "delete": {
+        "tags": [
+          "Event management"
+        ],
+        "operationId": "RemoveEventCoordinator",
+        "summary": "Remove event coordinator",
+        "description": "Requires events.manage globally or ministry.members.manage for the coordinator assignment group scope.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "accountId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Coordinator removed"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          }
+        }
+      }
+    },
+    "/api/v1/prayer/requests/{requestId}/reports": {
+      "post": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Report a community or group prayer request",
+        "operationId": "ReportPrayerRequest",
+        "description": "Private requests cannot be reported. One report per member and request. The response omits reporter identity.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrayerReportInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerReport"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/prayer/reports": {
+      "get": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "List prayer reports in your moderation scope",
+        "operationId": "ListPrayerReports",
+        "description": "Global pastors/staff can review community requests; an active group leader can review their own group; Super Admin can review both. Private requests and reporter identities are never included.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "resolved",
+                "dismissed",
+                "expired"
+              ],
+              "default": "pending"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerReportList"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          }
+        }
+      }
+    },
+    "/api/v1/prayer/reports/{reportId}": {
+      "patch": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Hide a reported request or dismiss its report",
+        "operationId": "ReviewPrayerReport",
+        "description": "Only an authorized moderator in the report’s scope can decide. Hiding soft archives the request and writes a moderation audit event.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrayerReportReviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerRequestStatusResult"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          }
+        },
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/group-conversations": {
+      "get": {
+        "tags": [
+          "Group Messaging"
+        ],
+        "summary": "List accessible group chats",
+        "description": "Church-audience chats require active group membership. Leadership chats require current leadership audience eligibility. A staff role does not grant history access.",
+        "operationId": "ListGroupConversations",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accessible chats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupConversationListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Session required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/groups/{groupId}/messages": {
+      "get": {
+        "tags": [
+          "Group Messaging"
+        ],
+        "summary": "Read group chat history",
+        "description": "Every request rechecks verified account and current active membership or leadership audience eligibility. Removed members lose history access immediately.",
+        "operationId": "ListGroupMessages",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "beforeSequence",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMessagePageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Group chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Group Messaging"
+        ],
+        "summary": "Send group message",
+        "description": "Requires active group membership or current leadership audience eligibility. Client message IDs make retries idempotent.",
+        "operationId": "SendGroupMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendDirectMessageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMessageResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Idempotent retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupMessageResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Group chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Idempotency conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/groups/{groupId}/messages/{messageId}": {
+      "delete": {
+        "tags": [
+          "Group Messaging"
+        ],
+        "summary": "Redact group message",
+        "description": "Global Super Admin, Assistant Pastor, Staff or the group-scoped Ministry Leader may moderate. The body is replaced with an empty value and the action is audited.",
+        "operationId": "DeleteGroupMessage",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Message redacted"
+          },
+          "404": {
+            "description": "Message or moderation scope not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/groups/{groupId}/read": {
+      "put": {
+        "tags": [
+          "Group Messaging"
+        ],
+        "summary": "Advance group read receipt",
+        "operationId": "MarkGroupRead",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Read receipt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupReadReceiptResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Group chat not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
       }
     }
   },
@@ -6847,6 +7598,354 @@
           }
         },
         "additionalProperties": false
+      },
+      "EventCoordinator": {
+        "type": "object",
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "assignedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "eventId",
+          "groupId",
+          "groupName",
+          "accountId",
+          "firstName",
+          "lastName",
+          "assignedAt"
+        ],
+        "additionalProperties": false
+      },
+      "AssignEventCoordinatorInput": {
+        "type": "object",
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "groupId",
+          "accountId"
+        ],
+        "additionalProperties": false
+      },
+      "PrayerReportInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "safety",
+              "spam",
+              "inappropriate",
+              "other"
+            ]
+          },
+          "details": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "PrayerReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "requestId",
+          "reason",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestBody": {
+            "type": "string"
+          },
+          "requestVisibility": {
+            "type": "string",
+            "enum": [
+              "community",
+              "group"
+            ]
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "anonymous": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "resolved",
+              "dismissed",
+              "expired"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PrayerReportList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/PrayerReport"
+        }
+      },
+      "PrayerReportReviewInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "hide",
+              "dismiss"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 500
+          }
+        }
+      },
+      "GroupMessage": {
+        "type": "object",
+        "required": [
+          "id",
+          "groupId",
+          "senderId",
+          "clientMessageId",
+          "body",
+          "sequence",
+          "createdAt",
+          "deleted"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "senderId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "clientMessageId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "description": "Empty after moderator redaction."
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "deleted": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GroupConversation": {
+        "type": "object",
+        "required": [
+          "groupId",
+          "groupName",
+          "audience",
+          "unreadCount",
+          "myLastReadSequence",
+          "canModerate"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "groupName": {
+            "type": "string"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "church",
+              "leadership"
+            ]
+          },
+          "lastMessage": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GroupMessage"
+              }
+            ],
+            "nullable": true
+          },
+          "unreadCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "myLastReadSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "canModerate": {
+            "type": "boolean"
+          }
+        }
+      },
+      "GroupReadReceipt": {
+        "type": "object",
+        "required": [
+          "groupId",
+          "lastReadSequence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "lastReadSequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "lastReadAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
+      "GroupConversationListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupConversation"
+            }
+          }
+        }
+      },
+      "GroupMessagePageResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroupMessage"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "nextBeforeSequence"
+            ],
+            "properties": {
+              "nextBeforeSequence": {
+                "type": "integer",
+                "format": "int64",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      },
+      "GroupMessageResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GroupMessage"
+          }
+        }
+      },
+      "GroupReadReceiptResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GroupReadReceipt"
+          }
+        }
       }
     },
     "responses": {
@@ -6951,6 +8050,16 @@
       },
       "503": {
         "description": "Service unavailable or authentication/provider configuration missing.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "404": {
+        "description": "Event not found.",
         "content": {
           "application/json": {
             "schema": {

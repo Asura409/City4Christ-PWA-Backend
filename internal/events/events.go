@@ -49,6 +49,16 @@ type RSVP struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
+type Coordinator struct {
+	EventID    string    `json:"eventId"`
+	GroupID    string    `json:"groupId"`
+	GroupName  string    `json:"groupName"`
+	AccountID  string    `json:"accountId"`
+	FirstName  string    `json:"firstName"`
+	LastName   string    `json:"lastName"`
+	AssignedAt time.Time `json:"assignedAt"`
+}
+
 type CreateInput struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`

@@ -189,4 +189,119 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 		}
 		writeJSON(w, 200, map[string]any{"data": receipt})
 	})
+	mux.HandleFunc("GET /api/v1/group-conversations", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		items, err := service.ListGroupConversations(r.Context(), actor)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": items})
+	})
+	mux.HandleFunc("GET /api/v1/groups/{groupId}/messages", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		for key, values := range q {
+			if (key != "beforeSequence" && key != "limit") || len(values) != 1 {
+				fail(w, messaging.ErrInvalid)
+				return
+			}
+		}
+		var before int64
+		var limit int
+		if q.Has("beforeSequence") {
+			before, err = strconv.ParseInt(q.Get("beforeSequence"), 10, 64)
+			if err != nil {
+				fail(w, messaging.ErrInvalid)
+				return
+			}
+		}
+		if q.Has("limit") {
+			limit, err = strconv.Atoi(q.Get("limit"))
+			if err != nil {
+				fail(w, messaging.ErrInvalid)
+				return
+			}
+		}
+		page, err := service.ListGroupMessages(r.Context(), actor, r.PathValue("groupId"), before, limit)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": page.Items, "meta": map[string]int64{"nextBeforeSequence": page.NextBeforeSequence}})
+	})
+	mux.HandleFunc("POST /api/v1/groups/{groupId}/messages", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[sendMessageRequest](w, r)
+		if !ok {
+			return
+		}
+		message, duplicate, err := service.SendGroupMessage(r.Context(), actor, r.PathValue("groupId"), in.ClientMessageID, in.Body)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		status := http.StatusCreated
+		if duplicate {
+			status = http.StatusOK
+		}
+		writeJSON(w, status, map[string]any{"data": message})
+	})
+	mux.HandleFunc("PUT /api/v1/groups/{groupId}/read", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[markReadRequest](w, r)
+		if !ok {
+			return
+		}
+		receipt, err := service.MarkGroupRead(r.Context(), actor, r.PathValue("groupId"), in.ThroughMessageID)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": receipt})
+	})
+	mux.HandleFunc("DELETE /api/v1/groups/{groupId}/messages/{messageId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		_, err := service.DeleteGroupMessage(r.Context(), actor, r.PathValue("groupId"), r.PathValue("messageId"))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
 }

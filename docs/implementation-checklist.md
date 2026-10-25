@@ -266,16 +266,22 @@ detail routes, pagination, search and attachments, not merely hidden in the UI.
   before start, church-wide publication. No group event audience in this slice.
 - [x] **M6.2:** Public published church-wide list/detail and `events.manage` draft,
   edit, publish and cancel routes with version conflicts.
-- [ ] **M6.3:** Coordinator assignments and in-app assignment notifications remain.
+- [x] **M6.3a:** Group event coordinator assignments are restricted to active,
+  verified members of an eligible church group; leaders can assign only within
+  their own group scope. Repository/service/global-app checks cover scope and
+  inactive or ineligible members.
+- [ ] **M6.3b:** Durable in-app assignment notifications remain; coordinator
+  assignments currently do not emit a notification.
 - [x] **M6.4:** Own RSVP/cancel, bounded attendee counts and transactionally enforced
   capacity; full events return a conflict, and repeat requests are safe.
-- [ ] **M6.5:** Calendar export remains. React event list, RSVP and manager UI are connected.
+- [x] **M6.5:** Calendar export returns a standards-based `.ics` file and the
+  React event page links to it. Focused API and browser checks cover the download.
 - [x] **M6.6:** Repository/service/global-app tests cover concurrent capacity, duplicate
   RSVP, cancellation and authorization. Browser tests cover listing, RSVP, full
   capacity and manager publication on desktop/mobile.
 
-**Exit:** MVP endpoints and UI are implemented and focused checks passed. M6 remains
-open for coordinators, calendar export, group event scope and full integration suite.
+**Exit:** MVP endpoints and UI are implemented and focused checks passed. Coordinator
+notifications, group event scope and the full integration suite remain open.
 
 ## M7 — Attendance and Sunday School
 
@@ -295,16 +301,22 @@ information remains restricted to the permitted relationship and task.
 
 ## M8 — Prayer wall
 
-- [ ] **M8.1:** Implement expiry, comments and attachment policy. Current slice supports
-  community, active-group and private visibility plus owner answer/archive status.
-- [ ] **M8.2:** Define controlled moderator attribution, abuse reports and audit.
+- [x] **M8.1a:** Requests expire after 180 days and are soft-archived in bounded
+  batches during prayer API activity. Expired pending reports are closed without
+  deleting request text, acknowledgements or audit history.
+- [ ] **M8.1b:** Prayer comments and attachment policy remain. Current visibility
+  supports community, active-group and private requests plus owner answer/archive.
+- [x] **M8.2:** Members can report visible community/group requests. Scoped
+  moderators review them with reasoned hide/dismiss actions and audit records;
+  report responses and queues omit reporter and author identities.
 - [x] **M8.3:** React filters, composer, acknowledgements and owner status controls
   use the real API with loading, empty and error states.
-- [x] **M8.4:** Focused disposable-PostgreSQL repository/service/global-app tests and
-  desktop/mobile browser scenarios cover privacy boundaries, anonymity, status and
-  acknowledgements. Expiry/moderation/media tests remain.
+- [x] **M8.4:** Disposable-PostgreSQL repository/service/global-app tests and
+  desktop/mobile browser scenarios cover privacy boundaries, anonymity, status,
+  acknowledgements, expiry and report moderation. Media tests remain.
 
-**Exit:** Original PRD moderation and notification workflows remain before closure.
+**Exit:** Core reports, moderation and expiry are implemented. Prayer comments,
+attachments and notification workflows remain before closure.
 
 ## M9 — Pastor directory and confidential care
 
@@ -328,15 +340,19 @@ read private purposes or notes.
   a one-to-one conversation. No staff backdoor. Group chat needs its own policy.
 - [x] **M10.2:** Participant-only durable history, directory search, idempotent sends,
   monotonic read receipts and account/IP rate limits are implemented.
-- [ ] **M10.3:** Group conversations, active-membership access and moderation remain.
+- [x] **M10.3:** Durable group conversations, active-membership access, read
+  markers and scoped moderation are implemented. Messages are redacted on removal;
+  membership is rechecked for reads, writes and history access.
 - [ ] **M10.4:** Realtime/WSS tickets, reconnect history and bounded fanout remain.
 - [x] **M10.5:** React conversation list, member search, send and read receipt use the
   real API with desktop/mobile browser scenarios.
-- [ ] **M10.6:** Full group/realtime lifecycle checks remain. Focused tests cover DM
-  participant privacy, retry behavior, receipts and rate limits.
+- [ ] **M10.6:** Group REST lifecycle and authorization checks now cover active
+  membership, leave/revocation and moderation. Realtime/WSS lifecycle and reconnect
+  history remain. Focused direct-message tests cover participant privacy, retry
+  behavior, receipts and rate limits.
 
-**Exit:** REST DM slice is implemented; M10 stays open for group chat, realtime,
-reconnect behavior and their security tests.
+**Exit:** Direct and group REST messaging slices are implemented; M10 stays open for
+realtime delivery, reconnect behavior and their security tests.
 
 ## M11 — Complete Word/live and the home/install experience
 
@@ -449,15 +465,16 @@ Staging release, owner-approved first Super Admin, real-provider/device acceptan
 factor-change alerts and assisted recovery remain explicit remaining gates.
 
 
-### Prayer, events and direct messaging — local feature slices (24 October 2026)
+### Prayer, events and messaging follow-ups — local feature slices (25 October 2026)
 
-Backend repository/service and global-app routes were tested against disposable
-PostgreSQL; OpenAPI and Swagger configuration checks passed. Frontend unit tests
-passed (29), production build passed with staging API_URL, and feature browser
-scenarios passed on desktop/mobile. A transient loading-state assertion in the
-messaging browser test was removed; the full messaging browser spec then passed.
-The expected-red/green CORS PUT preflight test passed both stages. No staging
-deployment, data reset, commit or push was performed. Full `go test ./...` was not
-run. Feature IDs M6/M8/M10 remain open for the deferred scope listed above.
-Give A Little is a provider candidate only: test campaign and webhook setup are
-not available, so M12 remains blocked at that provider prerequisite.
+Backend event, prayer, messaging, access and global-app packages passed against
+disposable PostgreSQL. The OpenAPI contract first failed on path-level parameter
+arrays, then passed after parameters were moved to the operations; OpenAPI JSON and
+Swagger configuration checks pass. Frontend unit tests passed (30), the production
+build passed with the staging API_URL, and all 28 focused desktop/mobile Playwright
+scenarios passed. No staging deployment, data reset, commit or push was performed;
+the follow-up feature changes remain local. Full `go test ./...` was not run.
+M6 remains open for notifications, group events and full-suite checks; M8 for
+comments, media and notifications; M10 for realtime/reconnect. Give A Little is a
+provider candidate only: test campaign and webhook setup are unavailable, so M12
+remains blocked at that provider prerequisite.

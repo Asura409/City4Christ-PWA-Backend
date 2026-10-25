@@ -52,7 +52,7 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []Capability{{Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
+	expected := []Capability{{Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
 	if len(current.Roles) != 5 || !reflect.DeepEqual(current.Capabilities, expected) {
 		t.Fatalf("incorrect scoped/deduplicated snapshot: %+v", current)
 	}
@@ -99,5 +99,16 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 		if _, err = s.Revoke(ctx, admin, member, change); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("privileged revoke %s opened: %v", role, err)
 		}
+	}
+}
+
+func TestPrayerModerationCapabilityRoleScopes(t *testing.T) {
+	global := rolesForPermission("prayer.moderate", "")
+	expected := []string{"super_administrator", "assistant_pastor", "staff"}
+	if !reflect.DeepEqual(global, expected) {
+		t.Fatalf("global prayer moderation roles=%v, want %v", global, expected)
+	}
+	if roles := rolesForPermission("prayer.moderate", "11111111-1111-4111-8111-111111111111"); !reflect.DeepEqual(roles, []string{"ministry_leader"}) {
+		t.Fatalf("group prayer moderation roles=%v", roles)
 	}
 }

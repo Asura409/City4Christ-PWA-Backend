@@ -2,6 +2,7 @@ package prayer
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -31,6 +32,9 @@ func prayerFixture(t *testing.T) (context.Context, *Service, string, string, str
 	stranger := account("stranger@example.invalid")
 	var group string
 	if err := db.QueryRow(`INSERT INTO groups(name,audience,join_policy,created_by) VALUES('Choir','church','open',$1) RETURNING id`, owner).Scan(&group); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO access_scopes(id,kind) VALUES($1,'ministry')`, group); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Exec(`INSERT INTO group_memberships(group_id,account_id,status) VALUES($1,$2,'active'),($1,$3,'active')`, group, member, owner); err != nil {
@@ -201,4 +205,113 @@ func containsRequest(items []Request, id string) bool {
 		}
 	}
 	return false
+}
+
+func TestReportsAreScopedAndModerationSoftArchivesWithAudit(t *testing.T) {
+	ctx, service, owner, member, stranger, group := prayerFixture(t)
+	community, err := service.Create(ctx, owner, CreateInput{Body: "Community report target", Visibility: "community", Anonymous: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupRequest, err := service.Create(ctx, owner, CreateInput{Body: "Group report target", Visibility: "group", GroupID: group})
+	if err != nil {
+		t.Fatal(err)
+	}
+	private, err := service.Create(ctx, owner, CreateInput{Body: "Private and confidential", Visibility: "private"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupLeader := createPrayerAccount(t, service.repo.db, "leader@example.invalid")
+	if _, err = service.repo.db.ExecContext(ctx, `INSERT INTO account_roles(account_id,role,scope) VALUES($1,'ministry_leader',$2)`, groupLeader, group); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.repo.db.ExecContext(ctx, `INSERT INTO group_memberships(group_id,account_id,status) VALUES($1,$2,'active')`, group, groupLeader); err != nil {
+		t.Fatal(err)
+	}
+	globalStaff := createPrayerAccount(t, service.repo.db, "moderator@example.invalid")
+	if _, err = service.repo.db.ExecContext(ctx, `INSERT INTO account_roles(account_id,role,scope) VALUES($1,'staff','')`, globalStaff); err != nil {
+		t.Fatal(err)
+	}
+
+	communityReport, err := service.Report(ctx, member, community.ID, ReportInput{Reason: "safety", Details: "Please review this post."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupReport, err := service.Report(ctx, member, groupRequest.ID, ReportInput{Reason: "inappropriate", Details: "Needs group review."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Report(ctx, stranger, private.ID, ReportInput{Reason: "safety"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("private request could be reported: %v", err)
+	}
+	if _, err = service.ListReports(ctx, stranger, Options{Status: "pending"}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("ordinary member read moderation queue: %v", err)
+	}
+	staffQueue, err := service.ListReports(ctx, globalStaff, Options{Status: "pending"})
+	if err != nil || len(staffQueue.Items) != 1 || staffQueue.Items[0].ID != communityReport.ID || staffQueue.Items[0].RequestBody != community.Body {
+		t.Fatalf("global community queue exposed wrong scope: %+v %v", staffQueue.Items, err)
+	}
+	leaderQueue, err := service.ListReports(ctx, groupLeader, Options{Status: "pending"})
+	if err != nil || len(leaderQueue.Items) != 1 || leaderQueue.Items[0].ID != groupReport.ID {
+		t.Fatalf("group leader queue exposed wrong scope: %+v %v", leaderQueue.Items, err)
+	}
+	if _, err = service.ReviewReport(ctx, globalStaff, groupReport.ID, ReviewInput{Decision: "hide", Reason: "Wrong group scope."}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("global community moderator accessed group report: %v", err)
+	}
+	if _, err = service.ReviewReport(ctx, groupLeader, communityReport.ID, ReviewInput{Decision: "dismiss", Reason: "Wrong group scope."}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("group moderator accessed community report: %v", err)
+	}
+	if _, err = service.ReviewReport(ctx, groupLeader, groupReport.ID, ReviewInput{Decision: "hide", Reason: "Violates group guidelines."}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Get(ctx, member, groupRequest.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("soft-archived request remained public: %v", err)
+	}
+	var reportState, archiveReason string
+	if err = service.repo.db.QueryRowContext(ctx, `SELECT r.status,p.archive_reason FROM prayer_reports r JOIN prayer_requests p ON p.id=r.request_id WHERE r.id=$1`, groupReport.ID).Scan(&reportState, &archiveReason); err != nil {
+		t.Fatal(err)
+	}
+	if reportState != "resolved" || archiveReason != "moderation" {
+		t.Fatalf("moderation state=%q archive reason=%q", reportState, archiveReason)
+	}
+	var auditCount int
+	if err = service.repo.db.QueryRowContext(ctx, `SELECT count(*) FROM prayer_moderation_events WHERE report_id=$1 AND actor_id=$2 AND action='hidden'`, groupReport.ID, groupLeader).Scan(&auditCount); err != nil || auditCount != 1 {
+		t.Fatalf("moderation audit count=%d err=%v", auditCount, err)
+	}
+	if _, err = service.ReviewReport(ctx, groupLeader, groupReport.ID, ReviewInput{Decision: "dismiss", Reason: "Already resolved."}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("resolved report remained actionable: %v", err)
+	}
+}
+
+func TestPrayerExpiryArchivesContentWithoutDeletingAndAudits(t *testing.T) {
+	ctx, service, owner, member, _, _ := prayerFixture(t)
+	request, err := service.Create(ctx, owner, CreateInput{Body: "An old but retained request", Visibility: "community"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.repo.db.ExecContext(ctx, `UPDATE prayer_requests SET expires_at=now()-interval '1 second' WHERE id=$1`, request.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.List(ctx, member, Options{Status: "open"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Get(ctx, owner, request.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expired request remained visible: %v", err)
+	}
+	var status, archiveReason, body, action string
+	if err = service.repo.db.QueryRowContext(ctx, `SELECT p.status,p.archive_reason,p.body,e.action FROM prayer_requests p JOIN prayer_moderation_events e ON e.request_id=p.id WHERE p.id=$1`, request.ID).Scan(&status, &archiveReason, &body, &action); err != nil {
+		t.Fatal(err)
+	}
+	if status != "archived" || archiveReason != "expiry" || body != request.Body || action != "expired" {
+		t.Fatalf("expiry status=%q reason=%q body=%q audit=%q", status, archiveReason, body, action)
+	}
+}
+
+func createPrayerAccount(t *testing.T, db *sql.DB, email string) string {
+	t.Helper()
+	var id string
+	if err := db.QueryRowContext(context.Background(), `INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES($1,'Prayer','Member',now()) RETURNING id`, email).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }

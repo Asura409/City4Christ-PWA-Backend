@@ -59,3 +59,32 @@ empty JSON object or `{"throughMessageId":"<message UUID>"}`. The stored read
 sequence only advances, even if older messages are marked afterward.
 
 The OpenAPI contract is served at `/openapi.json` and through `/docs/`.
+
+## Group conversations
+
+Each existing church group has one durable group chat. `GET /api/v1/group-conversations`
+returns only chats the verified caller can currently access. Church-audience chats
+require active group membership. Leadership-audience chats require a current
+Super Admin, Assistant Pastor, or Ministry Leader role, following the existing
+group audience policy. All group chat history/send/read requests recheck that
+eligibility; leaving a church group immediately hides its history. Staff do not
+receive a history bypass.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/v1/group-conversations` | List currently accessible group chats and unread counts |
+| `GET` | `/api/v1/groups/{groupId}/messages` | Read group history with older-message pagination |
+| `POST` | `/api/v1/groups/{groupId}/messages` | Send an idempotent group message |
+| `PUT` | `/api/v1/groups/{groupId}/read` | Advance the caller's group read receipt |
+| `DELETE` | `/api/v1/groups/{groupId}/messages/{messageId}` | Redact a message when authorized to moderate that group |
+
+Super Admin, Assistant Pastor, and Staff may moderate group content; a Ministry
+Leader may moderate only the group in their role scope. Moderation replaces the
+message body with an empty value and records an audit event. Other participants
+see a removed-message placeholder. A moderator role does not grant group history
+access. Group messages use REST and PostgreSQL; realtime delivery, attachments,
+notifications, typing indicators and presence remain future work.
+
+The group chat UI is available from the Chat screen's Group chats tab. The current
+`API_URL` environment setting is sufficient; the backend must allow the frontend
+origin and apply migration 00028 before the UI is released.

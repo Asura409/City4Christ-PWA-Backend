@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/google/uuid"
@@ -19,9 +20,20 @@ var (
 	ErrConflict  = errors.New("prayer request state conflict")
 )
 
-type Service struct{ repo *Repository }
+const requestLifetime = 180 * 24 * time.Hour
 
-func NewService(repo *Repository) *Service { return &Service{repo: repo} }
+type Service struct {
+	repo *Repository
+	now  func() time.Time
+}
+
+func NewService(repo *Repository, clocks ...func() time.Time) *Service {
+	now := time.Now
+	if len(clocks) > 0 && clocks[0] != nil {
+		now = clocks[0]
+	}
+	return &Service{repo: repo, now: now}
+}
 
 func validID(value string) bool {
 	id, err := uuid.Parse(value)
@@ -52,7 +64,7 @@ func (s *Service) Create(ctx context.Context, actor string, input CreateInput) (
 	default:
 		return Request{}, ErrInvalid
 	}
-	return s.repo.Create(ctx, actor, input)
+	return s.repo.Create(ctx, actor, input, s.now().UTC())
 }
 
 func (s *Service) List(ctx context.Context, actor string, options Options) (Page, error) {
@@ -85,6 +97,9 @@ func (s *Service) List(ctx context.Context, actor string, options Options) (Page
 		}
 		after = cursor
 	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return Page{}, err
+	}
 	items, err := s.repo.List(ctx, actor, options, after)
 	if err != nil {
 		return Page{}, err
@@ -109,6 +124,9 @@ func (s *Service) Get(ctx context.Context, actor, requestID string) (Request, er
 	if !validID(requestID) {
 		return Request{}, ErrNotFound
 	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return Request{}, err
+	}
 	return s.repo.Get(ctx, actor, requestID)
 }
 
@@ -122,6 +140,9 @@ func (s *Service) SetStatus(ctx context.Context, actor, requestID, status string
 	if status != "answered" && status != "archived" {
 		return false, ErrInvalid
 	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return false, err
+	}
 	return s.repo.SetStatus(ctx, actor, requestID, status)
 }
 
@@ -132,6 +153,65 @@ func (s *Service) Pray(ctx context.Context, actor, requestID string) (Acknowledg
 	if !validID(requestID) {
 		return Acknowledgement{}, ErrNotFound
 	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return Acknowledgement{}, err
+	}
 	changed, err := s.repo.Pray(ctx, actor, requestID)
 	return Acknowledgement{Changed: changed}, err
+}
+
+func (s *Service) Report(ctx context.Context, actor, requestID string, input ReportInput) (Report, error) {
+	input.Reason = strings.TrimSpace(input.Reason)
+	input.Details = strings.TrimSpace(input.Details)
+	if !validID(actor) || !validID(requestID) || !validReportReason(input.Reason) || len([]rune(input.Details)) > 1000 || !utf8.ValidString(input.Details) || strings.ContainsRune(input.Details, 0) {
+		return Report{}, ErrInvalid
+	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return Report{}, err
+	}
+	return s.repo.Report(ctx, actor, requestID, input)
+}
+
+func (s *Service) ListReports(ctx context.Context, actor string, options Options) (ReportPage, error) {
+	if !validID(actor) {
+		return ReportPage{}, ErrForbidden
+	}
+	if options.Limit == 0 {
+		options.Limit = 20
+	}
+	if options.Status == "" {
+		options.Status = "pending"
+	}
+	if options.Limit < 1 || options.Limit > 100 || (options.Status != "pending" && options.Status != "resolved" && options.Status != "dismissed" && options.Status != "expired") || options.Cursor != "" {
+		return ReportPage{}, ErrInvalid
+	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return ReportPage{}, err
+	}
+	items, err := s.repo.ListReports(ctx, actor, options)
+	if err != nil {
+		return ReportPage{}, err
+	}
+	return ReportPage{Items: items}, nil
+}
+
+func (s *Service) ReviewReport(ctx context.Context, actor, reportID string, input ReviewInput) (bool, error) {
+	input.Decision = strings.TrimSpace(input.Decision)
+	input.Reason = strings.TrimSpace(input.Reason)
+	if !validID(actor) || !validID(reportID) || (input.Decision != "hide" && input.Decision != "dismiss") || !utf8.ValidString(input.Reason) || len([]rune(input.Reason)) < 3 || len([]rune(input.Reason)) > 500 || strings.ContainsRune(input.Reason, 0) {
+		return false, ErrInvalid
+	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return false, err
+	}
+	return s.repo.ReviewReport(ctx, actor, reportID, input, s.now().UTC())
+}
+
+func validReportReason(reason string) bool {
+	switch reason {
+	case "safety", "spam", "inappropriate", "other":
+		return true
+	default:
+		return false
+	}
 }
