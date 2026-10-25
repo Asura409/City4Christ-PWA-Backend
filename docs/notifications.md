@@ -20,5 +20,7 @@ email or other private content by design. Delivery is currently in-app only;
 there is no email, SMS, Web Push, broadcast or retry worker in this slice.
 
 Use `Repository.CreateTx` from a domain transaction. `DedupKey` should be stable
-for one domain event and recipient, for example a group decision ID. The UI
-refreshes the unread count when opening a page and after marking an item read.
+for one domain event and recipient, for example a group decision ID or coordinator
+audit event ID. Event coordinator assignments notify only the assigned member and
+link to Events. The UI refreshes the unread count when opening a page and after
+marking an item read.

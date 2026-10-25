@@ -39,7 +39,9 @@ within the assignment transaction. Group leaders can only assign and remove with
 their own group scope. Global event managers can use any eligible church group.
 Remove using `DELETE /api/v1/events/{eventId}/coordinators/{accountId}`. Changes
 are audited; a coordinator is hidden from the public list once their membership
-becomes inactive.
+becomes inactive. A new assignment also creates one private in-app notification for
+the assigned member in the same transaction; retrying the same assignment does not
+duplicate it. The notice links to the Events page and contains the event title.
 
 `GET /api/v1/events/{eventId}/calendar.ics` downloads a standards-based calendar
 file for a published event. The UID remains stable across downloads. DTSTART is

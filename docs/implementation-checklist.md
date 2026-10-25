@@ -270,8 +270,9 @@ detail routes, pagination, search and attachments, not merely hidden in the UI.
   verified members of an eligible church group; leaders can assign only within
   their own group scope. Repository/service/global-app checks cover scope and
   inactive or ineligible members.
-- [ ] **M6.3b:** Durable in-app assignment notifications remain; coordinator
-  assignments currently do not emit a notification.
+- [x] **M6.3b:** A new coordinator assignment writes a deduplicated in-app notice
+  for the assigned member in the same transaction. Repeat assignments do not
+  duplicate it; the existing React notification inbox links to Events.
 - [x] **M6.4:** Own RSVP/cancel, bounded attendee counts and transactionally enforced
   capacity; full events return a conflict, and repeat requests are safe.
 - [x] **M6.5:** Calendar export returns a standards-based `.ics` file and the
@@ -280,8 +281,8 @@ detail routes, pagination, search and attachments, not merely hidden in the UI.
   RSVP, cancellation and authorization. Browser tests cover listing, RSVP, full
   capacity and manager publication on desktop/mobile.
 
-**Exit:** MVP endpoints and UI are implemented and focused checks passed. Coordinator
-notifications, group event scope and the full integration suite remain open.
+**Exit:** MVP endpoints and UI are implemented and focused checks passed. Group
+event scope remains open; the latest PR CI run is the full-suite release gate.
 
 ## M7 — Attendance and Sunday School
 
@@ -478,3 +479,12 @@ M6 remains open for notifications, group events and full-suite checks; M8 for
 comments, media and notifications; M10 for realtime/reconnect. Give A Little is a
 provider candidate only: test campaign and webhook setup are unavailable, so M12
 remains blocked at that provider prerequisite.
+
+
+### Event coordinator in-app notices — local slice (25 October 2026)
+
+Assignment notices are inserted in the same database transaction as a new
+coordinator assignment, deduplicated by the assignment audit event, and visible only
+in the assigned member's inbox. Repeating the same assignment does not create a
+second notice. Backend repository and global-app tests passed with disposable
+PostgreSQL; the notification link passed desktop/mobile browser checks.

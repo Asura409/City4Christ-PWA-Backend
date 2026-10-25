@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/notifications"
 )
 
 func (s *Service) AssignCoordinator(ctx context.Context, actor, eventID, groupID, accountID string) (Coordinator, error) {
@@ -17,8 +19,8 @@ func (s *Service) AssignCoordinator(ctx context.Context, actor, eventID, groupID
 		return Coordinator{}, err
 	}
 	defer tx.Rollback()
-	var status string
-	if err = tx.QueryRowContext(ctx, `SELECT status FROM church_events WHERE id=$1 FOR UPDATE`, eventID).Scan(&status); err != nil {
+	var status, eventTitle string
+	if err = tx.QueryRowContext(ctx, `SELECT status,title FROM church_events WHERE id=$1 FOR UPDATE`, eventID).Scan(&status, &eventTitle); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Coordinator{}, ErrNotFound
 		}
@@ -52,9 +54,22 @@ func (s *Service) AssignCoordinator(ctx context.Context, actor, eventID, groupID
 	if err != nil {
 		return Coordinator{}, err
 	}
-	item, err := s.repo.assignCoordinatorTx(ctx, tx, actor, eventID, groupID, accountID, s.now())
+	item, auditID, changed, err := s.repo.assignCoordinatorTx(ctx, tx, actor, eventID, groupID, accountID, s.now())
 	if err != nil {
 		return Coordinator{}, err
+	}
+	if changed {
+		_, err = notifications.NewRepository(s.db).CreateTx(ctx, tx, notifications.CreateInput{
+			AccountID:    accountID,
+			Kind:         "event.coordinator_assigned",
+			Title:        "Event coordinator assigned",
+			Body:         "You have been assigned to coordinate: " + eventTitle,
+			ResourcePath: "/#/events",
+			DedupKey:     "event.coordinator_assigned:" + strconv.FormatInt(auditID, 10),
+		})
+		if err != nil {
+			return Coordinator{}, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return Coordinator{}, err

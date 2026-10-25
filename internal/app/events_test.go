@@ -259,6 +259,14 @@ func TestEventCoordinatorRoutesThroughGlobalAppEnforceGroupScope(t *testing.T) {
 	if w := request("PUT", "/api/v1/events/"+event.Data.ID+"/coordinators", leaderToken, string(assignment), "https://api.example"); w.Code != 200 {
 		t.Fatalf("group leader assignment: %d %s", w.Code, w.Body.String())
 	}
+	notices := request("GET", "/api/v1/notifications", memberToken, "", "")
+	if notices.Code != 200 || !strings.Contains(notices.Body.String(), `"kind":"event.coordinator_assigned"`) || !strings.Contains(notices.Body.String(), "Choir Anniversary") {
+		t.Fatalf("coordinator notification: %d %s", notices.Code, notices.Body.String())
+	}
+	otherNotices := request("GET", "/api/v1/notifications", adminToken, "", "")
+	if otherNotices.Code != 200 || strings.Contains(otherNotices.Body.String(), "Choir Anniversary") {
+		t.Fatalf("coordinator notification leaked to a different account: %d %s", otherNotices.Code, otherNotices.Body.String())
+	}
 	if w := request("GET", "/api/v1/events/"+event.Data.ID+"/coordinators", memberToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"firstName":"Event"`) || !strings.Contains(w.Body.String(), `"groupName":"Choir"`) {
 		t.Fatalf("public coordinator listing: %d %s", w.Code, w.Body.String())
 	}
