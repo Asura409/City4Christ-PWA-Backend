@@ -3,6 +3,7 @@ package sermons
 import (
 	"context"
 	"errors"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"net/url"
 	"regexp"
 	"strings"
@@ -25,34 +26,37 @@ func invalidField(field, message string) error {
 }
 
 type DraftInput struct {
-	Title      string    `json:"title"`
-	Summary    string    `json:"summary"`
-	Speaker    string    `json:"speaker"`
-	Series     string    `json:"series"`
-	Topic      string    `json:"topic"`
-	PreachedAt time.Time `json:"preachedAt"`
-	VideoURL   string    `json:"videoUrl"`
-	ImageURL   string    `json:"imageUrl"`
+	Title         string    `json:"title"`
+	Summary       string    `json:"summary"`
+	Speaker       string    `json:"speaker"`
+	Series        string    `json:"series"`
+	Topic         string    `json:"topic"`
+	PreachedAt    time.Time `json:"preachedAt"`
+	VideoURL      string    `json:"videoUrl"`
+	ImageURL      string    `json:"imageUrl"`
+	AttachmentIDs []string  `json:"attachmentIds,omitempty"`
 }
 type EditorialSermon struct {
 	ID string `json:"id"`
 	DraftInput
-	PublishedAt *time.Time `json:"publishedAt"`
-	Version     int        `json:"version"`
-	Status      string     `json:"status"`
+	PublishedAt   *time.Time `json:"publishedAt"`
+	Version       int        `json:"version"`
+	Status        string     `json:"status"`
+	AttachmentIDs []string   `json:"attachmentIds"`
 }
 type UpdateInput struct {
-	Version    int        `json:"version"`
-	Title      *string    `json:"title"`
-	Summary    *string    `json:"summary"`
-	Speaker    *string    `json:"speaker"`
-	Series     *string    `json:"series"`
-	Topic      *string    `json:"topic"`
-	PreachedAt *time.Time `json:"preachedAt"`
-	VideoURL   *string    `json:"videoUrl"`
-	ImageURL   *string    `json:"imageUrl"`
-	Status     *string    `json:"status"`
-	PublishAt  *time.Time `json:"publishAt"`
+	Version       int        `json:"version"`
+	Title         *string    `json:"title"`
+	Summary       *string    `json:"summary"`
+	Speaker       *string    `json:"speaker"`
+	Series        *string    `json:"series"`
+	Topic         *string    `json:"topic"`
+	PreachedAt    *time.Time `json:"preachedAt"`
+	VideoURL      *string    `json:"videoUrl"`
+	ImageURL      *string    `json:"imageUrl"`
+	Status        *string    `json:"status"`
+	PublishAt     *time.Time `json:"publishAt"`
+	AttachmentIDs *[]string  `json:"attachmentIds,omitempty"`
 }
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
@@ -131,6 +135,9 @@ func normalizeDraft(input DraftInput) (DraftInput, error) {
 	if err != nil {
 		return DraftInput{}, invalidField("imageUrl", "Use an HTTPS image URL hosted on images.unsplash.com, or leave this field empty.")
 	}
+	if media.ValidateAttachmentIDs(input.AttachmentIDs, media.MaxSermonAttachments) != nil {
+		return DraftInput{}, invalidField("attachmentIds", "Choose up to 10 unique, valid upload IDs.")
+	}
 	return input, nil
 }
 func validDate(t time.Time) bool { return !t.IsZero() && t.UTC().Year() >= 1 && t.UTC().Year() <= 9999 }
@@ -157,8 +164,11 @@ func (s *Service) Update(ctx context.Context, actorID, id string, input UpdateIn
 	if input.Version < 1 {
 		return EditorialSermon{}, invalidField("version", "Supply the current positive version from the editor response.")
 	}
-	if input.Title == nil && input.Summary == nil && input.Speaker == nil && input.Series == nil && input.Topic == nil && input.PreachedAt == nil && input.VideoURL == nil && input.ImageURL == nil && input.Status == nil {
+	if input.Title == nil && input.Summary == nil && input.Speaker == nil && input.Series == nil && input.Topic == nil && input.PreachedAt == nil && input.VideoURL == nil && input.ImageURL == nil && input.Status == nil && input.AttachmentIDs == nil {
 		return EditorialSermon{}, invalidField("body", "Supply at least one editable field or publication status.")
+	}
+	if input.AttachmentIDs != nil && media.ValidateAttachmentIDs(*input.AttachmentIDs, media.MaxSermonAttachments) != nil {
+		return EditorialSermon{}, invalidField("attachmentIds", "Choose up to 10 unique, valid upload IDs.")
 	}
 	now := s.now().UTC()
 	if input.PublishAt != nil {

@@ -1,0 +1,24 @@
+[Unit]
+Description=City4Christ private media scanning worker
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/city4christ/media-worker.env
+ExecStart=%h/.local/bin/city4christ-media-worker
+Restart=on-failure
+RestartSec=5s
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+RestrictSUIDSGID=true
+MemoryMax=512M
+TasksMax=64
+
+[Install]
+WantedBy=default.target

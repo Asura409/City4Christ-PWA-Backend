@@ -3478,7 +3478,7 @@
         ],
         "summary": "Publish a church post",
         "operationId": "CreateChurchPost",
-        "description": "Creates a text-only post visible to authenticated church members. Requires an allowed Origin and JSON body. Posts are limited to 5,000 Unicode characters.",
+        "description": "Creates a post visible to authenticated church members, optionally attaching up to four owned uploads that completed malware scanning. Requires an allowed Origin and JSON body. Posts are limited to 5,000 Unicode characters.",
         "security": [
           {
             "bearerAuth": []
@@ -3492,7 +3492,10 @@
                 "$ref": "#/components/schemas/CreateChurchPostInput"
               },
               "example": {
-                "body": "Welcome everyone to Sunday service."
+                "body": "Welcome everyone to Sunday service.",
+                "attachmentIds": [
+                  "88888888-8888-4888-8888-888888888888"
+                ]
               }
             }
           }
@@ -5536,6 +5539,424 @@
           }
         ]
       }
+    },
+    "/api/v1/uploads/presign": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "summary": "Create a private media upload reservation",
+        "operationId": "PresignMediaUpload",
+        "description": "Reserves an owner-scoped object key and returns a short-lived direct-to-R2 PUT URL. The private object is not attachable until a VPS scan worker reports a clean scan.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresignUploadInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Short-lived upload request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresignUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unsupported type, purpose, or size",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "R2 configuration or service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{uploadId}/complete": {
+      "post": {
+        "tags": [
+          "Media"
+        ],
+        "summary": "Complete an upload and enqueue its malware scan",
+        "operationId": "CompleteMediaUpload",
+        "description": "Checks the private R2 object size and media type against the reservation, then atomically queues a durable malware scan. Completion is idempotent.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteUploadInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Scan queued or upload already completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Upload not found for this owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "R2 object is not available yet",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Upload reservation expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Object metadata does not match reservation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "R2 or database unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/uploads/{uploadId}": {
+      "get": {
+        "tags": [
+          "Media"
+        ],
+        "summary": "Read the caller’s upload status",
+        "operationId": "GetMediaUpload",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "uploadId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Owner-scoped upload status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaUploadResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Upload not found for this owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Database unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/reaction": {
+      "put": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Add an Amen reaction",
+        "operationId": "SetPostAmenReaction",
+        "description": "Adds the authenticated member’s Amen reaction. Repeating the request is idempotent. Requires an allowed Origin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostReactionInput"
+              },
+              "example": {
+                "reaction": "amen"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Current reaction state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostReactionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found"
+          },
+          "422": {
+            "description": "Unsupported reaction"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Remove an Amen reaction",
+        "operationId": "RemovePostAmenReaction",
+        "description": "Removes the authenticated member’s Amen reaction. Repeating the request is idempotent. Requires an allowed Origin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current reaction state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostReactionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found"
+          },
+          "422": {
+            "description": "Invalid request"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5935,7 +6356,8 @@
           "series",
           "topic",
           "preachedAt",
-          "publishedAt"
+          "publishedAt",
+          "attachments"
         ],
         "properties": {
           "id": {
@@ -5976,6 +6398,12 @@
             "type": "string",
             "format": "uri",
             "description": "Optional Unsplash CDN image URL. Omitted when no image is set."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaAttachment"
+            }
           }
         },
         "additionalProperties": false
@@ -6029,6 +6457,16 @@
             "maxLength": 2048,
             "description": "Optional HTTPS image URL on images.unsplash.com. Empty clears it; no server-side fetch is performed.",
             "example": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Up to ten clean sermon uploads owned by this editor."
           }
         }
       },
@@ -6047,7 +6485,8 @@
           "videoUrl",
           "version",
           "status",
-          "imageUrl"
+          "imageUrl",
+          "attachmentIds"
         ],
         "properties": {
           "id": {
@@ -6099,6 +6538,13 @@
           "imageUrl": {
             "type": "string",
             "description": "HTTPS Unsplash CDN URL, or empty string when absent."
+          },
+          "attachmentIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
           }
         }
       },
@@ -6178,6 +6624,16 @@
             "description": "Optional HTTPS image URL on images.unsplash.com. Empty clears it; no server-side fetch is performed.",
             "example": "https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80",
             "nullable": true
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 10,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Replace attached media; an empty array removes all attachments."
           }
         },
         "description": "Supply version plus at least one field to change. Omitted or null optional fields are ignored; use empty strings to clear optional text/video fields. PublishedAt and roles cannot be supplied."
@@ -6902,8 +7358,19 @@
             "minLength": 1,
             "maxLength": 5000,
             "description": "Plain text post body."
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Up to four owned uploads that have passed malware scanning."
           }
-        }
+        },
+        "description": "Post body plus optional IDs of the author’s clean, scanned media uploads."
       },
       "ChurchPost": {
         "type": "object",
@@ -6914,7 +7381,10 @@
           "firstName",
           "lastName",
           "body",
-          "createdAt"
+          "createdAt",
+          "attachments",
+          "amenCount",
+          "reacted"
         ],
         "properties": {
           "id": {
@@ -6937,6 +7407,21 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaAttachment"
+            }
+          },
+          "amenCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total Amen reactions for this post."
+          },
+          "reacted": {
+            "type": "boolean",
+            "description": "Whether the authenticated viewer has reacted."
           }
         }
       },
@@ -7944,6 +8429,233 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/GroupReadReceipt"
+          }
+        }
+      },
+      "PresignUploadInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "purpose",
+          "contentType",
+          "size"
+        ],
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "post_attachment",
+              "sermon_attachment"
+            ]
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/gif",
+              "audio/mpeg",
+              "audio/mp4",
+              "audio/x-wav",
+              "audio/wav",
+              "audio/ogg",
+              "video/mp4",
+              "video/webm"
+            ]
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1,
+            "description": "Maximum: image 20 MiB, audio 50 MiB, video 100 MiB."
+          }
+        }
+      },
+      "PresignUploadResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "uploadId",
+              "url",
+              "method",
+              "headers",
+              "expiresAt"
+            ],
+            "properties": {
+              "uploadId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "url": {
+                "type": "string",
+                "format": "uri"
+              },
+              "method": {
+                "type": "string",
+                "enum": [
+                  "PUT"
+                ]
+              },
+              "headers": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "CompleteUploadInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Send an empty JSON object."
+      },
+      "MediaUploadResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "purpose",
+              "status",
+              "contentType",
+              "size",
+              "createdAt",
+              "expiresAt"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "post_attachment",
+                  "sermon_attachment"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending_upload",
+                  "expired",
+                  "scan_queued",
+                  "scanning",
+                  "available",
+                  "rejected",
+                  "scan_failed"
+                ]
+              },
+              "contentType": {
+                "type": "string"
+              },
+              "size": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        }
+      },
+      "MediaAttachment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "contentType",
+          "size",
+          "url",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Short-lived signed read URL; expiresAt is its expiry."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PostReactionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reaction"
+        ],
+        "properties": {
+          "reaction": {
+            "type": "string",
+            "enum": [
+              "amen"
+            ]
+          }
+        }
+      },
+      "PostReactionResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "postId",
+              "amenCount",
+              "reacted"
+            ],
+            "properties": {
+              "postId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "amenCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reacted": {
+                "type": "boolean"
+              }
+            }
           }
         }
       }

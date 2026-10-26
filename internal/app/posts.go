@@ -13,6 +13,10 @@ import (
 
 func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
 	writeErrorFor := func(w http.ResponseWriter, err error) {
+		if errors.Is(err, posts.ErrNotFound) {
+			writeError(w, 404, "post_not_found", "Post not found.", nil)
+			return
+		}
 		if errors.Is(err, posts.ErrInvalid) {
 			writeError(w, 422, "validation_failed", "Check the post or feed pagination fields.", nil)
 			return
@@ -49,7 +53,6 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 		if !ok {
 			return
 		}
-		_ = actor
 		q, err := url.ParseQuery(r.URL.RawQuery)
 		if err != nil {
 			writeErrorFor(w, posts.ErrInvalid)
@@ -69,7 +72,7 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 				return
 			}
 		}
-		page, err := service.List(r.Context(), o)
+		page, err := service.List(r.Context(), o, actor)
 		if err != nil {
 			writeErrorFor(w, err)
 			return
@@ -95,5 +98,47 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 			return
 		}
 		writeJSON(w, 201, map[string]any{"data": post})
+	})
+	mux.HandleFunc("PUT /api/v1/posts/{postId}/reaction", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeErrorFor(w, posts.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[struct {
+			Reaction string `json:"reaction"`
+		}](w, r)
+		if !ok {
+			return
+		}
+		if in.Reaction != "amen" {
+			writeErrorFor(w, posts.ErrInvalid)
+			return
+		}
+		state, err := service.SetAmen(r.Context(), actor, r.PathValue("postId"))
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": state})
+	})
+	mux.HandleFunc("DELETE /api/v1/posts/{postId}/reaction", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeErrorFor(w, posts.ErrInvalid)
+			return
+		}
+		state, err := service.RemoveAmen(r.Context(), actor, r.PathValue("postId"))
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": state})
 	})
 }

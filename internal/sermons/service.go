@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -21,21 +22,31 @@ type Page struct {
 	NextCursor string
 }
 type Service struct {
-	repo *Repository
-	now  func() time.Time
+	repo   *Repository
+	now    func() time.Time
+	signer media.DownloadSigner
 }
 
-func NewService(repo *Repository, now func() time.Time) *Service {
+func NewService(repo *Repository, now func() time.Time, signers ...media.DownloadSigner) *Service {
 	if now == nil {
 		now = time.Now
 	}
-	return &Service{repo: repo, now: now}
+	s := &Service{repo: repo, now: now}
+	if len(signers) > 0 {
+		s.signer = signers[0]
+	}
+	return s
 }
 func (s *Service) Get(ctx context.Context, id string) (Sermon, error) {
 	if !canonicalID(id) {
 		return Sermon{}, ErrNotFound
 	}
-	return s.repo.Get(ctx, id, s.now())
+	item, err := s.repo.Get(ctx, id, s.now())
+	if err != nil {
+		return Sermon{}, err
+	}
+	item.Attachments, err = media.SignAttachments(ctx, s.signer, item.Attachments)
+	return item, err
 }
 func canonicalID(id string) bool {
 	parsed, err := uuid.Parse(id)
@@ -74,6 +85,12 @@ func (s *Service) List(ctx context.Context, o Options) (Page, error) {
 	items, err := s.repo.List(ctx, o, after, s.now())
 	if err != nil {
 		return Page{}, err
+	}
+	for i := range items {
+		items[i].Attachments, err = media.SignAttachments(ctx, s.signer, items[i].Attachments)
+		if err != nil {
+			return Page{}, err
+		}
 	}
 	page := Page{Items: items}
 	if len(items) > o.Limit {

@@ -54,8 +54,29 @@ func TestPostsThroughGlobalApp(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	if w := request("POST", "/api/v1/posts", memberToken, `{"body":"Welcome to Sunday service"}`, "https://api.example"); w.Code != 201 {
-		t.Fatalf("create post: %d %s", w.Code, w.Body.String())
+	created := request("POST", "/api/v1/posts", memberToken, `{"body":"Welcome to Sunday service"}`, "https://api.example")
+	if created.Code != 201 {
+		t.Fatalf("create post: %d %s", created.Code, created.Body.String())
+	}
+	var post struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &post); err != nil {
+		t.Fatal(err)
+	}
+	if w := request("PUT", "/api/v1/posts/"+post.Data.ID+"/reaction", memberToken, `{"reaction":"amen"}`, "https://api.example"); w.Code != 200 || !strings.Contains(w.Body.String(), `"amenCount":1`) || !strings.Contains(w.Body.String(), `"reacted":true`) {
+		t.Fatalf("set Amen: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", "/api/v1/posts", otherToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), `"amenCount":1`) || strings.Contains(w.Body.String(), `"reacted":true`) {
+		t.Fatalf("other member feed reaction: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", "/api/v1/posts/"+post.Data.ID+"/reaction", memberToken, "", "https://api.example"); w.Code != 200 || !strings.Contains(w.Body.String(), `"amenCount":0`) {
+		t.Fatalf("remove Amen: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("PUT", "/api/v1/posts/"+post.Data.ID+"/reaction", memberToken, `{"reaction":"amen"}`, ""); w.Code != 403 {
+		t.Fatalf("set Amen without allowed origin: %d %s", w.Code, w.Body.String())
 	}
 	if w := request("GET", "/api/v1/posts", otherToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Welcome to Sunday service") {
 		t.Fatalf("member feed: %d %s", w.Code, w.Body.String())
@@ -92,10 +113,12 @@ func TestPostsContractRequiresMemberAuthentication(t *testing.T) {
 	if route == nil || route["get"] == nil || route["post"] == nil {
 		t.Fatal("posts API contract is missing")
 	}
-	for _, method := range []string{"get", "post"} {
-		security, ok := route[method]["security"].([]any)
+	for _, endpoint := range []struct {
+		path, method string
+	}{{"/api/v1/posts", "get"}, {"/api/v1/posts", "post"}, {"/api/v1/posts/{postId}/reaction", "put"}, {"/api/v1/posts/{postId}/reaction", "delete"}} {
+		security, ok := spec.Paths[endpoint.path][endpoint.method]["security"].([]any)
 		if !ok || len(security) != 1 {
-			t.Fatalf("%s posts endpoint must require bearer authentication", method)
+			t.Fatalf("%s %s endpoint must require bearer authentication", endpoint.method, endpoint.path)
 		}
 	}
 }

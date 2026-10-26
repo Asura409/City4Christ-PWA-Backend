@@ -44,6 +44,34 @@ func TestConfigFailsClosed(t *testing.T) {
 	}
 }
 
+func TestR2MediaStorageConfigIsOptionalButMustBeComplete(t *testing.T) {
+	values := map[string]string{
+		"DATABASE_URL":            "postgres://test:test@localhost/test",
+		"VERIFICATION_KEY_BASE64": base64.StdEncoding.EncodeToString(make([]byte, 32)),
+		"R2_ACCOUNT_ID":           "0123456789abcdef0123456789abcdef",
+		"R2_BUCKET":               "city4christ-media-staging",
+		"R2_ACCESS_KEY_ID":        "test-access",
+		"R2_SECRET_ACCESS_KEY":    "test-secret",
+	}
+	config, err := loadConfig(func(key string) string { return values[key] })
+	if err != nil || !config.r2Configured || config.r2Config.Bucket != values["R2_BUCKET"] {
+		t.Fatalf("R2 config = %+v, err = %v", config, err)
+	}
+	for _, missing := range []string{"R2_ACCOUNT_ID", "R2_BUCKET", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"} {
+		t.Run(missing, func(t *testing.T) {
+			_, err := loadConfig(func(key string) string {
+				if key == missing {
+					return ""
+				}
+				return values[key]
+			})
+			if err == nil {
+				t.Fatalf("partial R2 config accepted without %s", missing)
+			}
+		})
+	}
+}
+
 func TestStartupMigrationPreservesDataAndServesGlobalApp(t *testing.T) {
 	db := testpg.New(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)

@@ -3,11 +3,85 @@ package sermons
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
+	"github.com/google/uuid"
 )
+
+type sermonDownloadSigner struct{}
+
+func (sermonDownloadSigner) PresignDownload(_ context.Context, key string, ttl time.Duration) (media.SignedRequest, error) {
+	return media.SignedRequest{URL: "https://private.r2.example/" + key + "?signature=test", ExpiresAt: time.Now().Add(ttl)}, nil
+}
+
+func TestSermonsAttachOnlyOwnedCleanUploadsAndExposeURLsOnlyWhenPublished(t *testing.T) {
+	db, now := fixture(t)
+	ctx := context.Background()
+	staff := editor(t, db, "content_editor")
+	other := editor(t, db, "content_editor")
+	available := insertSermonUpload(t, db, staff, "available")
+	foreign := insertSermonUpload(t, db, other, "available")
+	queued := insertSermonUpload(t, db, staff, "scan_queued")
+	service := NewService(NewRepository(db), func() time.Time { return now }, sermonDownloadSigner{})
+	input := DraftInput{Title: "A message with media", Speaker: "Pastor Joy", PreachedAt: now, AttachmentIDs: []string{available}}
+	draft, err := service.CreateDraft(ctx, staff, input)
+	if err != nil || len(draft.AttachmentIDs) != 1 || draft.AttachmentIDs[0] != available {
+		t.Fatalf("create draft with attachment: %+v %v", draft, err)
+	}
+	for name, ids := range map[string][]string{"foreign owner": {foreign}, "not scanned": {queued}} {
+		bad := input
+		bad.AttachmentIDs = ids
+		if _, err := service.CreateDraft(ctx, staff, bad); !errors.Is(err, ErrInvalidInput) {
+			t.Fatalf("%s attachment accepted: %v", name, err)
+		}
+	}
+	if _, err := service.Get(ctx, draft.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatal("draft attachment was exposed before publication")
+	}
+	published := "published"
+	if _, err := service.Update(ctx, staff, draft.ID, UpdateInput{Version: 1, Status: &published}); err != nil {
+		t.Fatal(err)
+	}
+	sermon, err := service.Get(ctx, draft.ID)
+	if err != nil || len(sermon.Attachments) != 1 || sermon.Attachments[0].URL == "" || strings.Contains(mustSermonJSON(t, sermon), "objectKey") {
+		t.Fatalf("published attachment response: %+v %v", sermon, err)
+	}
+}
+
+func insertSermonUpload(t *testing.T, db *sql.DB, owner, status string) string {
+	t.Helper()
+	var id string
+	objectID := uuid.NewString()
+	sourceKey := "sermons/" + owner + "/" + objectID + ".png"
+	availableKey := any(nil)
+	uploaded := time.Now()
+	var scanned any
+	if status == "available" {
+		availableKey = "available/" + objectID + "/clean.png"
+		scanned = time.Now()
+	}
+	err := db.QueryRow(`INSERT INTO media_uploads(id,owner_id,purpose,object_key,available_object_key,declared_content_type,declared_size,actual_content_type,actual_size,status,expires_at,uploaded_at,scanned_at)
+		VALUES($1,$2,'sermon_attachment',$3,$4,'image/png',8,'image/png',8,$5,now()+interval '1 hour',$6,$7) RETURNING id::text`, objectID, owner, sourceKey, availableKey, status, uploaded, scanned).Scan(&id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
+func mustSermonJSON(t *testing.T, value any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
 
 func editor(t *testing.T, db *sql.DB, role string) string {
 	t.Helper()
