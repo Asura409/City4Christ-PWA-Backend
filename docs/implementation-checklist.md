@@ -371,8 +371,11 @@ realtime delivery, reconnect behavior and their security tests.
 
 ## M11 — Complete Word/live and the home/install experience
 
-- [ ] **M11.1:** Add published series, own playback progress and private sermon
-  notes, preserving the already implemented catalog/publishing behavior.
+- [ ] **M11.1:** Published series discovery and filtering plus member-owned
+  playback progress and private sermon notes are implemented locally, with
+  PostgreSQL/service/global-app and desktop/mobile browser coverage. Progress
+  tracks uploaded audio/video; external YouTube embeds cannot report their
+  playhead. Staging acceptance remains separate.
 - [ ] **M11.2:** Add managed devotionals/daily verse and approved live provider
   metadata/scheduling; never stream video through the app WebSocket.
 - [ ] **M11.3:** Implement personalized home aggregation and authorized cross-domain

@@ -249,3 +249,50 @@ func TestChurchRoleContract(t *testing.T) {
 		t.Fatal("candidate privacy contract")
 	}
 }
+
+func TestSermonMemberToolsOpenAPIRequiresBearer(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec struct {
+		Paths map[string]map[string]map[string]any `json:"paths"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []struct{ path, method string }{
+		{"/api/v1/me/sermons/{sermonId}/progress", "get"},
+		{"/api/v1/me/sermons/{sermonId}/progress", "put"},
+		{"/api/v1/me/sermons/{sermonId}/notes", "get"},
+		{"/api/v1/me/sermons/{sermonId}/notes", "put"},
+		{"/api/v1/me/sermons/{sermonId}/notes", "delete"},
+	} {
+		operation := spec.Paths[route.path][route.method]
+		if operation == nil {
+			t.Fatalf("missing OpenAPI operation %s %s", route.method, route.path)
+		}
+		security, ok := operation["security"].([]any)
+		if !ok || len(security) != 1 {
+			t.Fatalf("%s %s does not require Bearer auth", route.method, route.path)
+		}
+	}
+}
+
+func TestPublishedSermonSeriesOpenAPIIsPublic(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec struct {
+		Paths map[string]map[string]map[string]any `json:"paths"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	operation := spec.Paths["/api/v1/sermons/series"]["get"]
+	if operation == nil {
+		t.Fatal("missing published sermon series operation")
+	}
+	if _, protected := operation["security"]; protected {
+		t.Fatal("public published sermon series must not require authentication")
+	}
+}

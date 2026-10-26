@@ -58,3 +58,20 @@ func TestServicePaginationAndValidation(t *testing.T) {
 		t.Fatal("ignored cancellation")
 	}
 }
+
+func TestServiceListsPublishedSeriesAtConfiguredTime(t *testing.T) {
+	db, now := fixture(t)
+	publication := now.Add(-time.Minute)
+	future := now.Add(time.Minute)
+	insert(t, db, "Published title", "Speaker", "Grace", "Faith", &publication)
+	insert(t, db, "Scheduled title", "Speaker", "Hope", "Faith", &future)
+	service := NewService(NewRepository(db), func() time.Time { return now })
+
+	series, err := service.ListSeries(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(series) != 1 || series[0].Name != "Grace" {
+		t.Fatalf("service exposed a future series: %+v", series)
+	}
+}
