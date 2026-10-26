@@ -18,7 +18,7 @@ func realtimeTicketRoutes(mux *http.ServeMux, tickets *messaging.RealtimeTicketS
 			writeError(w, 403, "origin_not_allowed", "Supply an allowed Origin header.", nil)
 			return
 		}
-		actor, err := sessions.Authenticate(r.Context(), requestAccess(r))
+		actor, sessionID, accessExpiresAt, err := sessions.AuthenticateSession(r.Context(), requestAccess(r))
 		if err != nil {
 			sessionError(w, err)
 			return
@@ -36,7 +36,7 @@ func realtimeTicketRoutes(mux *http.ServeMux, tickets *messaging.RealtimeTicketS
 				return
 			}
 		}
-		ticket, err := tickets.Issue(r.Context(), actor.ID)
+		ticket, err := tickets.Issue(r.Context(), actor.ID, sessionID, accessExpiresAt)
 		if err != nil {
 			writeError(w, 503, "unavailable", "Service unavailable.", nil)
 			return

@@ -82,8 +82,9 @@ Super Admin, Assistant Pastor, and Staff may moderate group content; a Ministry
 Leader may moderate only the group in their role scope. Moderation replaces the
 message body with an empty value and records an audit event. Other participants
 see a removed-message placeholder. A moderator role does not grant group history
-access. Group messages use REST and PostgreSQL; realtime delivery, attachments,
-notifications, typing indicators and presence remain future work.
+access. Group messages use REST and PostgreSQL; realtime delivery is available
+for connected, currently authorized group members. Attachments, notifications,
+typing indicators and presence remain future work.
 
 The group chat UI is available from the Chat screen's Group chats tab. The current
 `API_URL` environment setting is sufficient; the backend must allow the frontend
@@ -93,7 +94,36 @@ origin and apply migration 00028 before the UI is released.
 
 `POST /api/v1/realtime/tickets` requires the same Bearer access token and an
 allowed `Origin`. It returns an opaque 32-byte ticket with a 30-second lifetime.
-The server stores only its SHA-256 digest. A client must present it once in the
-first WebSocket authentication frame, never in the URL. Account and IP rate
-limits apply. Ticket issuance is available now; the WebSocket transport,
-reconnect event history and bounded fanout are still pending.
+The server stores only its SHA-256 digest and binds the ticket to the current
+verified account, session, and access-token expiry. Account and IP rate limits
+apply. Tickets are single-use, and logout/revocation invalidates an unconsumed
+ticket.
+
+Connect to `wss://<api-origin>/api/v1/realtime` from an allowed browser origin.
+Do not put the ticket in the URL or a subprotocol. Send it in the first JSON
+frame immediately after the WebSocket handshake:
+
+```json
+{"type":"authenticate","ticket":"<ticket from POST /api/v1/realtime/tickets>"}
+```
+
+After authentication the server sends `{"type":"ready"}`. A client may send
+`{"type":"ping"}` and receives `{"type":"pong"}`. The server also sends
+WebSocket control pings to detect dead connections. Message writes continue to
+use the REST endpoints so their validation and idempotency rules remain in
+effect.
+
+New direct and group messages produce a `message.created` event containing the
+scope, conversation or group ID, message ID, and monotonic sequence. Group
+moderation produces `message.deleted`. Event frames deliberately omit message
+bodies; fetch content from the corresponding REST history endpoint. Events are
+sent only to connected participants or currently eligible group members. The
+server rechecks session revocation periodically and closes the socket by access
+token expiry. A slow client is disconnected when its bounded event queue fills.
+
+Delivery is an online notification, not a durable event log. On connect or after
+reconnect, fetch the relevant REST history and use its sequence cursor to catch
+up; duplicate notification or history data should be reconciled by message ID.
+There is no cross-instance WebSocket fanout yet, so deploy more than one API
+instance only after adding shared pub/sub. PostgreSQL remains the durable source
+of truth.

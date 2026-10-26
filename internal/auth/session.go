@@ -215,15 +215,31 @@ func (s *SessionService) Refresh(ctx context.Context, raw string) (SessionTokens
 }
 
 func (s *SessionService) Authenticate(ctx context.Context, raw string) (Account, error) {
+	account, _, _, err := s.AuthenticateSession(ctx, raw)
+	return account, err
+}
+
+// AuthenticateSession authenticates an access token and returns the exact server
+// session and access-token expiry that a realtime connection must remain bound to.
+func (s *SessionService) AuthenticateSession(ctx context.Context, raw string) (Account, string, time.Time, error) {
 	claims, err := s.parseAccess(raw)
 	if err != nil {
-		return Account{}, err
+		return Account{}, "", time.Time{}, err
 	}
 	a, err := scanAccount(s.db.QueryRowContext(ctx, `SELECT `+prefixedAccountColumns+` FROM accounts a JOIN auth_sessions s ON s.account_id=a.id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL`, claims.SessionID, claims.Subject, s.now().UTC()))
 	if errors.Is(err, sql.ErrNoRows) {
-		return Account{}, ErrInvalidSession
+		return Account{}, "", time.Time{}, ErrInvalidSession
 	}
-	return a, err
+	if err != nil {
+		return Account{}, "", time.Time{}, err
+	}
+	return a, claims.SessionID, claims.ExpiresAt.Time, nil
+}
+
+func (s *SessionService) SessionActive(ctx context.Context, accountID, sessionID string) (bool, error) {
+	var active bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND s.account_id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL)`, sessionID, accountID, s.now().UTC()).Scan(&active)
+	return active, err
 }
 
 var prefixedAccountColumns = "a." + strings.ReplaceAll(accountColumns, ", ", ", a.")

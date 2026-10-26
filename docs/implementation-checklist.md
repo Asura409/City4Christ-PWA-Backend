@@ -361,17 +361,23 @@ read private purposes or notes.
 - [x] **M10.3:** Durable group conversations, active-membership access, read
   markers and scoped moderation are implemented. Messages are redacted on removal;
   membership is rechecked for reads, writes and history access.
-- [ ] **M10.4:** Short-lived, single-use realtime ticket issuance is implemented;
-  WebSocket authentication, reconnect history and bounded fanout remain.
+- [x] **M10.4:** Short-lived, single-use realtime tickets are bound to the
+  verified session and access-token expiry. The WebSocket authenticates before
+  `ready`, sends participant/member-scoped message metadata through bounded
+  queues, and drops slow clients. PostgreSQL REST history is the reconnect
+  catch-up source; shared fanout across API instances is not implemented.
 - [x] **M10.5:** React conversation list, member search, send and read receipt use the
   real API with desktop/mobile browser scenarios.
-- [ ] **M10.6:** Group REST lifecycle and authorization checks now cover active
-  membership, leave/revocation and moderation. Realtime/WSS lifecycle and reconnect
-  history remain. Focused direct-message tests cover participant privacy, retry
-  behavior, receipts and rate limits.
+- [ ] **M10.6:** Group REST lifecycle and authorization checks cover active
+  membership, leave/revocation and moderation. Server-side WSS handshake, direct
+  message delivery, ticket replay rejection and bounded fanout are implemented.
+  Frontend socket lifecycle/reconnect UX, group delivery end-to-end coverage,
+  logout/expiry lifecycle coverage and multi-instance fanout remain.
 
-**Exit:** Direct and group REST messaging slices are implemented; M10 stays open for
-realtime delivery, reconnect behavior and their security tests.
+**Exit:** Direct and group REST messaging plus single-instance server realtime
+delivery are implemented. M10 stays open for frontend reconnect lifecycle,
+group WebSocket integration coverage, broader auth lifecycle tests and shared
+fanout if the API runs more than one instance.
 
 ## M11 — Complete Word/live and the home/install experience
 

@@ -6811,6 +6811,27 @@
           }
         }
       }
+    },
+    "/api/v1/realtime": {
+      "get": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "Open an authenticated realtime WebSocket",
+        "description": "Requires one allowed Origin and no query parameters. After upgrade, send {\"type\":\"authenticate\",\"ticket\":\"...\"} as the first JSON frame. The 30-second single-use ticket must come from POST /api/v1/realtime/tickets and must never be placed in the URL. Server events contain message IDs and sequence metadata, not message bodies; use REST history for content and reconnect catch-up.",
+        "operationId": "OpenRealtimeWebSocket",
+        "responses": {
+          "101": {
+            "description": "WebSocket upgraded; the first client frame must authenticate with a realtime ticket."
+          },
+          "403": {
+            "description": "Origin is not allowed."
+          },
+          "503": {
+            "description": "Realtime service unavailable."
+          }
+        }
+      }
     }
   },
   "components": {
