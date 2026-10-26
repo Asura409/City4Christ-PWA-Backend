@@ -1,6 +1,6 @@
 # Direct messaging
 
-The first messaging slice supports durable one-to-one conversations over REST.
+The messaging API supports durable one-to-one conversations over REST.
 Only verified accounts can participate. Any verified member may start a chat by
 recipient account ID; the React picker discovers members through the existing
 opt-in directory, which omits accounts whose owners keep their profiles hidden.
@@ -15,8 +15,8 @@ private conversations. Conversation creation is idempotent per member pair, so
 opening the same pair from either direction returns the same conversation.
 
 Message bodies are durable in PostgreSQL and are not included in API request logs.
-The API does not yet provide message deletion, moderation, attachment upload,
-search, group conversations, realtime delivery, typing indicators, or presence.
+The API does not yet provide direct-message deletion, attachment upload, search,
+typing indicators, or presence.
 Retention and any exceptional access policy must be decided before those features
 are added. Read and send operations remain available over HTTPS REST without a
 realtime service.
@@ -88,3 +88,12 @@ notifications, typing indicators and presence remain future work.
 The group chat UI is available from the Chat screen's Group chats tab. The current
 `API_URL` environment setting is sufficient; the backend must allow the frontend
 origin and apply migration 00028 before the UI is released.
+
+## Realtime connection tickets
+
+`POST /api/v1/realtime/tickets` requires the same Bearer access token and an
+allowed `Origin`. It returns an opaque 32-byte ticket with a 30-second lifetime.
+The server stores only its SHA-256 digest. A client must present it once in the
+first WebSocket authentication frame, never in the URL. Account and IP rate
+limits apply. Ticket issuance is available now; the WebSocket transport,
+reconnect event history and bounded fanout are still pending.

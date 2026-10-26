@@ -74,6 +74,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	groupRoutes(mux, groups.NewService(groups.NewRepository(db), config.Now), sessions, limiter, config)
 	prayerRoutes(mux, prayer.NewService(prayer.NewRepository(db)), sessions, limiter, config)
 	directMessagingRoutes(mux, messaging.NewService(messaging.NewRepository(db), config.Now), sessions, limiter, config)
+	realtimeTicketRoutes(mux, messaging.NewRealtimeTicketService(messaging.NewRepository(db), config.Now), sessions, limiter, config)
 	notificationRoutes(mux, notifications.NewService(notifications.NewRepository(db), config.Now), sessions, limiter, config)
 	mediaRoutes(mux, media.NewService(media.NewRepository(db), config.MediaStorage, config.Now), sessions, limiter, config)
 	accessService := access.NewService(db)
