@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	maxSignedURLTTL = 5 * time.Minute
+	maxSignedURLTTL   = 5 * time.Minute
 	maxDownloadURLTTL = time.Hour
 )
 
