@@ -46,6 +46,19 @@ type Acknowledgement struct {
 	Changed bool `json:"changed"`
 }
 
+type Encouragement struct {
+	ID        string    `json:"id"`
+	RequestID string    `json:"requestId"`
+	Body      string    `json:"body"`
+	Author    string    `json:"author"`
+	IsOwner   bool      `json:"isOwner"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type EncouragementInput struct {
+	Body string `json:"body"`
+}
+
 type StatusResult struct {
 	Changed bool `json:"changed"`
 }

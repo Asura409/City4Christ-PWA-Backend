@@ -198,6 +198,51 @@ func TestGroupPrayerRequiresActiveMembership(t *testing.T) {
 	}
 }
 
+func TestEncouragementsUsePrayerVisibilityAndAreListedInOrder(t *testing.T) {
+	ctx, service, owner, member, stranger, group := prayerFixture(t)
+	community, err := service.Create(ctx, owner, CreateInput{Body: "Community", Visibility: "community", Anonymous: true})
+	if err != nil { t.Fatal(err) }
+	private, err := service.Create(ctx, owner, CreateInput{Body: "Private", Visibility: "private"})
+	if err != nil { t.Fatal(err) }
+	groupRequest, err := service.Create(ctx, owner, CreateInput{Body: "Group", Visibility: "group", GroupID: group})
+	if err != nil { t.Fatal(err) }
+	first, err := service.CreateEncouragement(ctx, member, community.ID, EncouragementInput{Body: "Praying for you"})
+	if err != nil || first.Author == "" || first.IsOwner { t.Fatalf("create community encouragement: %+v %v", first, err) }
+	second, err := service.CreateEncouragement(ctx, owner, private.ID, EncouragementInput{Body: "A private reply"})
+	if err != nil || second.Author != "You" || !second.IsOwner { t.Fatalf("owner private reply: %+v %v", second, err) }
+	var notices int
+	if err := service.repo.db.QueryRowContext(ctx, `SELECT count(*) FROM notifications WHERE account_id=$1 AND kind='prayer.encouragement'`, owner).Scan(&notices); err != nil || notices != 1 {
+		t.Fatalf("owner notice missing or self-encouragement notified: count=%d err=%v", notices, err)
+	}
+	privateReplies, err := service.ListEncouragements(ctx, owner, private.ID)
+	if err != nil || len(privateReplies) != 1 || privateReplies[0].Author != "You" || !privateReplies[0].IsOwner {
+		t.Fatalf("private owner could not read own encouragement: %+v %v", privateReplies, err)
+	}
+	if _, err := service.CreateEncouragement(ctx, stranger, private.ID, EncouragementInput{Body: "Should not leak"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("private request disclosed by encouragement write: %v", err)
+	}
+	if _, err := service.CreateEncouragement(ctx, stranger, groupRequest.ID, EncouragementInput{Body: "Should not leak"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("group request disclosed by encouragement write: %v", err)
+	}
+	listed, err := service.ListEncouragements(ctx, member, community.ID)
+	if err != nil || len(listed) != 1 || listed[0].ID != first.ID || listed[0].Author == "" {
+		t.Fatalf("visible encouragement list: %+v %v", listed, err)
+	}
+	if _, err := service.ListEncouragements(ctx, stranger, private.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("private request disclosed by encouragement list: %v", err)
+	}
+	if _, err := service.ListEncouragements(ctx, stranger, groupRequest.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("group request disclosed by encouragement list: %v", err)
+	}
+	if _, err := service.CreateEncouragement(ctx, member, community.ID, EncouragementInput{Body: "  "}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("empty encouragement accepted: %v", err)
+	}
+	if changed, err := service.SetStatus(ctx, owner, community.ID, "archived"); err != nil || !changed { t.Fatalf("archive: %v %v", changed, err) }
+	if _, err := service.CreateEncouragement(ctx, member, community.ID, EncouragementInput{Body: "Too late"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("archived prayer accepted encouragement: %v", err)
+	}
+}
+
 func containsRequest(items []Request, id string) bool {
 	for _, item := range items {
 		if item.ID == id {
