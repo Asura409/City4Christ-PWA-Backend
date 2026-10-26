@@ -22,7 +22,7 @@ type markReadRequest struct {
 	ThroughMessageID string `json:"throughMessageId"`
 }
 
-func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
+func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, hub *messaging.RealtimeHub, c Config) {
 	fail := func(w http.ResponseWriter, err error) {
 		switch {
 		case errors.Is(err, messaging.ErrInvalid):
@@ -163,6 +163,9 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 			fail(w, err)
 			return
 		}
+		if !duplicate {
+			publishDirectMessage(r.Context(), service, hub, message)
+		}
 		status := http.StatusCreated
 		if duplicate {
 			status = http.StatusOK
@@ -262,6 +265,9 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 			fail(w, err)
 			return
 		}
+		if !duplicate {
+			publishGroupMessage(r.Context(), service, hub, message)
+		}
 		status := http.StatusCreated
 		if duplicate {
 			status = http.StatusOK
@@ -297,10 +303,13 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 			fail(w, messaging.ErrInvalid)
 			return
 		}
-		_, err := service.DeleteGroupMessage(r.Context(), actor, r.PathValue("groupId"), r.PathValue("messageId"))
+		deleted, err := service.DeleteGroupMessage(r.Context(), actor, r.PathValue("groupId"), r.PathValue("messageId"))
 		if err != nil {
 			fail(w, err)
 			return
+		}
+		if deleted {
+			publishGroupMessageDeleted(r.Context(), service, hub, r.PathValue("groupId"), r.PathValue("messageId"))
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
