@@ -21,6 +21,7 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/app"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/googleoidc"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -35,6 +36,8 @@ type serverConfig struct {
 	crossSiteCookies                   bool
 	trustedProxyCIDRs                  []string
 	googleClientID, googleClientSecret string
+	r2Config                           media.R2Config
+	r2Configured                       bool
 }
 
 func loadConfig(getenv func(string) string) (serverConfig, error) {
@@ -104,6 +107,23 @@ func loadConfig(getenv func(string) string) (serverConfig, error) {
 	if (c.googleClientID == "") != (c.googleClientSecret == "") || c.googleClientID != "" && c.appOrigin == "" {
 		return c, errors.New("Google requires client ID, client secret, and APP_ORIGIN")
 	}
+	r2Values := []string{getenv("R2_ACCOUNT_ID"), getenv("R2_BUCKET"), getenv("R2_ACCESS_KEY_ID"), getenv("R2_SECRET_ACCESS_KEY")}
+	configured := 0
+	for _, value := range r2Values {
+		if value != "" {
+			configured++
+		}
+	}
+	if configured != 0 && configured != len(r2Values) {
+		return c, errors.New("R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be configured together")
+	}
+	if configured == len(r2Values) {
+		c.r2Config = media.R2Config{AccountID: r2Values[0], Bucket: r2Values[1], AccessKeyID: r2Values[2], SecretAccessKey: r2Values[3]}
+		if _, err := media.NewR2Storage(c.r2Config, nil); err != nil {
+			return serverConfig{}, errors.New("R2 media storage configuration is invalid")
+		}
+		c.r2Configured = true
+	}
 	return c, nil
 }
 
@@ -111,6 +131,13 @@ func migrate(ctx context.Context, db *sql.DB) error { return database.Migrate(ct
 
 func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfig) error {
 	appConfig := app.Config{RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
+	if c.r2Configured {
+		store, err := media.NewR2Storage(c.r2Config, nil)
+		if err != nil {
+			return errors.New("R2 media storage configuration failed")
+		}
+		appConfig.MediaStorage = store
+	}
 	if c.googleClientID != "" {
 		discovery, cancel := context.WithTimeout(ctx, 15*time.Second)
 		provider, err := googleoidc.New(discovery, c.googleClientID, c.googleClientSecret, c.appOrigin+"/api/v1/auth/google/callback")

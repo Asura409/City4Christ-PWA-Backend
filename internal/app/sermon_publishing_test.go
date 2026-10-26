@@ -10,6 +10,7 @@ import (
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/sermons"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/testpg"
 )
@@ -46,7 +47,8 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	}
 	staff, editor := actor("content_editor")
 	_, member := actor("")
-	handler := New(db, Config{VerificationKey: key, AppOrigin: origin, Now: func() time.Time { return now }})
+	storage := &testMediaStorage{info: media.ObjectInfo{ContentLength: 32, ContentType: "image/png"}}
+	handler := New(db, Config{VerificationKey: key, AppOrigin: origin, Now: func() time.Time { return now }, MediaStorage: storage})
 	request := func(method, path, token, body, from string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		if token != "" {
@@ -92,7 +94,12 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	if sample.Code != 200 {
 		t.Fatalf("Swagger publish example failed: %d %s", sample.Code, sample.Body.String())
 	}
-	body := `{"title":"Faith","speaker":"Pastor Joy","summary":"A message","preachedAt":"2026-10-11T14:00:00Z","videoUrl":"https://youtu.be/dQw4w9WgXcQ","imageUrl":"https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80"}`
+	var sermonMediaID string
+	if err := db.QueryRow(`INSERT INTO media_uploads(id,owner_id,purpose,object_key,available_object_key,declared_content_type,declared_size,actual_content_type,actual_size,status,expires_at,uploaded_at,scanned_at)
+		VALUES(gen_random_uuid(),$1,'sermon_attachment','sermons/source.png','available/sermon/clean.png','image/png',32,'image/png',32,'available',now()+interval '1 hour',now(),now()) RETURNING id::text`, staff).Scan(&sermonMediaID); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"title":"Faith","speaker":"Pastor Joy","summary":"A message","preachedAt":"2026-10-11T14:00:00Z","videoUrl":"https://youtu.be/dQw4w9WgXcQ","imageUrl":"https://images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1?auto=format&fit=crop&w=1200&q=80","attachmentIds":["` + sermonMediaID + `"]}`
 	for _, tc := range []struct {
 		token, origin string
 		want          int
@@ -130,7 +137,7 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	var result struct {
 		Data sermons.EditorialSermon `json:"data"`
 	}
-	if err = json.Unmarshal(w.Body.Bytes(), &result); err != nil || result.Data.Status != "draft" {
+	if err = json.Unmarshal(w.Body.Bytes(), &result); err != nil || result.Data.Status != "draft" || len(result.Data.AttachmentIDs) != 1 || result.Data.AttachmentIDs[0] != sermonMediaID {
 		t.Fatalf("draft response: %s", w.Body.String())
 	}
 	id := result.Data.ID
@@ -146,7 +153,7 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	if w = request("PATCH", "/api/v1/admin/sermons/"+id, editor.AccessToken, `{"version":1,"status":"published"}`, origin); w.Code != 200 {
 		t.Fatalf("publish: %d %s", w.Code, w.Body.String())
 	}
-	if w = request("GET", "/api/v1/sermons/"+id, "", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "youtube.com/watch?v=") || !strings.Contains(w.Body.String(), "images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1") {
+	if w = request("GET", "/api/v1/sermons/"+id, "", "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "youtube.com/watch?v=") || !strings.Contains(w.Body.String(), "images.unsplash.com/photo-1770097286875-0cbf4ca2f8c1") || !strings.Contains(w.Body.String(), "r2.example.invalid/available/sermon/clean.png") {
 		t.Fatal("published media unavailable")
 	}
 	if w = request("PATCH", "/api/v1/admin/sermons/"+id, editor.AccessToken, `{"version":1,"title":"Stale"}`, origin); w.Code != 409 {

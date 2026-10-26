@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"time"
 )
 
@@ -49,6 +50,17 @@ func (r *Repository) createDraft(ctx context.Context, actorID string, input Draf
 	if err != nil {
 		return EditorialSermon{}, err
 	}
+	attachments, err := media.LoadAttachableTx(ctx, tx, actorID, string(media.PurposeSermonAttachment), input.AttachmentIDs)
+	if err != nil {
+		if errors.Is(err, media.ErrInvalidAttachment) {
+			return EditorialSermon{}, invalidField("attachmentIds", "Choose media uploaded by this editor and cleared by scanning.")
+		}
+		return EditorialSermon{}, err
+	}
+	if err = replaceSermonAttachments(ctx, tx, result.ID, attachments); err != nil {
+		return EditorialSermon{}, err
+	}
+	result.AttachmentIDs = attachmentIDs(attachments)
 	if err = audit(ctx, tx, actorID, result, "created", now); err != nil {
 		return EditorialSermon{}, err
 	}
@@ -69,6 +81,9 @@ func (r *Repository) getEditorial(ctx context.Context, actorID, id string, now t
 	result, err := scanEditorial(tx.QueryRowContext(ctx, "SELECT "+editorialColumns+" FROM sermons WHERE id=$1", id), now)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EditorialSermon{}, ErrNotFound
+	}
+	if err == nil {
+		result.AttachmentIDs, err = sermonAttachmentIDs(ctx, tx, id)
 	}
 	return result, err
 }
@@ -154,10 +169,63 @@ func (r *Repository) update(ctx context.Context, actorID, id string, patch Updat
 	if err = audit(ctx, tx, actorID, result, action, now); err != nil {
 		return EditorialSermon{}, err
 	}
+	if patch.AttachmentIDs != nil {
+		attachments, loadErr := media.LoadAttachableTx(ctx, tx, actorID, string(media.PurposeSermonAttachment), *patch.AttachmentIDs)
+		if loadErr != nil {
+			if errors.Is(loadErr, media.ErrInvalidAttachment) {
+				return EditorialSermon{}, invalidField("attachmentIds", "Choose media uploaded by this editor and cleared by scanning.")
+			}
+			return EditorialSermon{}, loadErr
+		}
+		if err = replaceSermonAttachments(ctx, tx, id, attachments); err != nil {
+			return EditorialSermon{}, err
+		}
+		result.AttachmentIDs = attachmentIDs(attachments)
+	} else {
+		result.AttachmentIDs, err = sermonAttachmentIDs(ctx, tx, id)
+		if err != nil {
+			return EditorialSermon{}, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return EditorialSermon{}, err
 	}
 	return result, nil
+}
+
+func replaceSermonAttachments(ctx context.Context, tx *sql.Tx, sermonID string, items []media.Attachment) error {
+	if _, err := tx.ExecContext(ctx, "DELETE FROM sermon_media_attachments WHERE sermon_id=$1", sermonID); err != nil {
+		return err
+	}
+	for position, item := range items {
+		if _, err := tx.ExecContext(ctx, "INSERT INTO sermon_media_attachments(sermon_id,upload_id,position) VALUES($1,$2,$3)", sermonID, item.ID, position); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func attachmentIDs(items []media.Attachment) []string {
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		ids = append(ids, item.ID)
+	}
+	return ids
+}
+func sermonAttachmentIDs(ctx context.Context, tx *sql.Tx, sermonID string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, "SELECT upload_id::text FROM sermon_media_attachments WHERE sermon_id=$1 ORDER BY position", sermonID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 func audit(ctx context.Context, tx *sql.Tx, actorID string, s EditorialSermon, action string, now time.Time) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO sermon_audit_events(sermon_id,actor_id,action,version,status,occurred_at) VALUES($1,$2,$3,$4,$5,$6)`, s.ID, actorID, action, s.Version, s.Status, now)

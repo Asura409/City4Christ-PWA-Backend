@@ -84,10 +84,13 @@ func TestR2SignerRejectsInvalidKeysAndLongExpiry(t *testing.T) {
 			t.Errorf("PresignUpload(%q) succeeded, want invalid key error", key)
 		}
 	}
-	for _, ttl := range []time.Duration{0, -time.Second, 6 * time.Minute} {
+	for _, ttl := range []time.Duration{0, -time.Second, 61 * time.Minute} {
 		if _, err := signer.PresignDownload(context.Background(), "posts/id/image.png", ttl); err == nil {
 			t.Errorf("PresignDownload(%s) succeeded, want invalid expiry error", ttl)
 		}
+	}
+	if _, err := signer.PresignDownload(context.Background(), "posts/id/image.png", DownloadURLTTL); err != nil {
+		t.Fatalf("PresignDownload(%s) rejected the attachment URL lifetime: %v", DownloadURLTTL, err)
 	}
 	if _, err := signer.PresignUpload(context.Background(), "posts/id/image.png", "not a mime type", 512, time.Minute); err == nil {
 		t.Fatal("PresignUpload() accepted an invalid content type")

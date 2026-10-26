@@ -6,8 +6,9 @@ suffix="c4c-smoke-$$"
 db="${suffix}-db"
 api="${suffix}-api"
 worker="${suffix}-worker"
+media_worker="${suffix}-media-worker"
 cleanup() {
-  docker rm -fv "$api" "$worker" "$db" >/dev/null 2>&1 || true
+  docker rm -fv "$api" "$worker" "$media_worker" "$db" >/dev/null 2>&1 || true
   docker network rm "$suffix" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -38,6 +39,12 @@ curl --fail --silent "$endpoint/health/ready"
 curl --fail --silent "$endpoint/docs/" >/dev/null
 curl --fail --silent "$endpoint/openapi.json" >/dev/null
 curl --fail --silent "$endpoint/api/v1/sermons" >/dev/null
+worker_artifacts=$(mktemp -d)
+docker cp "$api:/app/media-worker" "$worker_artifacts/media-worker"
+docker cp "$api:/app/city4christ-media-worker.service" "$worker_artifacts/city4christ-media-worker.service"
+test -x "$worker_artifacts/media-worker"
+test -s "$worker_artifacts/city4christ-media-worker.service"
+rm -rf -- "$worker_artifacts"
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/me/access")" = 401
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/auth/reauthentication")" = 401
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/auth/mfa")" = 401
@@ -50,9 +57,13 @@ test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.e
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{"token":"invalid","password":"a sufficiently long password"}' "$endpoint/api/v1/auth/password/reset")" = 400
 test "$(docker inspect -f '{{.Config.User}}' "$api")" = 65532:65532
 docker run -d --name "$worker" "$image" /app/email-worker >/dev/null
+docker run -d --name "$media_worker" "$image" /app/media-worker >/dev/null
 sleep 2
 test "$(docker inspect -f '{{.State.Running}}' "$worker")" = true
+test "$(docker inspect -f '{{.State.Running}}' "$media_worker")" = true
 docker stop --time 15 "$api" "$worker" >/dev/null
+docker stop --time 10 "$media_worker" >/dev/null
 test "$(docker inspect -f '{{.State.ExitCode}}' "$api")" = 0
 test "$(docker inspect -f '{{.State.ExitCode}}' "$worker")" = 0
+test "$(docker inspect -f '{{.State.ExitCode}}' "$media_worker")" = 0
 echo 'Docker smoke checks passed with disposable PostgreSQL.'

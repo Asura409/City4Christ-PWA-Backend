@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.media-worker.example
 /email-worker
 /bin/
 /coverage.out

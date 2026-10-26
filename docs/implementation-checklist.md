@@ -78,10 +78,12 @@ delivery order:
 Group membership precedes group-specific posts and chats. Each slice keeps
 its server-side audience/ownership checks and React interface. Media bytes stay
 outside PostgreSQL behind a private object-storage adapter with short-lived signed
-URLs. Cloudflare R2 is the selected provider; uploads remain disabled until the
-media API enforces file-size/type limits, validates actual content, and applies the
-approved public/private access policy. Sermon and post attachments must use the
-same media policy. Push notifications are not a prerequisite for durable group or
+URLs. Cloudflare R2 is the selected provider; upload reservations and scanning
+now validate limits and actual content, with clean files promoted privately.
+Uploads remain disabled in a live environment until the VPS worker is installed
+and verified and the approved access policy is in place. Sermon and post
+attachments must use the same media policy. Push notifications are not a
+prerequisite for durable group or
 message state; record in-app events transactionally and add delivery separately.
 
 This priority update supersedes the default milestone order in the table and the
@@ -247,8 +249,20 @@ full cross-group read/write boundary audit; membership notifications remain open
 
 - [ ] **M5.1:** Choose storage/scanning provider and implement short-lived upload
   permissions, size/type/content validation, private object access and completion.
+  Progress: R2 and ClamAV are selected; PostgreSQL upload reservations and durable
+  leased scan jobs, authenticated presign/complete/status routes, magic-byte MIME
+  validation, ClamAV scanning and immutable clean-object promotion are implemented.
+  The VPS worker has not been deployed or acceptance-tested. Owner-scoped
+  post/sermon associations and short-lived signed reads are implemented; live
+  upload acceptance remains blocked on the private VPS scanner rollout and R2
+  CORS configuration.
 - [ ] **M5.2:** Implement audience-filtered feed, posts, comments, reactions and
   own-content edits/deletion with cursor pagination and retry-safe operations.
+  Progress: church-wide posts, paginated reads, and idempotent Amen reactions
+  with per-viewer state exist. Members can attach
+  up to four of their own clean uploads, and React editors can attach up to ten
+  clean uploads to sermon drafts before publishing. Comments and post edit/delete
+  remain open.
 - [ ] **M5.3:** Implement reports and authorized group/church moderation actions
   with reasons, audit, immediate feed/attachment removal and agreed retention/purge.
 - [ ] **M5.4:** Add secure profile avatars using the completed media pipeline;

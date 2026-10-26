@@ -11,6 +11,7 @@ fi
 release_sha=${BASH_REMATCH[1]}
 config_dir="$HOME/.config/city4christ"
 env_file="$config_dir/api.env"
+media_env_file="$config_dir/media-worker.env"
 container_name=city4christ-api
 previous_name=city4christ-api-previous
 image="city4christ-api:$release_sha"
@@ -104,3 +105,78 @@ if [[ "$healthy" != true ]]; then
 fi
 
 echo "API deployment $release_sha is ready at http://127.0.0.1:3000."
+
+# The native media worker is opt-in. It uses the VPS ClamAV Unix socket and is
+# installed only after an operator has configured its separate private env file.
+if [[ -r "$media_env_file" ]] && grep -Eq '^MEDIA_SCAN_ENABLED=true$' "$media_env_file"; then
+  for required_key in DATABASE_URL R2_ACCOUNT_ID R2_BUCKET MEDIA_R2_ACCESS_KEY_ID MEDIA_R2_SECRET_ACCESS_KEY; do
+    if ! grep -Eq "^${required_key}=.+$" "$media_env_file"; then
+      echo "Required media worker setting is missing or empty: $required_key" >&2
+      exit 1
+    fi
+  done
+  if ! command -v clamdscan >/dev/null || [[ ! -S /run/clamav/clamd.ctl ]] || ! id -nG | tr ' ' '\n' | grep -qx clamav; then
+    echo "Enable the host ClamAV Unix socket and grant the deploy user clamav group access before starting media scanning." >&2
+    exit 1
+  fi
+  if ! systemctl --user show-environment >/dev/null 2>&1 || [[ "$(loginctl show-user "$USER" --property=Linger --value 2>/dev/null)" != yes ]]; then
+    echo "A lingering systemd user manager is required for the persistent media worker." >&2
+    exit 1
+  fi
+
+  worker_tmp=$(mktemp -d)
+  worker_container=$(docker create "$image")
+  if ! docker cp "$worker_container:/app/media-worker" "$worker_tmp/media-worker" || \
+    ! docker cp "$worker_container:/app/city4christ-media-worker.service" "$worker_tmp/city4christ-media-worker.service"; then
+    docker rm "$worker_container" >/dev/null 2>&1 || true
+    rm -rf -- "$worker_tmp"
+    echo "The release image does not contain the media worker and its service unit." >&2
+    exit 1
+  fi
+  docker rm "$worker_container" >/dev/null
+  worker_bin_dir="$HOME/.local/lib/city4christ/media-worker"
+  worker_link="$HOME/.local/bin/city4christ-media-worker"
+  unit_dir="$HOME/.config/systemd/user"
+  worker_release="$worker_bin_dir/$release_sha"
+  old_worker_target=$(readlink "$worker_link" 2>/dev/null || true)
+  install -d -m 700 "$worker_bin_dir" "$HOME/.local/bin" "$unit_dir"
+  install -m 700 "$worker_tmp/media-worker" "$worker_release"
+  install -m 600 "$worker_tmp/city4christ-media-worker.service" "$unit_dir/city4christ-media-worker.service"
+  rm -rf -- "$worker_tmp"
+  ln -sfn "$worker_release" "$worker_link"
+  systemctl --user daemon-reload
+  worker_start_ok=false
+  if systemctl --user enable city4christ-media-worker.service; then
+    if [[ -n "$old_worker_target" ]]; then
+      if systemctl --user restart city4christ-media-worker.service; then worker_start_ok=true; fi
+    elif systemctl --user start city4christ-media-worker.service; then
+      worker_start_ok=true
+    fi
+  fi
+  if [[ "$worker_start_ok" != true ]]; then
+    if [[ -n "$old_worker_target" ]]; then
+      ln -sfn "$old_worker_target" "$worker_link"
+      systemctl --user restart city4christ-media-worker.service >/dev/null 2>&1 || true
+    else
+      systemctl --user disable --now city4christ-media-worker.service >/dev/null 2>&1 || true
+      rm -f "$worker_link"
+    fi
+    echo "The media worker failed to start; its prior version was restored when available." >&2
+    exit 1
+  fi
+  sleep 2
+  if ! systemctl --user is-active --quiet city4christ-media-worker.service; then
+    if [[ -n "$old_worker_target" ]]; then
+      ln -sfn "$old_worker_target" "$worker_link"
+      systemctl --user restart city4christ-media-worker.service >/dev/null 2>&1 || true
+    else
+      systemctl --user disable --now city4christ-media-worker.service >/dev/null 2>&1 || true
+      rm -f "$worker_link"
+    fi
+    echo "The media worker exited during startup; its prior version was restored when available." >&2
+    exit 1
+  fi
+  echo "Media scanning worker deployment $release_sha is active."
+elif [[ -r "$media_env_file" ]] && grep -Eq '^MEDIA_SCAN_ENABLED=false$' "$media_env_file" && systemctl --user show-environment >/dev/null 2>&1; then
+  systemctl --user disable --now city4christ-media-worker.service >/dev/null 2>&1 || true
+fi
