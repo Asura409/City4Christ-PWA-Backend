@@ -159,6 +159,42 @@ func prayerRoutes(mux *http.ServeMux, service *prayer.Service, sessions *auth.Se
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"data": result})
 	})
+	mux.HandleFunc("GET /api/v1/prayer/requests/{requestId}/encouragements", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeErrorFor(w, prayer.ErrInvalid)
+			return
+		}
+		items, err := service.ListEncouragements(r.Context(), actor, r.PathValue("requestId"))
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": items})
+	})
+	mux.HandleFunc("POST /api/v1/prayer/requests/{requestId}/encouragements", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeErrorFor(w, prayer.ErrInvalid)
+			return
+		}
+		input, ok := decodeJSON[prayer.EncouragementInput](w, r)
+		if !ok {
+			return
+		}
+		item, err := service.CreateEncouragement(r.Context(), actor, r.PathValue("requestId"), input)
+		if err != nil {
+			writeErrorFor(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, map[string]any{"data": item})
+	})
 	mux.HandleFunc("POST /api/v1/prayer/requests/{requestId}/reports", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {

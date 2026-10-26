@@ -9,12 +9,23 @@ The first Prayer Wall slice lets verified members create and read prayer request
 | `GET` | `/api/v1/prayer/requests/{requestId}` | Read one visible, non-archived request |
 | `PATCH` | `/api/v1/prayer/requests/{requestId}` | Owner marks `answered` or `archived` |
 | `PUT` | `/api/v1/prayer/requests/{requestId}/prayed` | Idempotently acknowledge an open, visible request |
+| `GET` | `/api/v1/prayer/requests/{requestId}/encouragements` | List encouragements under the parent request's visibility rules |
+| `POST` | `/api/v1/prayer/requests/{requestId}/encouragements` | Add a plain-text encouragement and notify the request owner |
 
 Every endpoint requires a verified member Bearer session. Community requests are available to signed-in members. Group requests are visible only to active members of that church group. Private requests are visible only to their owner. Staff roles have no privacy bypass. A request marked anonymous hides its author from other members; its owner sees `author: "You"` and `isOwner: true`. Inaccessible records return 404. Collections use a stable cursor and enforce visibility in SQL.
 
 Request bodies are trimmed plain text of 1–3,000 Unicode characters. `groupId` is required only for group visibility. Status filters support open and answered; archived requests are hidden from lists and detail. Reads/writes have account and IP limits.
 
-This slice does not include comments, file/media attachments, prayer notifications, or staff moderation.
+Encouragement bodies are trimmed plain text of 1–1,000 Unicode characters.
+Every encouragement list and create checks the parent request's current visibility:
+community, active group membership, or owner-only private access. Archived and
+expired requests cannot receive encouragements. Replies expose display names but
+never account IDs. Creating a reply writes a generic in-app notice to the request
+owner in the same PostgreSQL transaction; private request text is not copied into
+the notice. Notifications are not sent to the author when they encourage their own
+request.
+
+This slice does not include file/media attachments or staff moderation of encouragements.
 
 ## Reports, moderation and expiry
 

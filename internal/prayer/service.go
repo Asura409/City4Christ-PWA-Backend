@@ -160,6 +160,30 @@ func (s *Service) Pray(ctx context.Context, actor, requestID string) (Acknowledg
 	return Acknowledgement{Changed: changed}, err
 }
 
+func (s *Service) ListEncouragements(ctx context.Context, actor, requestID string) ([]Encouragement, error) {
+	if !validID(actor) {
+		return nil, ErrForbidden
+	}
+	if !validID(requestID) {
+		return nil, ErrNotFound
+	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return nil, err
+	}
+	return s.repo.ListEncouragements(ctx, actor, requestID)
+}
+
+func (s *Service) CreateEncouragement(ctx context.Context, actor, requestID string, input EncouragementInput) (Encouragement, error) {
+	input.Body = strings.TrimSpace(input.Body)
+	if !validID(actor) || !validID(requestID) || !utf8.ValidString(input.Body) || len([]rune(input.Body)) < 1 || len([]rune(input.Body)) > 1000 || strings.ContainsRune(input.Body, 0) {
+		return Encouragement{}, ErrInvalid
+	}
+	if _, err := s.repo.Expire(ctx, s.now().UTC(), 500); err != nil {
+		return Encouragement{}, err
+	}
+	return s.repo.CreateEncouragement(ctx, actor, requestID, input.Body, s.now().UTC())
+}
+
 func (s *Service) Report(ctx context.Context, actor, requestID string, input ReportInput) (Report, error) {
 	input.Reason = strings.TrimSpace(input.Reason)
 	input.Details = strings.TrimSpace(input.Details)

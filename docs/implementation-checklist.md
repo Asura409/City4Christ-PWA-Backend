@@ -319,19 +319,22 @@ information remains restricted to the permitted relationship and task.
 - [x] **M8.1a:** Requests expire after 180 days and are soft-archived in bounded
   batches during prayer API activity. Expired pending reports are closed without
   deleting request text, acknowledgements or audit history.
-- [ ] **M8.1b:** Prayer comments and attachment policy remain. Current visibility
-  supports community, active-group and private requests plus owner answer/archive.
+- [x] **M8.1b (comments):** Members can list/add 1,000-character encouragements
+  under the parent's community, active-group or owner-only private scope; hidden,
+  expired and archived requests return 404. The owner notice is transactionally
+  recorded without copying private prayer text. Attachment policy remains.
 - [x] **M8.2:** Members can report visible community/group requests. Scoped
   moderators review them with reasoned hide/dismiss actions and audit records;
   report responses and queues omit reporter and author identities.
-- [x] **M8.3:** React filters, composer, acknowledgements and owner status controls
-  use the real API with loading, empty and error states.
+- [x] **M8.3:** React filters, composer, acknowledgements, encouragements and owner
+  status controls use the real API with loading, empty and error states. The
+  encouragement flow passed desktop/mobile browser checks.
 - [x] **M8.4:** Disposable-PostgreSQL repository/service/global-app tests and
   desktop/mobile browser scenarios cover privacy boundaries, anonymity, status,
-  acknowledgements, expiry and report moderation. Media tests remain.
+  acknowledgements, encouragements, expiry and report moderation. Media tests remain.
 
-**Exit:** Core reports, moderation and expiry are implemented. Prayer comments,
-attachments and notification workflows remain before closure.
+**Exit:** Core reports, moderation, expiry, comments and in-app owner notices are
+implemented. Prayer attachments and their media tests remain before closure.
 
 ## M9 — Pastor directory and confidential care
 

@@ -6631,6 +6631,154 @@
           }
         ]
       }
+    },
+    "/api/v1/prayer/requests/{requestId}/encouragements": {
+      "get": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "List encouragements on a visible prayer request",
+        "operationId": "ListPrayerEncouragements",
+        "description": "Uses the parent request visibility: community requests are available to members, group requests to active group members, and private requests only to their owner. Archived, expired or inaccessible requests return 404. No staff privacy bypass.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Visible encouragements",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PrayerEncouragement"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Prayer Wall"
+        ],
+        "summary": "Share encouragement on a visible prayer request",
+        "operationId": "CreatePrayerEncouragement",
+        "description": "Request visibility is enforced on the write. Body is trimmed plain text of 1–1,000 Unicode characters. Archived, expired or inaccessible requests return 404. The owner receives an in-app notification in the same transaction; no request or author identity is copied into the notice.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PrayerEncouragementInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Encouragement created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PrayerEncouragement"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9413,6 +9561,57 @@
             "minimum": 1
           },
           "latestPublishedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PrayerEncouragementInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "description": "Trimmed plain text."
+          }
+        }
+      },
+      "PrayerEncouragement": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "requestId",
+          "body",
+          "author",
+          "isOwner",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string"
+          },
+          "author": {
+            "type": "string",
+            "description": "Display name or You; author account IDs are never returned."
+          },
+          "isOwner": {
+            "type": "boolean"
+          },
+          "createdAt": {
             "type": "string",
             "format": "date-time"
           }
