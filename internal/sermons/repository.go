@@ -69,7 +69,7 @@ func (r *Repository) List(ctx context.Context, o Options, after *Cursor, now tim
  WHERE published_at<=$1
  AND ($2='' OR strpos(lower(title || ' ' || summary),lower($2))>0)
  AND ($3='' OR lower(speaker)=lower($3))
- AND ($4='' OR lower(series)=lower($4))
+ AND ($4='' OR lower(BTRIM(series))=lower($4))
  AND ($5='' OR lower(topic)=lower($5))
  AND ($6::timestamptz IS NULL OR (published_at,id)<($6::timestamptz,$7::uuid))
  ORDER BY published_at DESC,id DESC LIMIT $8`, now.UTC(), o.Query, o.Speaker, o.Series, o.Topic, at, id, o.Limit+1)

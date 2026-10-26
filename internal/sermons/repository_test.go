@@ -91,6 +91,31 @@ func TestRepositoryPublicationAndFilters(t *testing.T) {
 		t.Fatalf("detail: %+v %v", a, err)
 	}
 }
+
+func TestRepositoryListsOnlyPublishedSeries(t *testing.T) {
+	db, now := fixture(t)
+	repo := NewRepository(db)
+	old := now.Add(-48 * time.Hour)
+	latest := now.Add(-time.Hour)
+	future := now.Add(time.Hour)
+	insert(t, db, "Foundations part one", "Pastor", "Foundations", "Faith", &old)
+	insert(t, db, "Foundations part two", "Pastor", " foundations ", "Faith", &latest)
+	insert(t, db, "Future message", "Pastor", "Future Hope", "Faith", &future)
+	insert(t, db, "Draft message", "Pastor", "Hidden Draft", "Faith", nil)
+	insert(t, db, "Standalone message", "Pastor", "", "Faith", &latest)
+
+	items, err := repo.ListSeries(context.Background(), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("expected one published named series: %+v", items)
+	}
+	if items[0].Name != "Foundations" || items[0].SermonCount != 2 || !items[0].LatestPublishedAt.Equal(latest) {
+		t.Fatalf("incorrect aggregate or normalization: %+v", items[0])
+	}
+}
+
 func TestRepositoryStablePageBoundaryAndMigrationPreservation(t *testing.T) {
 	db, now := fixture(t)
 	ctx := context.Background()

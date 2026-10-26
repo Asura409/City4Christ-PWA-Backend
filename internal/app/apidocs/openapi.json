@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.14.0",
+    "version": "1.16.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -67,6 +67,10 @@
     {
       "name": "Group Messaging",
       "description": "Durable group conversations with current membership checks."
+    },
+    {
+      "name": "Sermon member tools",
+      "description": "Member-owned playback progress and private sermon notes."
     }
   ],
   "paths": {
@@ -790,7 +794,7 @@
         ],
         "operationId": "ListPublishedSermons",
         "summary": "List published sermons",
-        "description": "Public metadata only. Sorted by publication time descending, then ID descending. Drafts (no publication timestamp) and future publications are hidden. Unknown or repeated query parameters and malformed cursors return 422. An empty catalog returns data: [] and nextCursor: \"\". Video links, when present, are canonical YouTube URLs. Editor writes use /admin/sermons; managed series resources and media hosting are deferred.",
+        "description": "Public metadata only. Sorted by publication time descending, then ID descending. Drafts (no publication timestamp) and future publications are hidden. Unknown or repeated query parameters and malformed cursors return 422. An empty catalog returns data: [] and nextCursor: \"\". Video links, when present, are canonical YouTube URLs. Editor writes use /admin/sermons; published series discovery is available at /api/v1/sermons/series; media hosting remains separate.",
         "security": [],
         "parameters": [
           {
@@ -6190,6 +6194,443 @@
           }
         }
       }
+    },
+    "/api/v1/sermons/series": {
+      "get": {
+        "tags": [
+          "Sermons"
+        ],
+        "summary": "List published sermon series",
+        "operationId": "ListPublishedSermonSeries",
+        "description": "Returns named series that contain at least one sermon published now. Names are trimmed and grouped case-insensitively. Each entry includes its published sermon count and latest publication time. Use the series name as the `series` filter on GET /api/v1/sermons.",
+        "responses": {
+          "200": {
+            "description": "Currently published sermon series, ordered by latest publication first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublishedSermonSeries"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/me/sermons/{sermonId}/progress": {
+      "get": {
+        "tags": [
+          "Sermon member tools"
+        ],
+        "summary": "Get own sermon playback progress",
+        "operationId": "GetOwnSermonProgress",
+        "description": "Returns position zero when no progress has been saved. Only the current member can read this record; unpublished sermons are not found.",
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current member progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "sermonId",
+                        "positionSeconds"
+                      ],
+                      "properties": {
+                        "sermonId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "positionSeconds": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 86400
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Sermon member tools"
+        ],
+        "summary": "Save own sermon playback progress",
+        "operationId": "SaveOwnSermonProgress",
+        "description": "Position can move forward or backward and is bounded to one day. Requires an active Bearer session and an allowed Origin.",
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "positionSeconds"
+                ],
+                "properties": {
+                  "positionSeconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 86400
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved progress",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "sermonId",
+                        "positionSeconds"
+                      ],
+                      "properties": {
+                        "sermonId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "positionSeconds": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 86400
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/me/sermons/{sermonId}/notes": {
+      "get": {
+        "tags": [
+          "Sermon member tools"
+        ],
+        "summary": "Get own private sermon note",
+        "operationId": "GetOwnSermonNote",
+        "description": "Returns data null when the member has not written a note. Notes are never visible to other members or staff. Unpublished sermons are not found.",
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Private note or null",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "nullable": true,
+                      "required": [
+                        "sermonId",
+                        "body",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "sermonId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Sermon member tools"
+        ],
+        "summary": "Create or update own private sermon note",
+        "operationId": "SaveOwnSermonNote",
+        "description": "One private note per member and published sermon, up to 10000 Unicode characters. Requires an active Bearer session and an allowed Origin.",
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "body"
+                ],
+                "properties": {
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 10000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved private note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "sermonId",
+                        "body",
+                        "updatedAt"
+                      ],
+                      "properties": {
+                        "sermonId": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "body": {
+                          "type": "string",
+                          "maxLength": 10000
+                        },
+                        "updatedAt": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Sermon member tools"
+        ],
+        "summary": "Delete own private sermon note",
+        "operationId": "DeleteOwnSermonNote",
+        "description": "Idempotently deletes the current member note only. Requires an active Bearer session and an allowed Origin.",
+        "parameters": [
+          {
+            "name": "sermonId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Note deleted or already absent"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -8948,6 +9389,30 @@
             "type": "string"
           },
           "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublishedSermonSeries": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "sermonCount",
+          "latestPublishedAt"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "sermonCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "latestPublishedAt": {
             "type": "string",
             "format": "date-time"
           }

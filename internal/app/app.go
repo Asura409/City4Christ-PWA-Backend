@@ -54,6 +54,7 @@ func New(db *sql.DB, config Config) http.Handler {
 		sessions, _ = auth.NewSessionService(db, auth.SessionConfig{Key: config.VerificationKey, Now: config.Now})
 		limiter = auth.NewRateLimiter(db, config.VerificationKey, config.Now)
 	}
+	sermonMemberRoutes(mux, sermons.NewMemberService(sermons.NewRepository(db), config.Now), sessions, limiter, config)
 	mux.HandleFunc("POST /api/v1/auth/register", registrationHandler(service, config.RegistrationEnabled, limiter))
 	mux.HandleFunc("POST /api/v1/auth/verification/verify", verificationHandler(verification, limiter))
 	mux.HandleFunc("POST /api/v1/auth/verification/resend", resendHandler(verification, limiter))

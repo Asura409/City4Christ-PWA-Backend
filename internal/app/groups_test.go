@@ -105,6 +105,19 @@ func TestGroupsThroughGlobalApp(t *testing.T) {
 	if err := db.QueryRow(`SELECT id FROM groups WHERE name='Prayer Team'`).Scan(&otherID); err != nil {
 		t.Fatal(err)
 	}
+	if w = request("POST", "/api/v1/groups/"+otherID+"/membership", memberToken, `{}`, "https://api.example"); w.Code != 200 {
+		t.Fatalf("request membership in second group: %d %s", w.Code, w.Body.String())
+	}
+	if w = request("GET", "/api/v1/groups/"+otherID+"/membership-requests", leaderToken, "", ""); w.Code != 403 {
+		t.Fatalf("cross-group leader read pending requests: %d %s", w.Code, w.Body.String())
+	}
+	if w = request("PATCH", "/api/v1/groups/"+otherID+"/membership-requests/"+member, leaderToken, `{"decision":"approve","reason":"Out of scope"}`, "https://api.example"); w.Code != 403 {
+		t.Fatalf("cross-group leader approved a request: %d %s", w.Code, w.Body.String())
+	}
+	var requestStatus string
+	if err := db.QueryRow(`SELECT status FROM group_memberships WHERE group_id=$1 AND account_id=$2`, otherID, member).Scan(&requestStatus); err != nil || requestStatus != "pending" {
+		t.Fatalf("cross-group action changed membership status to %q: %v", requestStatus, err)
+	}
 	if w = request("GET", "/api/v1/groups/"+otherID+"/members", leaderToken, "", ""); w.Code != 403 {
 		t.Fatalf("cross-group leader roster: %d %s", w.Code, w.Body.String())
 	}

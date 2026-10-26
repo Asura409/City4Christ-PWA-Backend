@@ -20,6 +20,14 @@ func sermonRoutes(mux *http.ServeMux, service *sermons.Service) {
 			writeError(w, 503, "unavailable", "Service unavailable.", nil)
 		}
 	}
+	mux.HandleFunc("GET /api/v1/sermons/series", func(w http.ResponseWriter, r *http.Request) {
+		items, err := service.ListSeries(r.Context())
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": items})
+	})
 	mux.HandleFunc("GET /api/v1/sermons", func(w http.ResponseWriter, r *http.Request) {
 		q, err := url.ParseQuery(r.URL.RawQuery)
 		if err != nil {

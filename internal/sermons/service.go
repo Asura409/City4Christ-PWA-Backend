@@ -48,6 +48,11 @@ func (s *Service) Get(ctx context.Context, id string) (Sermon, error) {
 	item.Attachments, err = media.SignAttachments(ctx, s.signer, item.Attachments)
 	return item, err
 }
+
+func (s *Service) ListSeries(ctx context.Context) ([]SeriesSummary, error) {
+	return s.repo.ListSeries(ctx, s.now())
+}
+
 func canonicalID(id string) bool {
 	parsed, err := uuid.Parse(id)
 	return err == nil && parsed.String() == id

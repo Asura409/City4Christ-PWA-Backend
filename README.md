@@ -39,7 +39,7 @@ For automatic, CI-gated deployment to the Hostinger VPS, see
 the current email worker separate and uses the VPS Docker logs for API request
 diagnostics.
 
-The first [sermon catalog slice](docs/sermon-catalog.md) adds public published-only metadata listing and detail, filters, and cursor pagination. The [publishing slice](docs/sermon-publishing.md) adds role-checked draft/publish controls, atomic audit records, version checks and canonical YouTube links. No content or privileged account is seeded automatically.
+The first [sermon catalog slice](docs/sermon-catalog.md) adds public published-only metadata listing and detail, filters, and cursor pagination. The [publishing slice](docs/sermon-publishing.md) adds role-checked draft/publish controls, atomic audit records, version checks and canonical YouTube links. [Member sermon tools](docs/sermon-member-tools.md) cover private notes and uploaded-media playback progress. No content or privileged account is seeded automatically.
 
 See [access management](docs/access-management.md) for scoped permissions, operator-provisioned access administrators and audited role delegation.
 
