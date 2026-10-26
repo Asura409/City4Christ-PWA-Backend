@@ -201,15 +201,25 @@ func TestGroupPrayerRequiresActiveMembership(t *testing.T) {
 func TestEncouragementsUsePrayerVisibilityAndAreListedInOrder(t *testing.T) {
 	ctx, service, owner, member, stranger, group := prayerFixture(t)
 	community, err := service.Create(ctx, owner, CreateInput{Body: "Community", Visibility: "community", Anonymous: true})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	private, err := service.Create(ctx, owner, CreateInput{Body: "Private", Visibility: "private"})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	groupRequest, err := service.Create(ctx, owner, CreateInput{Body: "Group", Visibility: "group", GroupID: group})
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	first, err := service.CreateEncouragement(ctx, member, community.ID, EncouragementInput{Body: "Praying for you"})
-	if err != nil || first.Author == "" || first.IsOwner { t.Fatalf("create community encouragement: %+v %v", first, err) }
+	if err != nil || first.Author == "" || first.IsOwner {
+		t.Fatalf("create community encouragement: %+v %v", first, err)
+	}
 	second, err := service.CreateEncouragement(ctx, owner, private.ID, EncouragementInput{Body: "A private reply"})
-	if err != nil || second.Author != "You" || !second.IsOwner { t.Fatalf("owner private reply: %+v %v", second, err) }
+	if err != nil || second.Author != "You" || !second.IsOwner {
+		t.Fatalf("owner private reply: %+v %v", second, err)
+	}
 	var notices int
 	if err := service.repo.db.QueryRowContext(ctx, `SELECT count(*) FROM notifications WHERE account_id=$1 AND kind='prayer.encouragement'`, owner).Scan(&notices); err != nil || notices != 1 {
 		t.Fatalf("owner notice missing or self-encouragement notified: count=%d err=%v", notices, err)
@@ -237,7 +247,9 @@ func TestEncouragementsUsePrayerVisibilityAndAreListedInOrder(t *testing.T) {
 	if _, err := service.CreateEncouragement(ctx, member, community.ID, EncouragementInput{Body: "  "}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("empty encouragement accepted: %v", err)
 	}
-	if changed, err := service.SetStatus(ctx, owner, community.ID, "archived"); err != nil || !changed { t.Fatalf("archive: %v %v", changed, err) }
+	if changed, err := service.SetStatus(ctx, owner, community.ID, "archived"); err != nil || !changed {
+		t.Fatalf("archive: %v %v", changed, err)
+	}
 	if _, err := service.CreateEncouragement(ctx, member, community.ID, EncouragementInput{Body: "Too late"}); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("archived prayer accepted encouragement: %v", err)
 	}

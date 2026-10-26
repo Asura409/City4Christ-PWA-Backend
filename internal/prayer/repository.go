@@ -369,7 +369,9 @@ func (r *Repository) ListEncouragements(ctx context.Context, actor, requestID st
   (p.visibility='group' AND EXISTS(SELECT 1 FROM group_memberships gm JOIN groups g ON g.id=gm.group_id
    WHERE gm.group_id=p.group_id AND gm.account_id=$2 AND gm.status='active' AND g.archived_at IS NULL))
  ) ORDER BY e.created_at,e.id`, requestID, actor)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	items := make([]Encouragement, 0)
 	visible := false
@@ -378,7 +380,9 @@ func (r *Repository) ListEncouragements(ctx context.Context, actor, requestID st
 		var item Encouragement
 		var id, replyID, body, author sql.NullString
 		var createdAt sql.NullTime
-		if err := rows.Scan(&id, &replyID, &body, &author, &item.IsOwner, &createdAt); err != nil { return nil, err }
+		if err := rows.Scan(&id, &replyID, &body, &author, &item.IsOwner, &createdAt); err != nil {
+			return nil, err
+		}
 		if !id.Valid {
 			continue
 		}
@@ -386,14 +390,20 @@ func (r *Repository) ListEncouragements(ctx context.Context, actor, requestID st
 		item.CreatedAt = createdAt.Time.UTC()
 		items = append(items, item)
 	}
-	if err := rows.Err(); err != nil { return nil, err }
-	if !visible { return nil, ErrNotFound }
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, ErrNotFound
+	}
 	return items, nil
 }
 
 func (r *Repository) CreateEncouragement(ctx context.Context, actor, requestID, body string, now time.Time) (Encouragement, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil { return Encouragement{}, err }
+	if err != nil {
+		return Encouragement{}, err
+	}
 	defer tx.Rollback()
 	var ownerID string
 	err = tx.QueryRowContext(ctx, `SELECT p.author_id FROM prayer_requests p WHERE p.id=$2
@@ -403,13 +413,19 @@ func (r *Repository) CreateEncouragement(ctx context.Context, actor, requestID, 
   (p.visibility='group' AND EXISTS(SELECT 1 FROM group_memberships gm JOIN groups g ON g.id=gm.group_id
    WHERE gm.group_id=p.group_id AND gm.account_id=$1 AND gm.status='active' AND g.archived_at IS NULL))
  ) FOR UPDATE OF p`, actor, requestID, now).Scan(&ownerID)
-	if errors.Is(err, sql.ErrNoRows) { return Encouragement{}, ErrNotFound }
-	if err != nil { return Encouragement{}, err }
+	if errors.Is(err, sql.ErrNoRows) {
+		return Encouragement{}, ErrNotFound
+	}
+	if err != nil {
+		return Encouragement{}, err
+	}
 	var item Encouragement
 	err = tx.QueryRowContext(ctx, `INSERT INTO prayer_encouragements(request_id,author_id,body,created_at)
 	 VALUES($1,$2,$3,$4) RETURNING id,request_id,body,author_id=$5,created_at`, requestID, actor, body, now, ownerID).
 		Scan(&item.ID, &item.RequestID, &item.Body, &item.IsOwner, &item.CreatedAt)
-	if err != nil { return Encouragement{}, err }
+	if err != nil {
+		return Encouragement{}, err
+	}
 	if item.IsOwner {
 		item.Author = "You"
 	} else if err := tx.QueryRowContext(ctx, `SELECT trim(first_name || ' ' || last_name) FROM accounts WHERE id=$1`, actor).Scan(&item.Author); err != nil {
@@ -419,11 +435,15 @@ func (r *Repository) CreateEncouragement(ctx context.Context, actor, requestID, 
 	if ownerID != actor {
 		if _, err := notifications.NewRepository(r.db).CreateTx(ctx, tx, notifications.CreateInput{
 			AccountID: ownerID, Kind: "prayer.encouragement", Title: "New prayer encouragement",
-			Body: "A member shared encouragement on your prayer request.",
+			Body:         "A member shared encouragement on your prayer request.",
 			ResourcePath: "/#/prayer/" + requestID,
-		}); err != nil { return Encouragement{}, err }
+		}); err != nil {
+			return Encouragement{}, err
+		}
 	}
-	if err := tx.Commit(); err != nil { return Encouragement{}, err }
+	if err := tx.Commit(); err != nil {
+		return Encouragement{}, err
+	}
 	return item, nil
 }
 
