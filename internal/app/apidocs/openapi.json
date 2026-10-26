@@ -5957,6 +5957,239 @@
           }
         }
       }
+    },
+    "/api/v1/posts/{postId}/comments": {
+      "get": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "List comments on a post",
+        "operationId": "ListPostComments",
+        "description": "Returns comments visible to authenticated church members, newest first, using stable cursor pagination.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Comment page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PostComment"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "nextCursor"
+                      ],
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "404": {
+            "description": "Post not found"
+          },
+          "422": {
+            "description": "Invalid pagination fields"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Comment on a post",
+        "operationId": "CreatePostComment",
+        "description": "Creates a plain-text comment visible to church members. Requires an allowed Origin. Members may delete their own comments.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostCommentInput"
+              },
+              "example": {
+                "body": "Praying with you."
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PostComment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid JSON"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found"
+          },
+          "413": {
+            "description": "Request body too large"
+          },
+          "415": {
+            "description": "JSON required"
+          },
+          "422": {
+            "description": "Comment body must contain 1–2,000 characters"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
+    },
+    "/api/v1/posts/{postId}/comments/{commentId}": {
+      "delete": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Delete your comment",
+        "operationId": "DeletePostComment",
+        "description": "Deletes a comment owned by the authenticated member. Other members’ comments are not revealed. Requires an allowed Origin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "commentId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Comment deleted"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post or owned comment not found"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7384,7 +7617,8 @@
           "createdAt",
           "attachments",
           "amenCount",
-          "reacted"
+          "reacted",
+          "commentCount"
         ],
         "properties": {
           "id": {
@@ -7422,6 +7656,11 @@
           "reacted": {
             "type": "boolean",
             "description": "Whether the authenticated viewer has reacted."
+          },
+          "commentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Total comments on this post."
           }
         }
       },
@@ -8656,6 +8895,61 @@
                 "type": "boolean"
               }
             }
+          }
+        }
+      },
+      "PostCommentInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Plain-text comment body."
+          }
+        }
+      },
+      "PostComment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "postId",
+          "authorId",
+          "firstName",
+          "lastName",
+          "body",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "postId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "authorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       }
