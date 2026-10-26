@@ -23,15 +23,16 @@ var (
 )
 
 type Post struct {
-	ID          string             `json:"id"`
-	AuthorID    string             `json:"authorId"`
-	FirstName   string             `json:"firstName"`
-	LastName    string             `json:"lastName"`
-	Body        string             `json:"body"`
-	CreatedAt   time.Time          `json:"createdAt"`
-	Attachments []media.Attachment `json:"attachments"`
-	AmenCount   int                `json:"amenCount"`
-	Reacted     bool               `json:"reacted"`
+	ID           string             `json:"id"`
+	AuthorID     string             `json:"authorId"`
+	FirstName    string             `json:"firstName"`
+	LastName     string             `json:"lastName"`
+	Body         string             `json:"body"`
+	CreatedAt    time.Time          `json:"createdAt"`
+	Attachments  []media.Attachment `json:"attachments"`
+	AmenCount    int                `json:"amenCount"`
+	Reacted      bool               `json:"reacted"`
+	CommentCount int                `json:"commentCount"`
 }
 
 type ReactionState struct {
@@ -85,7 +86,7 @@ func (r *Repository) Create(ctx context.Context, author string, in CreateInput, 
  INSERT INTO church_posts(author_id,body) VALUES($1,$2)
  RETURNING id,author_id,body,created_at
 )
-SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,0::bigint,false
+SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,0::bigint,false,0::bigint
 FROM created p JOIN accounts a ON a.id=p.author_id`, author, in.Body))
 	if err != nil {
 		return Post{}, err
@@ -118,7 +119,8 @@ func (r *Repository) List(ctx context.Context, o Options, after *Cursor, viewerI
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,
  (SELECT count(*) FROM post_reactions pr WHERE pr.post_id=p.id AND pr.reaction='amen'),
- EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=NULLIF($4,'')::uuid AND pr.reaction='amen')
+ EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=NULLIF($4,'')::uuid AND pr.reaction='amen'),
+ (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id)
  FROM church_posts p JOIN accounts a ON a.id=p.author_id
  WHERE ($1::timestamptz IS NULL OR (p.created_at,p.id)<($1::timestamptz,$2::uuid))
 	ORDER BY p.created_at DESC,p.id DESC LIMIT $3`, at, id, o.Limit+1, viewerID)
@@ -169,7 +171,7 @@ func loadPostAttachments(ctx context.Context, q interface {
 
 func scan(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
-	err := row.Scan(&p.ID, &p.AuthorID, &p.FirstName, &p.LastName, &p.Body, &p.CreatedAt, &p.AmenCount, &p.Reacted)
+	err := row.Scan(&p.ID, &p.AuthorID, &p.FirstName, &p.LastName, &p.Body, &p.CreatedAt, &p.AmenCount, &p.Reacted, &p.CommentCount)
 	p.CreatedAt = p.CreatedAt.UTC()
 	return p, err
 }

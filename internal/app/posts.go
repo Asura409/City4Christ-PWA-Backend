@@ -23,33 +23,8 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 		}
 		writeError(w, 503, "unavailable", "Service unavailable.", nil)
 	}
-	authorize := func(w http.ResponseWriter, r *http.Request, write bool) (string, bool) {
-		if sessions == nil || !validOrigin(c.AppOrigin) {
-			writeError(w, 503, "unavailable", "Post services are not configured.", nil)
-			return "", false
-		}
-		if write && !originAllowed(c, r.Header.Get("Origin")) {
-			writeError(w, 403, "origin_not_allowed", "Supply an allowed Origin header.", nil)
-			return "", false
-		}
-		actor, err := sessions.Authenticate(r.Context(), requestAccess(r))
-		if err != nil {
-			sessionError(w, err)
-			return "", false
-		}
-		if !accountLimit(w, r, limiter, "posts", actor.ID, 60, time.Minute) {
-			return "", false
-		}
-		if limiter != nil {
-			allowed, e := limiter.Allow(r.Context(), "ip/posts", clientIP(r, c), 120, time.Minute)
-			if !limitResult(w, allowed, e) {
-				return "", false
-			}
-		}
-		return actor.ID, true
-	}
 	mux.HandleFunc("GET /api/v1/posts", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := authorize(w, r, false)
+		actor, ok := authorizePostMember(w, r, sessions, limiter, c, "posts", false)
 		if !ok {
 			return
 		}
@@ -80,7 +55,7 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 		writeJSON(w, 200, map[string]any{"data": page.Items, "meta": map[string]string{"nextCursor": page.NextCursor}})
 	})
 	mux.HandleFunc("POST /api/v1/posts", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := authorize(w, r, true)
+		actor, ok := authorizePostMember(w, r, sessions, limiter, c, "posts", true)
 		if !ok {
 			return
 		}
@@ -100,7 +75,7 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 		writeJSON(w, 201, map[string]any{"data": post})
 	})
 	mux.HandleFunc("PUT /api/v1/posts/{postId}/reaction", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := authorize(w, r, true)
+		actor, ok := authorizePostMember(w, r, sessions, limiter, c, "posts", true)
 		if !ok {
 			return
 		}
@@ -126,7 +101,7 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 		writeJSON(w, 200, map[string]any{"data": state})
 	})
 	mux.HandleFunc("DELETE /api/v1/posts/{postId}/reaction", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := authorize(w, r, true)
+		actor, ok := authorizePostMember(w, r, sessions, limiter, c, "posts", true)
 		if !ok {
 			return
 		}
@@ -141,4 +116,30 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 		}
 		writeJSON(w, 200, map[string]any{"data": state})
 	})
+}
+
+func authorizePostMember(w http.ResponseWriter, r *http.Request, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config, bucket string, write bool) (string, bool) {
+	if sessions == nil || !validOrigin(c.AppOrigin) {
+		writeError(w, 503, "unavailable", "Post services are not configured.", nil)
+		return "", false
+	}
+	if write && !originAllowed(c, r.Header.Get("Origin")) {
+		writeError(w, 403, "origin_not_allowed", "Supply an allowed Origin header.", nil)
+		return "", false
+	}
+	actor, err := sessions.Authenticate(r.Context(), requestAccess(r))
+	if err != nil {
+		sessionError(w, err)
+		return "", false
+	}
+	if !accountLimit(w, r, limiter, bucket, actor.ID, 60, time.Minute) {
+		return "", false
+	}
+	if limiter != nil {
+		allowed, e := limiter.Allow(r.Context(), "ip/"+bucket, clientIP(r, c), 120, time.Minute)
+		if !limitResult(w, allowed, e) {
+			return "", false
+		}
+	}
+	return actor.ID, true
 }

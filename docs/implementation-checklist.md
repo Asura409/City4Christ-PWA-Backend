@@ -258,11 +258,11 @@ full cross-group read/write boundary audit; membership notifications remain open
   CORS configuration.
 - [ ] **M5.2:** Implement audience-filtered feed, posts, comments, reactions and
   own-content edits/deletion with cursor pagination and retry-safe operations.
-  Progress: church-wide posts, paginated reads, and idempotent Amen reactions
-  with per-viewer state exist. Members can attach
+  Progress: church-wide posts, paginated reads, idempotent Amen reactions with
+  per-viewer state, and member-visible comments with cursor pagination and
+  owner-only deletion exist. Members can attach
   up to four of their own clean uploads, and React editors can attach up to ten
-  clean uploads to sermon drafts before publishing. Comments and post edit/delete
-  remain open.
+  clean uploads to sermon drafts before publishing. Post edit/delete remain open.
 - [ ] **M5.3:** Implement reports and authorized group/church moderation actions
   with reasons, audit, immediate feed/attachment removal and agreed retention/purge.
 - [ ] **M5.4:** Add secure profile avatars using the completed media pipeline;

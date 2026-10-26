@@ -66,6 +66,34 @@ func TestPostsThroughGlobalApp(t *testing.T) {
 	if err := json.Unmarshal(created.Body.Bytes(), &post); err != nil {
 		t.Fatal(err)
 	}
+	commentPath := "/api/v1/posts/" + post.Data.ID + "/comments"
+	comment := request("POST", commentPath, memberToken, `{"body":"Praying with you."}`, "https://api.example")
+	if comment.Code != 201 || !strings.Contains(comment.Body.String(), `"body":"Praying with you."`) {
+		t.Fatalf("create post comment: %d %s", comment.Code, comment.Body.String())
+	}
+	var createdComment struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(comment.Body.Bytes(), &createdComment); err != nil {
+		t.Fatal(err)
+	}
+	if w := request("GET", commentPath, otherToken, "", ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Praying with you.") {
+		t.Fatalf("member reads church-wide comments: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", commentPath, "", "", ""); w.Code != 401 {
+		t.Fatalf("anonymous member read comments: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", commentPath+"/"+createdComment.Data.ID, otherToken, "", "https://api.example"); w.Code != 404 {
+		t.Fatalf("member deleted another author’s comment: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", commentPath+"/"+createdComment.Data.ID, memberToken, "", "https://api.example"); w.Code != 204 {
+		t.Fatalf("comment owner deletes comment: %d %s", w.Code, w.Body.String())
+	}
+	if w := request("POST", commentPath, memberToken, `{"body":"No origin"}`, ""); w.Code != 403 {
+		t.Fatalf("comment write without origin: %d %s", w.Code, w.Body.String())
+	}
 	if w := request("PUT", "/api/v1/posts/"+post.Data.ID+"/reaction", memberToken, `{"reaction":"amen"}`, "https://api.example"); w.Code != 200 || !strings.Contains(w.Body.String(), `"amenCount":1`) || !strings.Contains(w.Body.String(), `"reacted":true`) {
 		t.Fatalf("set Amen: %d %s", w.Code, w.Body.String())
 	}
@@ -115,7 +143,7 @@ func TestPostsContractRequiresMemberAuthentication(t *testing.T) {
 	}
 	for _, endpoint := range []struct {
 		path, method string
-	}{{"/api/v1/posts", "get"}, {"/api/v1/posts", "post"}, {"/api/v1/posts/{postId}/reaction", "put"}, {"/api/v1/posts/{postId}/reaction", "delete"}} {
+	}{{"/api/v1/posts", "get"}, {"/api/v1/posts", "post"}, {"/api/v1/posts/{postId}/reaction", "put"}, {"/api/v1/posts/{postId}/reaction", "delete"}, {"/api/v1/posts/{postId}/comments", "get"}, {"/api/v1/posts/{postId}/comments", "post"}, {"/api/v1/posts/{postId}/comments/{commentId}", "delete"}} {
 		security, ok := spec.Paths[endpoint.path][endpoint.method]["security"].([]any)
 		if !ok || len(security) != 1 {
 			t.Fatalf("%s %s endpoint must require bearer authentication", endpoint.method, endpoint.path)
