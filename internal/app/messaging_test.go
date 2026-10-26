@@ -133,6 +133,7 @@ func TestMessagingOpenAPIRequiresBearerForEveryRoute(t *testing.T) {
 		"/api/v1/groups/{groupId}/messages":               {"get", "post"},
 		"/api/v1/groups/{groupId}/messages/{messageId}":   {"delete"},
 		"/api/v1/groups/{groupId}/read":                   {"put"},
+		"/api/v1/realtime/tickets":                        {"post"},
 	}
 	for path, methods := range want {
 		var pathItem map[string]json.RawMessage

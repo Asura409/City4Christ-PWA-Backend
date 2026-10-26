@@ -6779,6 +6779,38 @@
           }
         }
       }
+    },
+    "/api/v1/realtime/tickets": {
+      "post": {
+        "tags": [
+          "Messaging"
+        ],
+        "summary": "Issue a short-lived realtime connection ticket",
+        "description": "Requires a verified Bearer session and allowed Origin. The opaque ticket is single-use, expires after 30 seconds, and should be sent in the first WebSocket frame, never in the URL.",
+        "operationId": "IssueRealtimeTicket",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Ticket issued; response is no-store."
+          },
+          "401": {
+            "description": "Invalid or missing access token."
+          },
+          "403": {
+            "description": "Origin is not allowed."
+          },
+          "429": {
+            "description": "Account or IP rate limit exceeded."
+          },
+          "503": {
+            "description": "Realtime ticket service unavailable."
+          }
+        }
+      }
     }
   },
   "components": {

@@ -361,7 +361,8 @@ read private purposes or notes.
 - [x] **M10.3:** Durable group conversations, active-membership access, read
   markers and scoped moderation are implemented. Messages are redacted on removal;
   membership is rechecked for reads, writes and history access.
-- [ ] **M10.4:** Realtime/WSS tickets, reconnect history and bounded fanout remain.
+- [ ] **M10.4:** Short-lived, single-use realtime ticket issuance is implemented;
+  WebSocket authentication, reconnect history and bounded fanout remain.
 - [x] **M10.5:** React conversation list, member search, send and read receipt use the
   real API with desktop/mobile browser scenarios.
 - [ ] **M10.6:** Group REST lifecycle and authorization checks now cover active
