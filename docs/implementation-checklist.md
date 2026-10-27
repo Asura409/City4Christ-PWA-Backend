@@ -368,16 +368,17 @@ read private purposes or notes.
   catch-up source; shared fanout across API instances is not implemented.
 - [x] **M10.5:** React conversation list, member search, send and read receipt use the
   real API with desktop/mobile browser scenarios.
-- [ ] **M10.6:** Group REST lifecycle and authorization checks cover active
+- [x] **M10.6:** Group REST lifecycle and authorization checks cover active
   membership, leave/revocation and moderation. Server-side WSS handshake, direct
   message delivery, ticket replay rejection and bounded fanout are implemented.
-  Frontend socket lifecycle/reconnect UX, group delivery end-to-end coverage,
-  logout/expiry lifecycle coverage and multi-instance fanout remain.
+  React reconnect catch-up is browser-tested, and disposable-PostgreSQL HTTP plus
+  WebSocket integration tests verify group delivery only to current members and
+  socket closure after logout or session expiry. Multi-instance fanout is deferred
+  while the API remains single-server.
 
 **Exit:** Direct and group REST messaging plus single-instance server realtime
-delivery are implemented. M10 stays open for frontend reconnect lifecycle,
-group WebSocket integration coverage, broader auth lifecycle tests and shared
-fanout if the API runs more than one instance.
+delivery are implemented and covered by frontend browser and backend integration
+checks. Shared fanout is deferred unless the API runs more than one instance.
 
 ## M11 — Complete Word/live and the home/install experience
 

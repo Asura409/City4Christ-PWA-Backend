@@ -15,7 +15,7 @@ WHERE m.conversation_id=$1 ORDER BY m.account_id`, conversationID)
 }
 
 func (r *Repository) groupRealtimeRecipients(ctx context.Context, groupID string) ([]string, error) {
-	rows, err := r.db.QueryContext(ctx, `SELECT DISTINCT a.id::text
+	rows, err := r.db.QueryContext(ctx, `SELECT a.id::text
 FROM groups g
 JOIN accounts a ON a.email_verified_at IS NOT NULL
 WHERE g.id=$1 AND g.archived_at IS NULL AND (
@@ -27,7 +27,7 @@ WHERE g.id=$1 AND g.archived_at IS NULL AND (
    (ar.role IN ('super_administrator','assistant_pastor') AND ar.scope='') OR ar.role='ministry_leader'
   )
  ))
-) ORDER BY a.id`, groupID)
+) ORDER BY a.id::text`, groupID)
 	if err != nil {
 		return nil, err
 	}
