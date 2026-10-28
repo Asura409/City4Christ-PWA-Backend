@@ -3550,6 +3550,139 @@
         }
       }
     },
+    "/api/v1/posts/{postId}": {
+      "put": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Edit your church post",
+        "operationId": "UpdateChurchPost",
+        "description": "Replaces the authenticated author’s post body and complete attachment list. An omitted attachmentIds field clears all attachments. Requires an allowed Origin and JSON body.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChurchPostInput"
+              },
+              "example": {
+                "body": "Updated church announcement.",
+                "attachmentIds": [
+                  "88888888-8888-4888-8888-888888888888"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChurchPost"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Standard API error response"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found or not owned by the caller"
+          },
+          "413": {
+            "description": "Standard API error response"
+          },
+          "415": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Invalid post body or attachments"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Delete your church post",
+        "operationId": "DeleteChurchPost",
+        "description": "Removes the author’s post from the feed, scrubs its text and removes its comments, reactions and media associations. Requires an allowed Origin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Post deleted"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found or not owned by the caller"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
+    },
     "/api/v1/prayer/requests": {
       "get": {
         "tags": [
@@ -6832,6 +6965,352 @@
           }
         }
       }
+    },
+    "/api/v1/content-reports": {
+      "post": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Report a post or comment",
+        "operationId": "ReportCommunityContent",
+        "description": "A verified member can report visible content by another member. Duplicate pending reports and self-reports are rejected.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityContentReportInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommunityContentReport"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Origin is not allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Self-report, duplicate, or state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/content-reports": {
+      "get": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "List community content reports",
+        "operationId": "ListCommunityContentReports",
+        "description": "Requires the global groups.content.moderate capability. Ministry-scoped leaders cannot review the church-wide feed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "resolved",
+                "dismissed"
+              ],
+              "default": "pending"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report queue page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CommunityContentReport"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Moderation permission required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/moderation/content-reports/{reportId}/review": {
+      "post": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Review a community content report",
+        "operationId": "ReviewCommunityContentReport",
+        "description": "A moderator must provide a reason to hide the reported content or dismiss the report. Review and audit are transactional.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reportId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommunityContentReviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Report reviewed"
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Moderation permission required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Report not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Report already reviewed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8246,6 +8725,32 @@
           }
         },
         "description": "Post body plus optional IDs of the author’s clean, scanned media uploads."
+      },
+      "UpdateChurchPostInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000,
+            "description": "Replacement plain text post body."
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Full replacement list of owned uploads that passed malware scanning. Omit or pass an empty list to remove all attachments."
+          }
+        },
+        "description": "Full replacement post body and optional attachment IDs."
       },
       "ChurchPost": {
         "type": "object",
@@ -9667,6 +10172,122 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "CommunityContentReportInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "targetType",
+          "targetId",
+          "reason"
+        ],
+        "properties": {
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "post",
+              "comment"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "spam",
+              "harassment",
+              "inappropriate",
+              "hate",
+              "threats",
+              "other"
+            ]
+          },
+          "details": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        }
+      },
+      "CommunityContentReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "targetType",
+          "targetId",
+          "postId",
+          "content",
+          "reason",
+          "details",
+          "status",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "post",
+              "comment"
+            ]
+          },
+          "targetId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "postId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "content": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "details": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "resolved",
+              "dismissed"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CommunityContentReviewInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision",
+          "reason"
+        ],
+        "properties": {
+          "decision": {
+            "type": "string",
+            "enum": [
+              "hide",
+              "dismiss"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
           }
         }
       }

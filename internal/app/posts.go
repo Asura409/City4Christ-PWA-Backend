@@ -12,6 +12,7 @@ import (
 )
 
 func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
+	postOwnershipRoutes(mux, service, sessions, limiter, c)
 	writeErrorFor := func(w http.ResponseWriter, err error) {
 		if errors.Is(err, posts.ErrNotFound) {
 			writeError(w, 404, "post_not_found", "Post not found.", nil)

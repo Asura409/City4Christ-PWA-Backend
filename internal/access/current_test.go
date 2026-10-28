@@ -52,7 +52,7 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []Capability{{Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
+	expected := []Capability{{Permission: "groups.content.moderate", Scope: a}, {Permission: "groups.content.moderate", Scope: b}, {Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
 	if len(current.Roles) != 5 || !reflect.DeepEqual(current.Capabilities, expected) {
 		t.Fatalf("incorrect scoped/deduplicated snapshot: %+v", current)
 	}
@@ -110,5 +110,16 @@ func TestPrayerModerationCapabilityRoleScopes(t *testing.T) {
 	}
 	if roles := rolesForPermission("prayer.moderate", "11111111-1111-4111-8111-111111111111"); !reflect.DeepEqual(roles, []string{"ministry_leader"}) {
 		t.Fatalf("group prayer moderation roles=%v", roles)
+	}
+}
+
+func TestCommunityContentModerationCapabilityScopes(t *testing.T) {
+	global := rolesForPermission("groups.content.moderate", "")
+	expected := []string{"super_administrator", "assistant_pastor", "staff"}
+	if !reflect.DeepEqual(global, expected) {
+		t.Fatalf("global content moderation roles=%v, want %v", global, expected)
+	}
+	if roles := rolesForPermission("groups.content.moderate", "11111111-1111-4111-8111-111111111111"); !reflect.DeepEqual(roles, []string{"ministry_leader"}) {
+		t.Fatalf("ministry content moderation roles=%v", roles)
 	}
 }

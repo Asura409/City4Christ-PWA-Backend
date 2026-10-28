@@ -195,3 +195,87 @@ func TestAmenReactionsAreIdempotentAndScopedPerMember(t *testing.T) {
 		t.Fatalf("unknown post reaction error=%v", err)
 	}
 }
+
+func TestMembersCanEditAndDeleteOnlyTheirOwnPosts(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	account := func(email string) string {
+		t.Helper()
+		var id string
+		if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES($1,'Member','Tester',now()) RETURNING id`, email).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	author, other := account("post-owner@example.invalid"), account("post-other@example.invalid")
+	firstUpload := insertPostUpload(t, db, author, "available")
+	secondUpload := insertPostUpload(t, db, author, "available")
+	foreignUpload := insertPostUpload(t, db, other, "available")
+	queuedUpload := insertPostUpload(t, db, author, "scan_queued")
+	service := NewService(NewRepository(db), &postDownloadSigner{})
+	created, err := service.Create(ctx, author, CreateInput{Body: "Original post", AttachmentIDs: []string{firstUpload}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := service.Update(ctx, author, created.ID, UpdateInput{Body: "Edited post", AttachmentIDs: []string{secondUpload}})
+	if err != nil {
+		t.Fatalf("owner edit: %v", err)
+	}
+	if updated.Body != "Edited post" || len(updated.Attachments) != 1 || updated.Attachments[0].ID != secondUpload {
+		t.Fatalf("updated post = %+v", updated)
+	}
+	withoutMedia, err := service.Update(ctx, author, created.ID, UpdateInput{Body: "Edited without media"})
+	if err != nil || withoutMedia.Body != "Edited without media" || len(withoutMedia.Attachments) != 0 {
+		t.Fatalf("update without attachment IDs must clear attachments: %+v %v", withoutMedia, err)
+	}
+	for label, attachmentID := range map[string]string{"another member's upload": foreignUpload, "unscanned upload": queuedUpload} {
+		if _, err := service.Update(ctx, author, created.ID, UpdateInput{Body: "Invalid attachment", AttachmentIDs: []string{attachmentID}}); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("%s accepted for edit: %v", label, err)
+		}
+	}
+	if _, err := service.Update(ctx, author, created.ID, UpdateInput{Body: strings.Repeat("x", 5001)}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("oversized post edit accepted: %v", err)
+	}
+	if _, err := service.Update(ctx, other, created.ID, UpdateInput{Body: "Hijacked"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("non-owner edit error = %v; want not found", err)
+	}
+	if _, err := service.Update(ctx, author, created.ID, UpdateInput{Body: " "}); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("empty edit error = %v; want invalid", err)
+	}
+
+	if err := service.Delete(ctx, other, created.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("non-owner delete error = %v; want not found", err)
+	}
+	if err := service.Delete(ctx, author, created.ID); err != nil {
+		t.Fatalf("owner delete: %v", err)
+	}
+	if err := service.Delete(ctx, author, created.ID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("repeat delete error = %v; want not found", err)
+	}
+	if _, err := service.Update(ctx, author, created.ID, UpdateInput{Body: "resurrected"}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("edit deleted post error = %v; want not found", err)
+	}
+	page, err := service.List(ctx, Options{})
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("deleted post appears in feed: %+v %v", page, err)
+	}
+	var body string
+	var deletedAt sql.NullTime
+	if err := db.QueryRow(`SELECT body,deleted_at FROM church_posts WHERE id=$1`, created.ID).Scan(&body, &deletedAt); err != nil {
+		t.Fatal(err)
+	}
+	if body != "[Post deleted]" || !deletedAt.Valid {
+		t.Fatalf("deleted post wasn't scrubbed: body=%q deletedAt=%v", body, deletedAt)
+	}
+	var attachmentCount int
+	if err := db.QueryRow(`SELECT count(*) FROM post_media_attachments WHERE post_id=$1`, created.ID).Scan(&attachmentCount); err != nil {
+		t.Fatal(err)
+	}
+	if attachmentCount != 0 {
+		t.Fatalf("deleted post retains attachment associations: %d", attachmentCount)
+	}
+}

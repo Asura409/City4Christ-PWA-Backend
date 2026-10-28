@@ -60,7 +60,7 @@ func (r *CommentRepository) Create(ctx context.Context, authorID, postID, body s
 	}
 	defer tx.Rollback()
 	var exists string
-	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 FOR KEY SHARE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
 		return Comment{}, ErrCommentNotFound
 	} else if err != nil {
 		return Comment{}, err
@@ -82,7 +82,7 @@ FROM created c JOIN accounts a ON a.id=c.account_id`, postID, authorID, body))
 
 func (r *CommentRepository) List(ctx context.Context, postID string, options CommentOptions, after *commentCursor) ([]Comment, error) {
 	var exists bool
-	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM church_posts WHERE id=$1)`, postID).Scan(&exists); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM church_posts WHERE id=$1 AND deleted_at IS NULL)`, postID).Scan(&exists); err != nil {
 		return nil, err
 	}
 	if !exists {
@@ -94,8 +94,9 @@ func (r *CommentRepository) List(ctx context.Context, postID string, options Com
 		createdAt, id = &after.CreatedAt, &after.ID
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT c.id::text,c.post_id::text,c.account_id::text,a.first_name,a.last_name,c.body,c.created_at
-		FROM post_comments c JOIN accounts a ON a.id=c.account_id
-		WHERE c.post_id=$1 AND ($2::timestamptz IS NULL OR (c.created_at,c.id)<($2::timestamptz,$3::uuid))
+		FROM post_comments c JOIN accounts a ON a.id=c.account_id JOIN church_posts p ON p.id=c.post_id
+		WHERE c.post_id=$1 AND c.deleted_at IS NULL AND p.deleted_at IS NULL
+		AND ($2::timestamptz IS NULL OR (c.created_at,c.id)<($2::timestamptz,$3::uuid))
 		ORDER BY c.created_at DESC,c.id DESC LIMIT $4`, postID, createdAt, id, options.Limit+1)
 	if err != nil {
 		return nil, err
@@ -113,7 +114,9 @@ func (r *CommentRepository) List(ctx context.Context, postID string, options Com
 }
 
 func (r *CommentRepository) Delete(ctx context.Context, authorID, postID, commentID string) error {
-	result, err := r.db.ExecContext(ctx, `DELETE FROM post_comments WHERE id=$1 AND post_id=$2 AND account_id=$3`, commentID, postID, authorID)
+	result, err := r.db.ExecContext(ctx, `UPDATE post_comments SET body='[Comment deleted]',deleted_at=now()
+		WHERE id=$1 AND post_id=$2 AND account_id=$3 AND deleted_at IS NULL AND EXISTS(
+		SELECT 1 FROM church_posts p WHERE p.id=post_comments.post_id AND p.deleted_at IS NULL)`, commentID, postID, authorID)
 	if err != nil {
 		return err
 	}
