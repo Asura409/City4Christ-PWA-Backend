@@ -3550,6 +3550,139 @@
         }
       }
     },
+    "/api/v1/posts/{postId}": {
+      "put": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Edit your church post",
+        "operationId": "UpdateChurchPost",
+        "description": "Replaces the authenticated author’s post body and complete attachment list. An omitted attachmentIds field clears all attachments. Requires an allowed Origin and JSON body.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChurchPostInput"
+              },
+              "example": {
+                "body": "Updated church announcement.",
+                "attachmentIds": [
+                  "88888888-8888-4888-8888-888888888888"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated post",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChurchPost"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Standard API error response"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found or not owned by the caller"
+          },
+          "413": {
+            "description": "Standard API error response"
+          },
+          "415": {
+            "description": "Standard API error response"
+          },
+          "422": {
+            "description": "Invalid post body or attachments"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Community"
+        ],
+        "summary": "Delete your church post",
+        "operationId": "DeleteChurchPost",
+        "description": "Removes the author’s post from the feed, scrubs its text and removes its comments, reactions and media associations. Requires an allowed Origin.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "postId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Post deleted"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed"
+          },
+          "404": {
+            "description": "Post not found or not owned by the caller"
+          },
+          "429": {
+            "description": "Account or shared IP request limit exceeded"
+          },
+          "503": {
+            "description": "Standard API error response"
+          }
+        }
+      }
+    },
     "/api/v1/prayer/requests": {
       "get": {
         "tags": [
@@ -8246,6 +8379,32 @@
           }
         },
         "description": "Post body plus optional IDs of the author’s clean, scanned media uploads."
+      },
+      "UpdateChurchPostInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "body"
+        ],
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 5000,
+            "description": "Replacement plain text post body."
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Full replacement list of owned uploads that passed malware scanning. Omit or pass an empty list to remove all attachments."
+          }
+        },
+        "description": "Full replacement post body and optional attachment IDs."
       },
       "ChurchPost": {
         "type": "object",

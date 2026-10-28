@@ -60,7 +60,7 @@ func (r *CommentRepository) Create(ctx context.Context, authorID, postID, body s
 	}
 	defer tx.Rollback()
 	var exists string
-	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 FOR KEY SHARE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
 		return Comment{}, ErrCommentNotFound
 	} else if err != nil {
 		return Comment{}, err
@@ -82,7 +82,7 @@ FROM created c JOIN accounts a ON a.id=c.account_id`, postID, authorID, body))
 
 func (r *CommentRepository) List(ctx context.Context, postID string, options CommentOptions, after *commentCursor) ([]Comment, error) {
 	var exists bool
-	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM church_posts WHERE id=$1)`, postID).Scan(&exists); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM church_posts WHERE id=$1 AND deleted_at IS NULL)`, postID).Scan(&exists); err != nil {
 		return nil, err
 	}
 	if !exists {

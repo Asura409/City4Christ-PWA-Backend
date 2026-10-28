@@ -262,13 +262,20 @@ full cross-group read/write boundary audit; membership notifications remain open
   per-viewer state, and member-visible comments with cursor pagination and
   owner-only deletion exist. Members can attach
   up to four of their own clean uploads, and React editors can attach up to ten
-  clean uploads to sermon drafts before publishing. Post edit/delete remain open.
+  clean uploads to sermon drafts before publishing. Member-owned post editing and
+  deletion are implemented locally: PUT replaces the body and complete list of
+  already-scanned attachments; DELETE scrubs post text, removes it from feeds,
+  deletes its comments/reactions and detaches media. PostgreSQL and global-app
+  tests cover ownership and deleted-content denial; desktop/mobile React controls
+  are connected. Reports/moderation and live media acceptance remain open.
 - [ ] **M5.3:** Implement reports and authorized group/church moderation actions
   with reasons, audit, immediate feed/attachment removal and agreed retention/purge.
 - [ ] **M5.4:** Add secure profile avatars using the completed media pipeline;
   garbage-collect unattached/rejected objects under an explicit cleanup policy.
 - [ ] **M5.5:** Connect community/group feed/composer/report/moderation pages;
   test ownership, group boundaries, removed content/media URLs and concurrent changes.
+  The React feed now exposes edit/delete controls only on the member’s own post;
+  report and moderator UI remain.
 
 **Exit:** W03 works for posts/comments/media; hidden content is unavailable through
 detail routes, pagination, search and attachments, not merely hidden in the UI.

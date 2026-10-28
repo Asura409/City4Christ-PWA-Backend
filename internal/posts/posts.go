@@ -122,7 +122,7 @@ func (r *Repository) List(ctx context.Context, o Options, after *Cursor, viewerI
  EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=NULLIF($4,'')::uuid AND pr.reaction='amen'),
  (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id)
  FROM church_posts p JOIN accounts a ON a.id=p.author_id
- WHERE ($1::timestamptz IS NULL OR (p.created_at,p.id)<($1::timestamptz,$2::uuid))
+ WHERE p.deleted_at IS NULL AND ($1::timestamptz IS NULL OR (p.created_at,p.id)<($1::timestamptz,$2::uuid))
 	ORDER BY p.created_at DESC,p.id DESC LIMIT $3`, at, id, o.Limit+1, viewerID)
 	if err != nil {
 		return nil, err
@@ -194,9 +194,18 @@ func validID(value string) bool {
 	return err == nil && id.String() == value && id != uuid.Nil
 }
 
+func normalizePostBody(body string) (string, error) {
+	body = strings.TrimSpace(body)
+	if !utf8.ValidString(body) || len([]rune(body)) < 1 || len([]rune(body)) > 5000 || strings.ContainsRune(body, 0) {
+		return "", ErrInvalid
+	}
+	return body, nil
+}
+
 func (s *Service) Create(ctx context.Context, author string, in CreateInput) (Post, error) {
-	in.Body = strings.TrimSpace(in.Body)
-	if !validID(author) || !utf8.ValidString(in.Body) || len([]rune(in.Body)) < 1 || len([]rune(in.Body)) > 5000 || strings.ContainsRune(in.Body, 0) {
+	var err error
+	in.Body, err = normalizePostBody(in.Body)
+	if !validID(author) || err != nil {
 		return Post{}, ErrInvalid
 	}
 	if media.ValidateAttachmentIDs(in.AttachmentIDs, media.MaxPostAttachments) != nil {
@@ -271,7 +280,7 @@ func (r *Repository) changeAmen(ctx context.Context, actorID, postID string, add
 	}
 	defer tx.Rollback()
 	var exists string
-	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 FOR UPDATE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
+	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
 		return ReactionState{}, ErrNotFound
 	} else if err != nil {
 		return ReactionState{}, err
