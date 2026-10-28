@@ -44,7 +44,7 @@ FROM accounts a WHERE p.id=$2 AND p.author_id=$3 AND p.deleted_at IS NULL AND a.
 RETURNING p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,
  (SELECT count(*) FROM post_reactions pr WHERE pr.post_id=p.id AND pr.reaction='amen'),
  EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=$3 AND pr.reaction='amen'),
- (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id)`, in.Body, postID, authorID))
+ (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL)`, in.Body, postID, authorID))
 	if err != nil {
 		return Post{}, err
 	}

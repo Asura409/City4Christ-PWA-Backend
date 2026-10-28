@@ -46,6 +46,7 @@ unknown names currently deny access and are not advertised as usable permissions
 | `roles.operational.manage` | Super Admin, Assistant Pastor/Staff | Global authority to appoint leaders to registered ministry scopes |
 | `ministry.members.manage` | `ministry_leader` | Assigned registered ministry only; ministry routes remain future work |
 | `prayer.moderate` | Super Admin, Assistant Pastor/Staff, scoped `ministry_leader` | Community scope for global roles; active assigned group only for group leaders; Super Admin also group-wide |
+| `groups.content.moderate` | Super Admin, Assistant Pastor/Staff globally; `ministry_leader` by ministry | Global church feed is active for global roles. Group-scoped content routes must check the exact assigned scope when group posts are added. |
 
 | Planned capability | Super Admin | Assistant Pastor / Staff | Ministry Leader / task assignee | Member |
 | --- | --- | --- | --- | --- |
@@ -66,7 +67,10 @@ unknown names currently deny access and are not advertised as usable permissions
 
 Public sermons and existing authenticated own-profile/directory access remain
 separate from staff-role capabilities. Future group participation, giving, RSVP,
-prayer reports use `prayer.moderate` plus request visibility and current membership;
+prayer reports use `prayer.moderate` plus request visibility and current membership.
+Church-wide post and comment reports require the global `groups.content.moderate`
+scope; a ministry-scoped leader cannot read or act on the church-wide queue. Group
+post moderation remains unimplemented until group posts exist.
 private requests stay owner-only for every role. Direct messaging and other future
 domains still require their own ownership/audience checks.
 

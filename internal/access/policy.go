@@ -25,6 +25,7 @@ var roleRules = [...]roleRule{
 	{role: "super_administrator", permission: "groups.members.manage"},
 	{role: "super_administrator", permission: "events.manage"},
 	{role: "super_administrator", permission: "prayer.moderate"},
+	{role: "super_administrator", permission: "groups.content.moderate"},
 	{role: "assistant_pastor", permission: "roles.read"},
 	{role: "assistant_pastor", permission: "roles.operational.manage"},
 	{role: "assistant_pastor", permission: "sermons.manage"},
@@ -32,6 +33,7 @@ var roleRules = [...]roleRule{
 	{role: "assistant_pastor", permission: "groups.members.manage"},
 	{role: "assistant_pastor", permission: "events.manage"},
 	{role: "assistant_pastor", permission: "prayer.moderate"},
+	{role: "assistant_pastor", permission: "groups.content.moderate"},
 	{role: "staff", permission: "roles.read"},
 	{role: "staff", permission: "roles.operational.manage"},
 	{role: "staff", permission: "sermons.manage"},
@@ -39,11 +41,13 @@ var roleRules = [...]roleRule{
 	{role: "staff", permission: "groups.members.manage"},
 	{role: "staff", permission: "events.manage"},
 	{role: "staff", permission: "prayer.moderate"},
+	{role: "staff", permission: "groups.content.moderate"},
 	{role: "content_editor", permission: "sermons.manage"},
 	{role: "system_administrator", permission: "sermons.manage"},
 	{role: "access_administrator", permission: "roles.manage"},
 	{role: "ministry_leader", permission: "ministry.members.manage", ministry: true},
 	{role: "ministry_leader", permission: "prayer.moderate", ministry: true},
+	{role: "ministry_leader", permission: "groups.content.moderate", ministry: true},
 }
 
 func (rule roleRule) acceptsScope(scope string) bool {

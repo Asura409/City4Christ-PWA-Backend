@@ -71,8 +71,8 @@ delivery order:
    support images, audio and uploaded video alongside existing YouTube links.
 3. Prayer wall with its own visibility and anonymity controls.
 4. Durable direct and group messaging, then realtime delivery.
-5. Giving in a payment sandbox; live checkout remains blocked until a provider,
-   currency and webhook/reconciliation rules are approved.
+5. Giving through the existing Give A Little hosted campaign page. Give A Little
+   owns checkout and transaction history; the PWA only links members there.
 6. Member, family and visitor onboarding after these member-facing features.
 
 Group membership precedes group-specific posts and chats. Each slice keeps
@@ -88,6 +88,32 @@ message state; record in-app events transactionally and add delivery separately.
 
 This priority update supersedes the default milestone order in the table and the
 paragraph below; onboarding is deferred rather than cancelled.
+
+### Current implementation position — 28 October 2026
+
+The owner-directed sequence above describes current priority, not the historical
+order of implementation. Work on later-numbered milestones began before M5 was
+closed, so “current focus” must not be read as “the only milestone started.”
+
+- **Current focus: M5.** The church-wide feed and media pipeline code exist. This
+  report/moderation slice is in progress; live upload acceptance, group-scoped
+  posts/moderation, and an approved report-retention policy remain open.
+- **M6 Events:** the church-wide event, RSVP, coordinator and calendar flows are
+  implemented. Group-specific event audiences, remaining notification work and
+  the full release gate remain open.
+- **M8 Prayer:** the core privacy, reporting, moderation, expiry and encouragement
+  flows are implemented. Attachments and their media acceptance remain open.
+- **M10 Messaging:** direct/group messaging and single-server realtime are
+  implemented. Multi-server fanout is deferred while the API remains single-server.
+- **M12 Giving:** no payment backend, ledger or webhook integration is planned for
+  the current scope. Members are sent to the existing Give A Little page; the church
+  reviews transactions in its Give A Little dashboard. The PWA does not confirm,
+  record, receipt or reconcile individual payments. Returning to the PWA is a
+  navigation step after the hosted flow, not a payment callback.
+
+The milestone sections below retain their original IDs and list their remaining
+exit gates. Use this position note for the current sequence and the sections for
+the detailed implementation state.
 
 | Milestone | Deliverable | Depends on | Owner requirements |
 | --- | --- | --- | --- |
@@ -267,15 +293,25 @@ full cross-group read/write boundary audit; membership notifications remain open
   already-scanned attachments; DELETE scrubs post text, removes it from feeds,
   deletes its comments/reactions and detaches media. PostgreSQL and global-app
   tests cover ownership and deleted-content denial; desktop/mobile React controls
-  are connected. Reports/moderation and live media acceptance remain open.
+  are connected. The church-wide reporting/moderation slice is implemented locally;
+  live media acceptance remains open.
 - [ ] **M5.3:** Implement reports and authorized group/church moderation actions
   with reasons, audit, immediate feed/attachment removal and agreed retention/purge.
+  Progress: post/comment reports, role-checked church-wide queues, reasoned hide or
+  dismiss, transactional audit, content scrubbing and media detachment are connected
+  in backend code. React reporting and staff review controls are implemented locally.
+  PostgreSQL-backed posts tests and global-app route tests pass; desktop/mobile
+  Playwright scenarios pass. Group-scoped moderation is not yet supported because
+  group posts are not implemented. Report snapshots/audit have no automatic purge;
+  agree a retention policy before production rollout.
 - [ ] **M5.4:** Add secure profile avatars using the completed media pipeline;
   garbage-collect unattached/rejected objects under an explicit cleanup policy.
 - [ ] **M5.5:** Connect community/group feed/composer/report/moderation pages;
   test ownership, group boundaries, removed content/media URLs and concurrent changes.
-  The React feed now exposes edit/delete controls only on the member’s own post;
-  report and moderator UI remain.
+  The React feed exposes edit/delete controls only on the member’s own post and now
+  includes reporting plus a capability-gated staff review queue. Desktop/mobile and
+  server checks for church-wide moderation pass. Group boundaries remain open with
+  group post support; media acceptance also awaits the VPS scanner rollout.
 
 **Exit:** W03 works for posts/comments/media; hidden content is unavailable through
 detail routes, pagination, search and attachments, not merely hidden in the UI.
@@ -408,27 +444,19 @@ screens; private content is absent from browser caches and unrelated search resu
 
 ## M12 — Giving and finance, sandbox first
 
-- [ ] **M12.1:** Provider candidate is Give A Little and currency is GBP. The owner
-  supplied the existing public campaign URL but has no merchant/webhook setup yet.
-  Obtain a provider test campaign, webhook enablement/signing secret through a
-  secure channel, and confirm guest/anonymous giving, categories, failure semantics,
-  receipts/refunds and retention/export policy before implementation. No live checkout
-  is wired into preview.
-- [ ] **M12.2:** Add money-in-minor-units validation, categories, pending checkout,
-  actor-scoped idempotency, verified raw-body webhook adapters and event deduplication.
-- [ ] **M12.3:** Implement auditable ledger/status transitions, reconciliation,
-  refunds, digital receipts and member-owned giving history.
-- [ ] **M12.4:** Implement Staff aggregate totals, Super Admin/Finance Officer donor
-  reports and audited exports; do not expose donor-level breakdowns through totals.
-- [ ] **M12.5:** Connect sandbox checkout, pending/failure/success states, receipts
-  and finance dashboards; never collect card secrets in this backend/frontend.
-- [ ] **M12.6:** Test forged signatures, duplicate/out-of-order events, redirect
-  spoofing, amount/currency mismatch, double processing and cross-donor authorization.
-- [ ] **M12.7:** Obtain explicit live-payment approval only after sandbox acceptance,
-  reconciliation/receipt checks and the finance access review pass.
+- [ ] **M12.1:** Add a Give button/link to the supplied hosted campaign URL and make
+  it clear that checkout and transaction history are handled by Give A Little.
+- [ ] **M12.2:** Provide a clear way back to the PWA after checkout. Do not represent
+  a browser return as proof of payment or show a payment-success state in the PWA.
+- [ ] **M12.3:** Document that members and church administrators view transaction
+  records in Give A Little; the PWA has no individual giving history, receipts,
+  payment ledger, reconciliation or finance reports under this integration scope.
+- [ ] **M12.4:** Review finance-role visibility separately if church-wide aggregate
+  totals are later requested from a trusted source.
 
-**Exit:** W07 completes with verified provider confirmation, accurate private history
-and authorized finance views. No real charges occur during automated tests.
+**Exit:** members can open the hosted campaign page and return to the PWA, with no
+payment credentials, API keys, webhooks, callbacks or payment claims in this system.
+Reopen backend payment integration only if the owner changes this product decision.
 
 ## M13 — Release security and operational readiness
 
@@ -511,9 +539,8 @@ build passed with the staging API_URL, and all 28 focused desktop/mobile Playwri
 scenarios passed. No staging deployment, data reset, commit or push was performed;
 the follow-up feature changes remain local. Full `go test ./...` was not run.
 M6 remains open for notifications, group events and full-suite checks; M8 for
-comments, media and notifications; M10 for realtime/reconnect. Give A Little is a
-provider candidate only: test campaign and webhook setup are unavailable, so M12
-remains blocked at that provider prerequisite.
+comments, media and notifications; M10 for realtime/reconnect. Giving is scoped to
+the existing Give A Little hosted page; no provider API integration is planned.
 
 
 ### Event coordinator in-app notices — local slice (25 October 2026)
