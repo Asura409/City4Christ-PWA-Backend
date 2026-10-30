@@ -323,7 +323,10 @@ func TestPublishedSermonSeriesOpenAPIIsPublic(t *testing.T) {
 	if operation == nil {
 		t.Fatal("missing published sermon series operation")
 	}
-	if _, protected := operation["security"]; protected {
-		t.Fatal("public published sermon series must not require authentication")
+	if security, declared := operation["security"]; declared {
+		requirements, ok := security.([]any)
+		if !ok || len(requirements) != 0 {
+			t.Fatal("public published sermon series must not require authentication")
+		}
 	}
 }

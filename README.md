@@ -45,6 +45,8 @@ See [access management](docs/access-management.md) for scoped permissions, opera
 
 See [member profiles and privacy](docs/member-profiles.md) for own-profile edits and directory visibility, and [request validation](docs/api-validation.md) for field-specific errors and improved Swagger examples.
 
+The [pastoral booking foundation](docs/pastoral-bookings.md) adds explicit pastor profiles, availability, approval-based requests and private member/pastor queues. It is a local feature slice; no real pastor is appointed automatically.
+
 See [the member directory](docs/member-directory.md) for authenticated name search, opt-in visibility, cursor pagination and response privacy.
 
 See [frontend browser integration](docs/frontend-browser-integration.md) for Google browser completion and optional Playwright checks through the real app with disposable PostgreSQL. The frontend checkout is an independent repository.

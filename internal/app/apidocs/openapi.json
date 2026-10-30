@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.16.0",
+    "version": "1.17.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -71,6 +71,10 @@
     {
       "name": "Sermon member tools",
       "description": "Member-owned playback progress and private sermon notes."
+    },
+    {
+      "name": "Pastoral appointments",
+      "description": "Verified-member booking requests requiring assigned-pastor approval. No confidential care notes are collected."
     }
   ],
   "paths": {
@@ -1204,7 +1208,7 @@
                 "editTitle": {
                   "value": {
                     "version": 2,
-                    "title": "Living in Faith — Updated"
+                    "title": "Living in Faith \u2014 Updated"
                   }
                 },
                 "unpublish": {
@@ -2491,7 +2495,7 @@
           "Access management"
         ],
         "operationId": "ListChurchRoleAssignments",
-        "summary": "Read a target account’s current assignments",
+        "summary": "Read a target account\u2019s current assignments",
         "security": [
           {
             "bearerAuth": []
@@ -3557,7 +3561,7 @@
         ],
         "summary": "Edit your church post",
         "operationId": "UpdateChurchPost",
-        "description": "Replaces the authenticated author’s post body and complete attachment list. An omitted attachmentIds field clears all attachments. Requires an allowed Origin and JSON body.",
+        "description": "Replaces the authenticated author\u2019s post body and complete attachment list. An omitted attachmentIds field clears all attachments. Requires an allowed Origin and JSON body.",
         "security": [
           {
             "bearerAuth": []
@@ -3644,7 +3648,7 @@
         ],
         "summary": "Delete your church post",
         "operationId": "DeleteChurchPost",
-        "description": "Removes the author’s post from the feed, scrubs its text and removes its comments, reactions and media associations. Requires an allowed Origin.",
+        "description": "Removes the author\u2019s post from the feed, scrubs its text and removes its comments, reactions and media associations. Requires an allowed Origin.",
         "security": [
           {
             "bearerAuth": []
@@ -4085,7 +4089,7 @@
         ],
         "summary": "List published church-wide events",
         "operationId": "ListEvents",
-        "description": "Returns at most 100 published church-wide events. Public reads never include attendee identities. A supplied bearer token adds only the caller’s RSVP attendeeCount.",
+        "description": "Returns at most 100 published church-wide events. Public reads never include attendee identities. A supplied bearer token adds only the caller\u2019s RSVP attendeeCount.",
         "responses": {
           "200": {
             "description": "Success",
@@ -4804,10 +4808,10 @@
         ],
         "summary": "List my notifications",
         "operationId": "ListMyNotifications",
-        "description": "Returns only the authenticated member’s notifications, newest first. Cursor pagination is stable. The API does not allow clients to create notifications.",
+        "description": "Returns only the authenticated member\u2019s notifications, newest first. Cursor pagination is stable. The API does not allow clients to create notifications.",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "parameters": [
@@ -4867,7 +4871,7 @@
         "operationId": "GetMyUnreadNotificationCount",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -4903,7 +4907,7 @@
         "description": "Idempotently marks a notification belonging to the caller as read. Notifications belonging to another account return 404. Requires an allowed Origin.",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "parameters": [
@@ -4997,7 +5001,8 @@
           "404": {
             "$ref": "#/components/responses/404"
           }
-        }
+        },
+        "security": []
       }
     },
     "/api/v1/events/{eventId}/coordinators": {
@@ -5324,7 +5329,7 @@
         ],
         "summary": "Hide a reported request or dismiss its report",
         "operationId": "ReviewPrayerReport",
-        "description": "Only an authorized moderator in the report’s scope can decide. Hiding soft archives the request and writes a moderation audit event.",
+        "description": "Only an authorized moderator in the report\u2019s scope can decide. Hiding soft archives the request and writes a moderation audit event.",
         "security": [
           {
             "bearerAuth": []
@@ -5401,7 +5406,7 @@
         "operationId": "ListGroupConversations",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -5438,7 +5443,7 @@
         "operationId": "ListGroupMessages",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "parameters": [
@@ -5502,7 +5507,7 @@
         "operationId": "SendGroupMessage",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -5580,7 +5585,7 @@
         "operationId": "DeleteGroupMessage",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -5629,7 +5634,7 @@
         "operationId": "MarkGroupRead",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "requestBody": {
@@ -5897,7 +5902,7 @@
         "tags": [
           "Media"
         ],
-        "summary": "Read the caller’s upload status",
+        "summary": "Read the caller\u2019s upload status",
         "operationId": "GetMediaUpload",
         "security": [
           {
@@ -5976,7 +5981,7 @@
         ],
         "summary": "Add an Amen reaction",
         "operationId": "SetPostAmenReaction",
-        "description": "Adds the authenticated member’s Amen reaction. Repeating the request is idempotent. Requires an allowed Origin.",
+        "description": "Adds the authenticated member\u2019s Amen reaction. Repeating the request is idempotent. Requires an allowed Origin.",
         "security": [
           {
             "bearerAuth": []
@@ -6046,7 +6051,7 @@
         ],
         "summary": "Remove an Amen reaction",
         "operationId": "RemovePostAmenReaction",
-        "description": "Removes the authenticated member’s Amen reaction. Repeating the request is idempotent. Requires an allowed Origin.",
+        "description": "Removes the authenticated member\u2019s Amen reaction. Repeating the request is idempotent. Requires an allowed Origin.",
         "security": [
           {
             "bearerAuth": []
@@ -6262,7 +6267,7 @@
             "description": "JSON required"
           },
           "422": {
-            "description": "Comment body must contain 1–2,000 characters"
+            "description": "Comment body must contain 1\u20132,000 characters"
           },
           "429": {
             "description": "Account or shared IP request limit exceeded"
@@ -6280,7 +6285,7 @@
         ],
         "summary": "Delete your comment",
         "operationId": "DeletePostComment",
-        "description": "Deletes a comment owned by the authenticated member. Other members’ comments are not revealed. Requires an allowed Origin.",
+        "description": "Deletes a comment owned by the authenticated member. Other members\u2019 comments are not revealed. Requires an allowed Origin.",
         "security": [
           {
             "bearerAuth": []
@@ -6361,7 +6366,8 @@
           "503": {
             "$ref": "#/components/responses/503"
           }
-        }
+        },
+        "security": []
       }
     },
     "/api/v1/me/sermons/{sermonId}/progress": {
@@ -6837,7 +6843,7 @@
         ],
         "summary": "Share encouragement on a visible prayer request",
         "operationId": "CreatePrayerEncouragement",
-        "description": "Request visibility is enforced on the write. Body is trimmed plain text of 1–1,000 Unicode characters. Archived, expired or inaccessible requests return 404. The owner receives an in-app notification in the same transaction; no request or author identity is copied into the notice.",
+        "description": "Request visibility is enforced on the write. Body is trimmed plain text of 1\u20131,000 Unicode characters. Archived, expired or inaccessible requests return 404. The owner receives an in-app notification in the same transaction; no request or author identity is copied into the notice.",
         "security": [
           {
             "bearerAuth": []
@@ -6923,7 +6929,7 @@
         "operationId": "IssueRealtimeTicket",
         "security": [
           {
-            "BearerAuth": []
+            "bearerAuth": []
           }
         ],
         "responses": {
@@ -6951,7 +6957,7 @@
           "Messaging"
         ],
         "summary": "Open an authenticated realtime WebSocket",
-        "description": "Requires one allowed Origin and no query parameters. After upgrade, send {\"type\":\"authenticate\",\"ticket\":\"...\"} as the first JSON frame. The 30-second single-use ticket must come from POST /api/v1/realtime/tickets and must never be placed in the URL. Server events contain message IDs and sequence metadata, not message bodies; use REST history for content and reconnect catch-up.",
+        "description": "Requires one allowed Origin and no query parameters. After upgrade, send {\"type\":\"authenticate\",\"ticket\":\"...\"} as the first JSON frame. The 30-second single-use ticket must come from POST /api/v1/realtime/tickets and must never be placed in the URL. Server events contain message IDs and sequence metadata, not message bodies; use REST history for content and reconnect catch-up. HTTP upgrade alone does not authorize application access; the connection must redeem its single-use ticket before any private metadata is delivered.",
         "operationId": "OpenRealtimeWebSocket",
         "responses": {
           "101": {
@@ -6963,7 +6969,8 @@
           "503": {
             "description": "Realtime service unavailable."
           }
-        }
+        },
+        "security": []
       }
     },
     "/api/v1/content-reports": {
@@ -7306,6 +7313,994 @@
                 "schema": {
                   "$ref": "#/components/schemas/Error"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pastors": {
+      "get": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "ListPastors",
+        "summary": "List explicitly published active pastors",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Directory includes names, biography and time zone only. Revoked pastoral roles and unverified/unlisted accounts are excluded.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastorProfilePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Bounded page size. Results are ordered by UUID ascending.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Use meta.nextCursor from the previous page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/pastors": {
+      "post": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "PublishPastorProfile",
+        "summary": "Create or replace pastor directory settings",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Super Admin only, with fresh primary and application MFA proofs checked transactionally. Target must already be a verified Assistant Pastor or Super Admin. Does not grant a church role. Unlisting stops new reservations; existing assigned appointments remain accessible to the eligible pastor. Audited; no account is seeded.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastorProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Exact allowed frontend HTTPS origin.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PastorProfileInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/pastoral/profile": {
+      "get": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "GetOwnPastorProfile",
+        "summary": "Get own eligible pastor profile",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. 404 when no explicit eligible profile exists. Does not reveal another account.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastorProfileResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": []
+      }
+    },
+    "/api/v1/pastors/{pastorId}/availability": {
+      "get": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "ListPastorAvailability",
+        "summary": "List available pastor slots",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Future active slots wholly inside the requested range. Pending and approved requests both hold slots. No requester information is returned.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralSlotPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "pastorId",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Bounded page size. Results are ordered by UUID ascending.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Use meta.nextCursor from the previous page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive start; defaults to now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive end; defaults to now plus 30 days. Range must be positive, at most 31 days, and end within 180 days.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/me/pastoral/availability": {
+      "get": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "ListOwnPastorAvailability",
+        "summary": "List own active slots, including held slots",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Only the explicitly appointed eligible pastor. available=false means an appointment holds the slot; requester details belong to the assigned booking queue.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralSlotPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Bounded page size. Results are ordered by UUID ascending.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Use meta.nextCursor from the previous page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive start; defaults to now.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive end; defaults to now plus 30 days. Range must be positive, at most 31 days, and end within 180 days.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "PublishPastorSlot",
+        "summary": "Publish an explicit availability slot",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Own pastor profile only; listed and current pastoral role required. Slots last 15\u2013120 minutes, start in the future and within 180 days. Overlaps with own active slots are rejected transactionally; adjacent slots are allowed. No recurring-rule expansion in this slice.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralSlotResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Exact allowed frontend HTTPS origin.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PastoralSlotInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/pastoral/availability/{slotId}": {
+      "delete": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "WithdrawPastorSlot",
+        "summary": "Withdraw an unreserved own slot",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. No body/query. An appointment must be cancelled/declined before its held slot can be withdrawn. Repeat withdrawal is safe; records and audit are retained.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Success; no body"
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "slotId",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Exact allowed frontend HTTPS origin.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/pastor-bookings": {
+      "post": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "RequestPastorBooking",
+        "summary": "Request a slot pending pastor approval",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Actor is derived from the session; only slotId is accepted. Pending holds the slot; approval is never implicit. A repeat request by the same member for the active slot returns the same booking. Prevents competing reservations and overlapping appointments for one member across pastors. Self-booking is rejected. A fresh request after decline needs a new approval. Notification and audit commit with the request; no purpose or care note is accepted.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralBookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Exact allowed frontend HTTPS origin.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PastoralRequestInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/pastor-bookings": {
+      "get": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "ListOwnPastorBookings",
+        "summary": "List only own booking requests",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Includes terminal statuses. No administrator exception or cross-member query parameter.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralBookingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Bounded page size. Results are ordered by UUID ascending.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Use meta.nextCursor from the previous page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/pastor-bookings/{bookingId}": {
+      "delete": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "CancelOwnPastorBooking",
+        "summary": "Cancel an own future appointment",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. No body/query. Pending/approved requests can be cancelled before start. Repeat cancellation is safe. Member cancellation remains available after pastor role revocation or unlisting. Does not delete audit/history.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralBookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Exact allowed frontend HTTPS origin.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/me/pastoral/bookings": {
+      "get": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "ListAssignedPastorBookings",
+        "summary": "List only appointments assigned to this pastor",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Requires an explicit eligible pastor profile and current pastoral role. Super Admin has no access to another pastor's appointments. Names are included for the two participants; email/contact/care notes are omitted.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralBookingPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Bounded page size. Results are ordered by UUID ascending.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Use meta.nextCursor from the previous page.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/me/pastoral/bookings/{bookingId}": {
+      "patch": {
+        "tags": [
+          "Pastoral appointments"
+        ],
+        "operationId": "ReviewAssignedPastorBooking",
+        "summary": "Approve, decline or cancel an assigned appointment",
+        "description": "All routes require a verified active Bearer session. Account read limits are 60/minute, writes 30/minute; shared IP limit is 120/minute. Unknown/duplicate query parameters are rejected. Only the assigned eligible pastor can decide, before start. Requires current version; stale state returns 409. Approval/decline apply to pending requests; cancellation also applies to approved appointments. Repeating the same terminal outcome is safe. Decline/cancellation releases the slot, with one transactional notice and audit event per change.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PastoralBookingResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "bookingId",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Origin",
+            "in": "header",
+            "required": true,
+            "description": "Exact allowed frontend HTTPS origin.",
+            "schema": {
+              "type": "string",
+              "format": "uri"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PastoralDecisionInput"
               }
             }
           }
@@ -8724,7 +9719,7 @@
             "description": "Up to four owned uploads that have passed malware scanning."
           }
         },
-        "description": "Post body plus optional IDs of the author’s clean, scanned media uploads."
+        "description": "Post body plus optional IDs of the author\u2019s clean, scanned media uploads."
       },
       "UpdateChurchPostInput": {
         "type": "object",
@@ -9106,7 +10101,7 @@
           },
           "myAttendeeCount": {
             "type": "integer",
-            "description": "Only present for the authenticated caller; never includes another account’s data."
+            "description": "Only present for the authenticated caller; never includes another account\u2019s data."
           },
           "status": {
             "type": "string",
@@ -9249,7 +10244,8 @@
                 "$ref": "#/components/schemas/DirectMessage"
               }
             ],
-            "nullable": true
+            "nullable": true,
+            "type": "object"
           },
           "unreadCount": {
             "type": "integer",
@@ -9714,7 +10710,8 @@
                 "$ref": "#/components/schemas/GroupMessage"
               }
             ],
-            "nullable": true
+            "nullable": true,
+            "type": "object"
           },
           "unreadCount": {
             "type": "integer",
@@ -10290,6 +11287,364 @@
             "maxLength": 500
           }
         }
+      },
+      "PastorProfile": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "bio": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "listed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "firstName",
+          "lastName",
+          "bio",
+          "timeZone",
+          "listed"
+        ]
+      },
+      "PastoralSlot": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pastorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "pastorId",
+          "startsAt",
+          "endsAt",
+          "timeZone",
+          "available"
+        ]
+      },
+      "PastoralBooking": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slotId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pastorId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "pastorFirstName": {
+            "type": "string"
+          },
+          "pastorLastName": {
+            "type": "string"
+          },
+          "memberFirstName": {
+            "type": "string"
+          },
+          "memberLastName": {
+            "type": "string"
+          },
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "timeZone": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "declined",
+              "cancelled"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "slotId",
+          "pastorId",
+          "memberId",
+          "pastorFirstName",
+          "pastorLastName",
+          "memberFirstName",
+          "memberLastName",
+          "startsAt",
+          "endsAt",
+          "timeZone",
+          "status",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "PastorProfileInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bio": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 100,
+            "example": "Africa/Lagos"
+          },
+          "listed": {
+            "type": "boolean",
+            "nullable": true,
+            "default": true,
+            "description": "Omitted or null means listed; this POST replaces directory settings."
+          }
+        },
+        "required": [
+          "accountId",
+          "timeZone"
+        ]
+      },
+      "PastoralSlotInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "startsAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "startsAt",
+          "endsAt"
+        ]
+      },
+      "PastoralRequestInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "slotId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "slotId"
+        ]
+      },
+      "PastoralDecisionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "approved",
+              "declined",
+              "cancelled"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ]
+      },
+      "PastorProfileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PastorProfile"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PastorProfilePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PastorProfile"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nextCursor": {
+                "type": "string",
+                "description": "Empty means last page. Otherwise an opaque position UUID, not an authorization credential."
+              }
+            },
+            "required": [
+              "nextCursor"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "PastoralSlotResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PastoralSlot"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PastoralSlotPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PastoralSlot"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nextCursor": {
+                "type": "string",
+                "description": "Empty means last page. Otherwise an opaque position UUID, not an authorization credential."
+              }
+            },
+            "required": [
+              "nextCursor"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
+      },
+      "PastoralBookingResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/PastoralBooking"
+          }
+        },
+        "required": [
+          "data"
+        ]
+      },
+      "PastoralBookingPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PastoralBooking"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nextCursor": {
+                "type": "string",
+                "description": "Empty means last page. Otherwise an opaque position UUID, not an authorization credential."
+              }
+            },
+            "required": [
+              "nextCursor"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "meta"
+        ]
       }
     },
     "responses": {
