@@ -45,7 +45,7 @@ See [access management](docs/access-management.md) for scoped permissions, opera
 
 See [member profiles and privacy](docs/member-profiles.md) for own-profile edits and directory visibility, and [request validation](docs/api-validation.md) for field-specific errors and improved Swagger examples.
 
-The [pastoral booking foundation](docs/pastoral-bookings.md) adds explicit pastor profiles, availability, approval-based requests and private member/pastor queues. It is a local feature slice; no real pastor is appointed automatically.
+The [pastoral booking foundation](docs/pastoral-bookings.md) adds explicit pastor profiles, availability, approval-based requests and private member/pastor queues. No real pastor is appointed automatically. [Appointment email delivery](docs/pastoral-email-delivery.md) adds transactional updates and scheduled reminders through the existing worker.
 
 See [the member directory](docs/member-directory.md) for authenticated name search, opt-in visibility, cursor pagination and response privacy.
 

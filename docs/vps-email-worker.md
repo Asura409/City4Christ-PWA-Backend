@@ -19,3 +19,5 @@ The database Blueprint allows only the VPS public IPv4 /32. A database session's
 A confirmed received OTP verifies email delivery, not the whole public auth flow or that both components have matching keys. End-to-end acceptance must register through the actual HTTPS API, receive the message, verify its code through that API, and exercise login, refresh rotation/replay, `/me` and logout. Use isolated test accounts and credentials outside Git. Staging signup is currently open for beta testing under operator control; Blueprint updates must preserve that setting.
 
 Free Render PostgreSQL still expires after 30 days. This worker does not remove that limit; arrange durable database hosting and backups before long-term use.
+
+Appointment status emails and scheduled reminders are an opt-in extension of this same worker. See [appointment delivery and rollout](pastoral-email-delivery.md) before enabling them.

@@ -1,4 +1,4 @@
-// email-worker dispatches the existing verification outbox. It never runs
+// email-worker dispatches verification, recovery and optional appointment outboxes. It never runs
 // migrations or resets data; schema changes are a separate operational step.
 package main
 
@@ -22,6 +22,8 @@ import (
 )
 
 type workerConfig struct {
+	pastoralEnabled bool
+	pastoralAppURL  string
 	enabled         bool
 	environment     string
 	databaseURL     string
@@ -61,6 +63,9 @@ func loadConfig(getenv func(string) string) (workerConfig, error) {
 	config.from = getenv("EMAIL_FROM")
 	if _, err := mailresend.New(config.apiKey, config.from); err != nil {
 		return workerConfig{}, errors.New("RESEND_API_KEY and a valid EMAIL_FROM are required")
+	}
+	if err := loadPastoralConfig(&config, getenv); err != nil {
+		return workerConfig{}, err
 	}
 	config.recipients = make(map[string]bool)
 	// A standalone wildcard explicitly enables email to all beta recipients.
@@ -140,6 +145,11 @@ func run(ctx context.Context, config workerConfig) error {
 	guarded := guardedSender{config: config, sender: sender}
 	recovery := auth.NewPasswordRecoveryService(db, verification)
 	recoverySender := guardedRecoverySender{config: config, sender: sender}
+	appointments, err := newPastoralWorker(db, config)
+	if err != nil {
+		return errors.New("email worker appointment configuration failed")
+	}
+	appointmentSender := guardedAppointmentSender{config: config, sender: sender}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -166,6 +176,7 @@ func run(ctx context.Context, config workerConfig) error {
 			}
 			slog.Warn("Password recovery email processing failed", "code", code)
 		}
+		processPastoralEmail(ctx, appointments, appointmentSender)
 		select {
 		case <-ctx.Done():
 			return nil

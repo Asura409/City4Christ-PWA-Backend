@@ -85,8 +85,9 @@ A real Super Admin must explicitly publish an already appointed pastor profile
 before availability can be offered. No live bootstrap is performed by this feature.
 
 Confidential notes, service types, recurring availability, explicit blocked periods,
-reassignment, attendance/no-show outcomes, email reminders and exceptional care
-access remain later slices. Care-data retention/encryption rules must be agreed
+reassignment, attendance/no-show outcomes and exceptional care access remain later
+slices. [Appointment emails and reminders](pastoral-email-delivery.md) are a separate
+opt-in worker extension. Care-data retention/encryption rules must be agreed
 before collecting free-text care details. This foundation does not close milestone M9.
 
 ## Local verification

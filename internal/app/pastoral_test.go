@@ -41,6 +41,10 @@ func TestPastoralApprovalFlowThroughGlobalApp(t *testing.T) {
 	slotBody := fmt.Sprintf(`{"startsAt":%q,"endsAt":%q}`, f.now.Add(time.Hour).Format(time.RFC3339), f.now.Add(90*time.Minute).Format(time.RFC3339))
 	slot := pastoralData[pastoral.Slot](t, f.request("POST", "/api/v1/me/pastoral/availability", pastor, slotBody), 201)
 	booking := pastoralData[pastoral.Booking](t, f.request("POST", "/api/v1/pastor-bookings", member, fmt.Sprintf(`{"slotId":%q}`, slot.ID)), 201)
+	var emails int
+	if err := f.db.QueryRow(`SELECT count(*) FROM pastoral_email_outbox WHERE booking_id=$1 AND event='requested' AND recipient_id=$2`, booking.ID, pastorID).Scan(&emails); err != nil || emails != 1 {
+		t.Fatal("HTTP request did not queue email", emails, err)
+	}
 	if booking.Status != "pending" {
 		t.Fatal("auto-approved request")
 	}
@@ -61,6 +65,9 @@ func TestPastoralApprovalFlowThroughGlobalApp(t *testing.T) {
 	cancelled := pastoralData[pastoral.Booking](t, f.request("DELETE", "/api/v1/pastor-bookings/"+booking.ID, member, ""), 200)
 	if cancelled.Status != "cancelled" {
 		t.Fatal(cancelled)
+	}
+	if err := f.db.QueryRow(`SELECT count(*) FROM pastoral_email_outbox WHERE booking_id=$1 AND event='cancelled'`, booking.ID).Scan(&emails); err != nil || emails != 2 {
+		t.Fatal("HTTP cancellation did not queue both emails", emails, err)
 	}
 	w := f.request("GET", "/api/v1/pastors", member, "")
 	if strings.Contains(w.Body.String(), "email") || w.Header().Get("Cache-Control") != "no-store" {
