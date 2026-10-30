@@ -381,6 +381,16 @@ implemented. Prayer attachments and their media tests remain before closure.
 
 ## M9 — Pastor directory and confidential care
 
+First local booking slice (30 October 2026): the owner selected pastor approval.
+Explicit eligible directory profiles, individual availability slots, pending holds,
+approval/decline, own cancellation, transactional in-app notices and private queues
+are implemented with React integration. Super Admin directory publication requires
+fresh primary and app MFA proofs and does not confer a role. Booking access is
+requester/assigned pastor only, with no administrator exception. No confidential
+notes are collected. See [contract and limits](pastoral-bookings.md). The unchecked
+items below retain the wider milestone scope; this slice does not close M9.
+
+
 - [ ] **M9.1:** Approve who may read care details, exceptional Super Admin access,
   service types, booking/cancellation/escalation rules and note retention.
 - [ ] **M9.2:** Implement active pastor directory, timezone-aware availability,
