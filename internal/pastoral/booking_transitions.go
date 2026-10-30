@@ -75,7 +75,10 @@ func (r *Repository) bookingEvent(ctx context.Context, tx *sql.Tx, b Booking, ac
 		recipient = b.PastorID
 	}
 	_, err := notifications.NewRepository(r.db).CreateTx(ctx, tx, notifications.CreateInput{AccountID: recipient, Kind: "pastoral." + action, Title: "Pastoral appointment update", Body: "Open your private appointments to review an update.", ResourcePath: "/#/pastors", DedupKey: "pastoral:" + b.ID + ":" + strconv.Itoa(b.Version)})
-	return err
+	if err != nil {
+		return err
+	}
+	return enqueueBookingEmails(ctx, tx, b, action, now)
 }
 func (r *Repository) WithdrawSlot(ctx context.Context, actor, id string, now time.Time) error {
 	tx, err := r.db.BeginTx(ctx, nil)

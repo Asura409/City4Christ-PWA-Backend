@@ -390,6 +390,11 @@ requester/assigned pastor only, with no administrator exception. No confidential
 notes are collected. See [contract and limits](pastoral-bookings.md). The unchecked
 items below retain the wider milestone scope; this slice does not close M9.
 
+The email extension adds a transactional metadata outbox, private status updates and
+24-hour/1-hour reminders through the existing worker, with stale-message checks,
+provider deduplication and opt-in rollout. See [delivery rules](pastoral-email-delivery.md).
+Live acceptance remains with the testing team; no worker configuration is changed here.
+
 
 - [ ] **M9.1:** Approve who may read care details, exceptional Super Admin access,
   service types, booking/cancellation/escalation rules and note retention.
