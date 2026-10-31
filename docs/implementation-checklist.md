@@ -58,6 +58,23 @@ For reversible documentation/configuration edits, use appropriate consistency/sc
 checks rather than artificial tests that repeat the implementation. Every domain
 slice still requires the repository/service/HTTP/global-app TDD sequence above.
 
+### Local group and notification completion — 31 October 2026
+
+Group posts/comments/reactions/media associations and report moderation now enforce
+active membership and exact group scope. Group events reuse publication/RSVP/version
+rules, authenticated private calendars and scoped coordinator management. Existing
+membership decision notices were preserved; a service-level unverified roster gap
+was fixed. See [group content](group-content.md).
+
+Notification preferences, mark-all-read, generic message/event notices, immutable
+broadcast draft/review/confirmed-send and opt-in Web Push are implemented locally.
+The worker uses maintained OSS encryption/VAPID, session-bound subscriptions,
+transactional jobs, current permission/consent checks, retries and expired endpoint
+cleanup. See [delivery and explicit worker rollout](notification-delivery.md).
+No live push, broadcast, migration, worker rollout or new deployment is claimed.
+Visitor welcome/SMS and production retention/device acceptance remain outside this
+slice. Older unchecked milestone items below retain their release/acceptance gates.
+
 ## Milestone overview
 
 ### Owner-directed product priority update (21 October 2026)
@@ -89,17 +106,17 @@ message state; record in-app events transactionally and add delivery separately.
 This priority update supersedes the default milestone order in the table and the
 paragraph below; onboarding is deferred rather than cancelled.
 
-### Current implementation position — 28 October 2026
+### Implementation position recorded — 28 October 2026
 
 The owner-directed sequence above describes current priority, not the historical
 order of implementation. Work on later-numbered milestones began before M5 was
 closed, so “current focus” must not be read as “the only milestone started.”
 
-- **Current focus: M5.** The church-wide feed and media pipeline code exist. This
+- **Focus at that checkpoint: M5.** The church-wide feed and media pipeline code exist. This
   report/moderation slice is in progress; live upload acceptance, group-scoped
   posts/moderation, and an approved report-retention policy remain open.
 - **M6 Events:** the church-wide event, RSVP, coordinator and calendar flows are
-  implemented. Group-specific event audiences, remaining notification work and
+  implemented. Group-specific event audiences and attendee change notices are now implemented locally;
   the full release gate remain open.
 - **M8 Prayer:** the core privacy, reporting, moderation, expiry and encouragement
   flows are implemented. Attachments and their media acceptance remain open.
@@ -310,8 +327,8 @@ full cross-group read/write boundary audit; membership notifications remain open
   test ownership, group boundaries, removed content/media URLs and concurrent changes.
   The React feed exposes edit/delete controls only on the member’s own post and now
   includes reporting plus a capability-gated staff review queue. Desktop/mobile and
-  server checks for church-wide moderation pass. Group boundaries remain open with
-  group post support; media acceptance also awaits the VPS scanner rollout.
+  server checks for church-wide moderation pass. Group boundaries now have PostgreSQL/global-app and desktop/mobile checks; media
+  acceptance still awaits the VPS scanner rollout.
 
 **Exit:** W03 works for posts/comments/media; hidden content is unavailable through
 detail routes, pagination, search and attachments, not merely hidden in the UI.
@@ -320,7 +337,8 @@ detail routes, pagination, search and attachments, not merely hidden in the UI.
 
 - [x] **M6.1:** MVP defaults: UTC instants plus IANA timezone, one RSVP per
   verified account with 1–10 attendees, optional capacity (unlimited when omitted), no waitlist, cancellation
-  before start, church-wide publication. No group event audience in this slice.
+  before start, church-wide or immutable group publication. Group read and RSVP
+  visibility recheck current membership and leadership eligibility.
 - [x] **M6.2:** Public published church-wide list/detail and `events.manage` draft,
   edit, publish and cancel routes with version conflicts.
 - [x] **M6.3a:** Group event coordinator assignments are restricted to active,
@@ -338,8 +356,8 @@ detail routes, pagination, search and attachments, not merely hidden in the UI.
   RSVP, cancellation and authorization. Browser tests cover listing, RSVP, full
   capacity and manager publication on desktop/mobile.
 
-**Exit:** MVP endpoints and UI are implemented and focused checks passed. Group
-event scope remains open; the latest PR CI run is the full-suite release gate.
+**Exit:** MVP endpoints and UI, including group scope, are implemented locally.
+Deployment, real-device acceptance and PR CI remain separate release gates.
 
 ## M7 — Attendance and Sunday School
 
@@ -575,3 +593,35 @@ coordinator assignment, deduplicated by the assignment audit event, and visible 
 in the assigned member's inbox. Repeating the same assignment does not create a
 second notice. Backend repository and global-app tests passed with disposable
 PostgreSQL; the notification link passed desktop/mobile browser checks.
+
+### Group completion followed by notifications — local evidence (31 October 2026)
+
+Verification used local branches `feat/group-content-notifications` in both
+repositories. No deployment, staging migration or worker configuration was performed
+as part of those local checks.
+Migrations 44–45 are additive and were tested only against disposable databases.
+
+- New group, preference, broadcast, push, provider-adapter, service-worker and
+  privacy tests were run in their failing state before implementation/fixes.
+- Group/posts/events/global-app targeted race checks passed. The later complete
+  notifications, messaging, events and access package race runs passed, as did
+  API/notification-worker command tests. The service-level verification-loss roster
+  denial and nonmember exact-group manager coordinator checks passed separately.
+- Final affected global-app HTTP race checks passed (220.172s). The broader app
+  package run exceeded its default ten-minute total budget during the existing
+  auth/session test; it was not counted as passing. That session test passed alone
+  afterward (71.001s). A complete backend-suite pass is not claimed by this run.
+- Frontend unit tests passed 45/45. The final desktop/mobile regression run passed
+  52/52, including posts, reports, uploads, events, groups, preferences, explicit
+  device opt-in and broadcasts. Upload tests require their synthetic R2 origin;
+  CI now supplies that test-only origin and includes the affected browser files.
+- Real Go API/React desktop/mobile group post/event/broadcast/inbox checks passed
+  through the optional loopback harness (119.303s), with disposable PostgreSQL.
+- Vet, formatting, whitespace, Swagger configuration and OpenAPI 1.21 validation
+  passed; OpenAPI retains eight existing warnings. The final Docker build and
+  migration/startup smoke passed, including a second migration run preserving its
+  existing fixture and the notification worker's disabled-by-default startup.
+
+Live push remains disabled until the operator configures matching VAPID settings,
+verified database access and the worker, then completes approved device acceptance.
+No real push, broadcast, email or personal test data was sent by these checks.

@@ -19,12 +19,15 @@ func (s *Service) AssignCoordinator(ctx context.Context, actor, eventID, groupID
 		return Coordinator{}, err
 	}
 	defer tx.Rollback()
-	var status, eventTitle string
-	if err = tx.QueryRowContext(ctx, `SELECT status,title FROM church_events WHERE id=$1 FOR UPDATE`, eventID).Scan(&status, &eventTitle); err != nil {
+	var status, eventTitle, eventGroup string
+	if err = tx.QueryRowContext(ctx, `SELECT status,title,COALESCE(group_id::text,'') FROM church_events WHERE id=$1 FOR UPDATE`, eventID).Scan(&status, &eventTitle, &eventGroup); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Coordinator{}, ErrNotFound
 		}
 		return Coordinator{}, err
+	}
+	if eventGroup != "" && eventGroup != groupID {
+		return Coordinator{}, ErrForbidden
 	}
 	if status == "cancelled" {
 		return Coordinator{}, ErrConflict
@@ -61,6 +64,7 @@ func (s *Service) AssignCoordinator(ctx context.Context, actor, eventID, groupID
 	if changed {
 		_, err = notifications.NewRepository(s.db).CreateTx(ctx, tx, notifications.CreateInput{
 			AccountID:    accountID,
+			GroupID:      eventGroup,
 			Kind:         "event.coordinator_assigned",
 			Title:        "Event coordinator assigned",
 			Body:         "You have been assigned to coordinate: " + eventTitle,
@@ -121,9 +125,33 @@ func (s *Service) RemoveCoordinator(ctx context.Context, actor, eventID, account
 	return tx.Commit()
 }
 
-func (s *Service) Coordinators(ctx context.Context, eventID string) ([]Coordinator, error) {
+func (s *Service) Coordinators(ctx context.Context, eventID string, viewers ...string) ([]Coordinator, error) {
 	if !validID(eventID) {
 		return nil, ErrNotFound
+	}
+	viewer := ""
+	if len(viewers) > 0 {
+		viewer = viewers[0]
+	}
+	if _, err := s.Detail(ctx, viewer, eventID); err != nil {
+		if !errors.Is(err, ErrNotFound) {
+			return nil, err
+		}
+		var group string
+		e := s.db.QueryRowContext(ctx, `SELECT group_id::text FROM church_events WHERE id=$1 AND status='published' AND group_id IS NOT NULL`, eventID).Scan(&group)
+		if errors.Is(e, sql.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		if e != nil {
+			return nil, e
+		}
+		e = s.checkGroupManager(ctx, viewer, group, "", func(*sql.Tx) error { return nil })
+		if errors.Is(e, ErrForbidden) {
+			return nil, ErrNotFound
+		}
+		if e != nil {
+			return nil, e
+		}
 	}
 	return s.repo.coordinators(ctx, eventID, false)
 }

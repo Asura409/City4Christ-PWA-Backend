@@ -27,6 +27,8 @@ import (
 )
 
 type Config struct {
+	PushEnabled         bool
+	PushPublicKey       string
 	BibleProvider       bible.Provider
 	RegistrationEnabled bool
 	VerificationKey     []byte

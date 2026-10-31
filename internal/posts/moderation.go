@@ -42,9 +42,10 @@ type Report struct {
 }
 
 type ReportOptions struct {
-	Status string
-	Limit  int
-	Cursor string
+	GroupID string
+	Status  string
+	Limit   int
+	Cursor  string
 }
 
 type ReportPage struct {
@@ -114,7 +115,7 @@ func (s *ModerationService) ListReports(ctx context.Context, actor string, optio
 	if options.Status == "" {
 		options.Status = "pending"
 	}
-	if options.Limit < 1 || options.Limit > 100 || (options.Status != "pending" && options.Status != "resolved" && options.Status != "dismissed") || len(options.Cursor) > 2048 {
+	if (options.GroupID != "" && !validID(options.GroupID)) || options.Limit < 1 || options.Limit > 100 || (options.Status != "pending" && options.Status != "resolved" && options.Status != "dismissed") || len(options.Cursor) > 2048 {
 		return ReportPage{}, ErrReportInvalid
 	}
 	var after *reportCursor

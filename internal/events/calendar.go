@@ -9,11 +9,15 @@ import (
 
 var ErrCalendarUnavailable = errors.New("calendar export unavailable")
 
-func (s *Service) Calendar(ctx context.Context, eventID string) ([]byte, error) {
+func (s *Service) Calendar(ctx context.Context, eventID string, viewers ...string) ([]byte, error) {
 	if !validID(eventID) {
 		return nil, ErrNotFound
 	}
-	item, err := s.repo.Detail(ctx, eventID, "", s.now())
+	viewer := ""
+	if len(viewers) > 0 {
+		viewer = viewers[0]
+	}
+	item, err := s.repo.Detail(ctx, eventID, viewer, s.now())
 	if err != nil {
 		return nil, err
 	}

@@ -64,3 +64,5 @@ See [church events](docs/events.md), [prayer wall](docs/prayer-wall.md), and [di
 See [in-app notifications](docs/notifications.md) for the private inbox API and current delivery scope.
 
 Bible lookup and Daily Bread integration: [API and editorial workflow](docs/bible-lookup.md).
+
+Group workflow completion: [group content](docs/group-content.md). Notification preferences, broadcasts and optional push: [delivery and worker rollout](docs/notification-delivery.md).

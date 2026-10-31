@@ -22,11 +22,14 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/googleoidc"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/notifications"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type serverConfig struct {
+	pushEnabled                        bool
+	pushPublicKey                      string
 	databaseURL                        string
 	port                               string
 	verificationKey                    []byte
@@ -42,6 +45,18 @@ type serverConfig struct {
 
 func loadConfig(getenv func(string) string) (serverConfig, error) {
 	c := serverConfig{databaseURL: getenv("DATABASE_URL"), port: getenv("PORT")}
+	switch getenv("PUSH_ENABLED") {
+	case "", "false":
+	case "true":
+		c.pushEnabled = true
+		c.pushPublicKey = getenv("PUSH_VAPID_PUBLIC_KEY")
+		if !notifications.ValidPushPublicKey(c.pushPublicKey) {
+			return c, errors.New("PUSH_VAPID_PUBLIC_KEY is required when push is enabled")
+		}
+	default:
+		return c, errors.New("PUSH_ENABLED must be true or false")
+	}
+
 	if c.databaseURL == "" {
 		return c, errors.New("DATABASE_URL is required")
 	}
@@ -130,7 +145,7 @@ func loadConfig(getenv func(string) string) (serverConfig, error) {
 func migrate(ctx context.Context, db *sql.DB) error { return database.Migrate(ctx, db) }
 
 func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfig) error {
-	appConfig := app.Config{RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
+	appConfig := app.Config{PushEnabled: c.pushEnabled, PushPublicKey: c.pushPublicKey, RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
 	if c.r2Configured {
 		store, err := media.NewR2Storage(c.r2Config, nil)
 		if err != nil {

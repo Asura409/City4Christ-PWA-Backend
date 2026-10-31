@@ -193,3 +193,13 @@ func TestMigrateAndServeStartsWithoutResettingData(t *testing.T) {
 		t.Fatalf("existing data lost: %d %v", count, err)
 	}
 }
+
+func TestPushAPIConfigFailsClosed(t *testing.T) {
+	valid := map[string]string{"DATABASE_URL": "postgres://test:test@localhost/test", "VERIFICATION_KEY_BASE64": base64.StdEncoding.EncodeToString(make([]byte, 32))}
+	for _, setting := range []string{"yes", "true"} {
+		valid["PUSH_ENABLED"] = setting
+		if _, err := loadConfig(func(k string) string { return valid[k] }); err == nil {
+			t.Fatal("invalid/incomplete push configuration accepted", setting)
+		}
+	}
+}

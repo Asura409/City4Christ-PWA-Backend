@@ -79,6 +79,11 @@ func (r *Repository) SendGroupMessage(ctx context.Context, groupID, actor, clien
 	if err != nil {
 		return GroupMessage{}, false, err
 	}
+	if !duplicate {
+		if err = messageNoticesTx(ctx, tx, message.ID, actor, "", groupID); err != nil {
+			return GroupMessage{}, false, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return GroupMessage{}, false, err
 	}

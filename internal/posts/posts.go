@@ -23,6 +23,7 @@ var (
 )
 
 type Post struct {
+	GroupID      string             `json:"groupId,omitempty"`
 	ID           string             `json:"id"`
 	AuthorID     string             `json:"authorId"`
 	FirstName    string             `json:"firstName"`
@@ -42,13 +43,15 @@ type ReactionState struct {
 }
 
 type CreateInput struct {
+	GroupID       string   `json:"groupId,omitempty"`
 	Body          string   `json:"body"`
 	AttachmentIDs []string `json:"attachmentIds,omitempty"`
 }
 
 type Options struct {
-	Limit  int
-	Cursor string
+	GroupID string
+	Limit   int
+	Cursor  string
 }
 
 type Cursor struct {
@@ -71,6 +74,15 @@ func (r *Repository) Create(ctx context.Context, author string, in CreateInput, 
 		return Post{}, err
 	}
 	defer tx.Rollback()
+	if in.GroupID != "" {
+		var visible bool
+		if err = tx.QueryRowContext(ctx, `SELECT c4c_group_content_visible($1::uuid,$2::uuid)`, in.GroupID, author).Scan(&visible); err != nil {
+			return Post{}, err
+		}
+		if !visible {
+			return Post{}, ErrNotFound
+		}
+	}
 	attachments, err := media.LoadAttachableTx(ctx, tx, author, string(media.PurposePostAttachment), in.AttachmentIDs)
 	if err != nil {
 		if errors.Is(err, media.ErrInvalidAttachment) {
@@ -83,11 +95,11 @@ func (r *Repository) Create(ctx context.Context, author string, in CreateInput, 
 		return Post{}, err
 	}
 	p, err := scan(tx.QueryRowContext(ctx, `WITH created AS (
- INSERT INTO church_posts(author_id,body) VALUES($1,$2)
- RETURNING id,author_id,body,created_at
+ INSERT INTO church_posts(author_id,body,group_id) VALUES($1,$2,NULLIF($3,'')::uuid)
+ RETURNING id,author_id,body,created_at,group_id
 )
-SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,0::bigint,false,0::bigint
-FROM created p JOIN accounts a ON a.id=p.author_id`, author, in.Body))
+SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,0::bigint,false,0::bigint,COALESCE(p.group_id::text,'')
+FROM created p JOIN accounts a ON a.id=p.author_id`, author, in.Body, in.GroupID))
 	if err != nil {
 		return Post{}, err
 	}
@@ -120,10 +132,10 @@ func (r *Repository) List(ctx context.Context, o Options, after *Cursor, viewerI
 	rows, err := r.db.QueryContext(ctx, `SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,
  (SELECT count(*) FROM post_reactions pr WHERE pr.post_id=p.id AND pr.reaction='amen'),
  EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=NULLIF($4,'')::uuid AND pr.reaction='amen'),
- (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL)
+ (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL),COALESCE(p.group_id::text,'')
  FROM church_posts p JOIN accounts a ON a.id=p.author_id
- WHERE p.deleted_at IS NULL AND ($1::timestamptz IS NULL OR (p.created_at,p.id)<($1::timestamptz,$2::uuid))
-	ORDER BY p.created_at DESC,p.id DESC LIMIT $3`, at, id, o.Limit+1, viewerID)
+ WHERE p.deleted_at IS NULL AND COALESCE(p.group_id::text,'')=$5 AND c4c_group_content_visible(p.group_id,NULLIF($4,'')::uuid) AND ($1::timestamptz IS NULL OR (p.created_at,p.id)<($1::timestamptz,$2::uuid))
+	ORDER BY p.created_at DESC,p.id DESC LIMIT $3`, at, id, o.Limit+1, viewerID, o.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +183,7 @@ func loadPostAttachments(ctx context.Context, q interface {
 
 func scan(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
-	err := row.Scan(&p.ID, &p.AuthorID, &p.FirstName, &p.LastName, &p.Body, &p.CreatedAt, &p.AmenCount, &p.Reacted, &p.CommentCount)
+	err := row.Scan(&p.ID, &p.AuthorID, &p.FirstName, &p.LastName, &p.Body, &p.CreatedAt, &p.AmenCount, &p.Reacted, &p.CommentCount, &p.GroupID)
 	p.CreatedAt = p.CreatedAt.UTC()
 	return p, err
 }
@@ -205,7 +217,7 @@ func normalizePostBody(body string) (string, error) {
 func (s *Service) Create(ctx context.Context, author string, in CreateInput) (Post, error) {
 	var err error
 	in.Body, err = normalizePostBody(in.Body)
-	if !validID(author) || err != nil {
+	if !validID(author) || err != nil || (in.GroupID != "" && !validID(in.GroupID)) {
 		return Post{}, ErrInvalid
 	}
 	if media.ValidateAttachmentIDs(in.AttachmentIDs, media.MaxPostAttachments) != nil {
@@ -225,7 +237,7 @@ func (s *Service) List(ctx context.Context, o Options, viewer ...string) (Page, 
 	if o.Limit == 0 {
 		o.Limit = 20
 	}
-	if o.Limit < 1 || o.Limit > 100 || len(o.Cursor) > 2048 {
+	if o.Limit < 1 || o.Limit > 100 || len(o.Cursor) > 2048 || (o.GroupID != "" && !validID(o.GroupID)) {
 		return Page{}, ErrInvalid
 	}
 	var after *Cursor
@@ -241,6 +253,9 @@ func (s *Service) List(ctx context.Context, o Options, viewer ...string) (Page, 
 			return Page{}, ErrInvalid
 		}
 		after = c
+	}
+	if err := s.repo.checkGroup(ctx, viewerID, o.GroupID); err != nil {
+		return Page{}, err
 	}
 	items, err := s.repo.List(ctx, o, after, viewerID)
 	if err != nil {
@@ -279,6 +294,9 @@ func (r *Repository) changeAmen(ctx context.Context, actorID, postID string, add
 		return ReactionState{}, err
 	}
 	defer tx.Rollback()
+	if err = visiblePostTx(ctx, tx, actorID, postID); err != nil {
+		return ReactionState{}, err
+	}
 	var exists string
 	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 AND deleted_at IS NULL FOR UPDATE`, postID).Scan(&exists); errors.Is(err, sql.ErrNoRows) {
 		return ReactionState{}, ErrNotFound

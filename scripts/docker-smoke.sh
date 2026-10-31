@@ -66,4 +66,6 @@ docker stop --time 10 "$media_worker" >/dev/null
 test "$(docker inspect -f '{{.State.ExitCode}}' "$api")" = 0
 test "$(docker inspect -f '{{.State.ExitCode}}' "$worker")" = 0
 test "$(docker inspect -f '{{.State.ExitCode}}' "$media_worker")" = 0
+# The optional push worker must start safely with delivery disabled by default.
+docker run --rm --network none "$image" /app/notification-worker
 echo 'Docker smoke checks passed with disposable PostgreSQL.'

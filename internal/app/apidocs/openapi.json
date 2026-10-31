@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.20.0",
+    "version": "1.21.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -3418,7 +3418,7 @@
         ],
         "summary": "List church posts",
         "operationId": "ListChurchPosts",
-        "description": "Returns the authenticated member feed, newest first. Cursor pagination is stable across posts with matching timestamps.",
+        "description": "Returns the authenticated member feed, newest first. Cursor pagination is stable across posts with matching timestamps. Group reads recheck current membership and leadership eligibility. Archived groups are unavailable. Without groupId, post/report/editorial event lists remain church-wide; published event lists include only group events visible to the authenticated viewer.",
         "security": [
           {
             "bearerAuth": []
@@ -3442,6 +3442,15 @@
               "type": "string",
               "maxLength": 2048
             }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
           }
         ],
         "responses": {
@@ -4101,7 +4110,7 @@
         ],
         "summary": "List published church-wide events",
         "operationId": "ListEvents",
-        "description": "Returns at most 100 published church-wide events. Public reads never include attendee identities. A supplied bearer token adds only the caller\u2019s RSVP attendeeCount.",
+        "description": "Returns at most 100 published church-wide events. Public reads never include attendee identities. A supplied bearer token adds only the caller\u2019s RSVP attendeeCount. Group reads recheck current membership and leadership eligibility. Archived groups are unavailable. Without groupId, post/report/editorial event lists remain church-wide; published event lists include only group events visible to the authenticated viewer.",
         "responses": {
           "200": {
             "description": "Success",
@@ -4121,10 +4130,21 @@
           }
         },
         "security": [
+          {},
           {
             "bearerAuth": []
-          },
-          {}
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
+          }
         ]
       }
     },
@@ -4168,10 +4188,10 @@
           }
         },
         "security": [
+          {},
           {
             "bearerAuth": []
-          },
-          {}
+          }
         ]
       }
     },
@@ -4302,7 +4322,7 @@
         ],
         "summary": "List event drafts and published events",
         "operationId": "ListManagedEvents",
-        "description": "Requires events.manage (Super Admin, Assistant Pastor or Staff).",
+        "description": "Requires events.manage (Super Admin, Assistant Pastor or Staff). Group reads recheck current membership and leadership eligibility. Archived groups are unavailable. Without groupId, post/report/editorial event lists remain church-wide; published event lists include only group events visible to the authenticated viewer.",
         "responses": {
           "200": {
             "description": "Success",
@@ -4327,6 +4347,17 @@
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
           }
         ]
       },
@@ -4986,7 +5017,7 @@
         ],
         "operationId": "DownloadEventCalendar",
         "summary": "Download event calendar file",
-        "description": "Published event export. DTSTART is an absolute UTC instant and the calendar carries the event IANA timezone metadata. UID is stable across downloads.",
+        "description": "Church-wide published calendars are public. Group calendars require an active member Bearer token. Responses are no-store; authenticated frontend downloads send Authorization headers.",
         "parameters": [
           {
             "name": "eventId",
@@ -5014,7 +5045,12 @@
             "$ref": "#/components/responses/404"
           }
         },
-        "security": []
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ]
       }
     },
     "/api/v1/events/{eventId}/coordinators": {
@@ -7097,7 +7133,7 @@
         ],
         "summary": "List community content reports",
         "operationId": "ListCommunityContentReports",
-        "description": "Requires the global groups.content.moderate capability. Ministry-scoped leaders cannot review the church-wide feed.",
+        "description": "Requires the global groups.content.moderate capability. Ministry-scoped leaders cannot review the church-wide feed. Group reads recheck current membership and leadership eligibility. Archived groups are unavailable. Without groupId, post/report/editorial event lists remain church-wide; published event lists include only group events visible to the authenticated viewer.",
         "security": [
           {
             "bearerAuth": []
@@ -7134,6 +7170,15 @@
               "type": "string",
               "maxLength": 2048
             }
+          },
+          {
+            "name": "groupId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
           }
         ],
         "responses": {
@@ -9213,6 +9258,671 @@
           }
         ]
       }
+    },
+    "/api/v1/notifications/preferences": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Read my push preferences",
+        "operationId": "GetNotificationPreferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationPreferences"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Replace my push preferences",
+        "operationId": "PutNotificationPreferences",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationPreferences"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationPreferences"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/read-all": {
+      "put": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Mark my currently visible inbox read",
+        "operationId": "ReadAllNotifications",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "changedCount"
+                      ],
+                      "properties": {
+                        "changedCount": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/push/config": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Read browser push availability and public key",
+        "operationId": "GetPushConfiguration",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "enabled",
+                        "publicKey"
+                      ],
+                      "properties": {
+                        "enabled": {
+                          "type": "boolean"
+                        },
+                        "publicKey": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/push/subscriptions": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Subscribe this device to my authenticated session",
+        "operationId": "SubscribePush",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Explicit browser consent is required. Only HTTPS browser push-provider endpoints are accepted. Limit ten subscriptions per account. Binding an endpoint owned by another active account returns 409; secrets/endpoints are never returned. Disabled push returns 503.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushSubscriptionInput"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Unsubscribe my device endpoint",
+        "operationId": "UnsubscribePush",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "removed"
+                      ],
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "endpoint"
+                ],
+                "properties": {
+                  "endpoint": {
+                    "type": "string",
+                    "format": "uri",
+                    "maxLength": 2048
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/broadcasts": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "List recent broadcasts for an authorized audience",
+        "operationId": "ListBroadcasts",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "maxItems": 50,
+                      "items": {
+                        "$ref": "#/components/schemas/Broadcast"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "groupId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Create an immutable announcement draft",
+        "operationId": "CreateBroadcast",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Church-wide broadcasts require broadcasts.send (Super Admin, Assistant Pastor, Staff). Group announcements permit exact-scope leaders and authorized global broadcasters, with leadership eligibility checked. Creating a draft sends nothing.",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Broadcast"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BroadcastInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/broadcasts/{broadcastId}": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Review draft content and current recipient count",
+        "operationId": "ReviewBroadcast",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires a verified active session. Writes require an allowed Origin. Account and IP limits apply. Private responses use Cache-Control: no-store.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Broadcast"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "broadcastId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/broadcasts/{broadcastId}/send": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Explicitly send a reviewed broadcast once",
+        "operationId": "SendBroadcast",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Rechecks current authorization and audience. Requires confirm:true and current version. Drafts are immutable; sending is transactional, audited and retry-safe. Maximum 10,000 verified recipients. Recipient count means inbox records, not push receipt. Group notices are hidden after membership/eligibility is lost.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Broadcast"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "version",
+                  "confirm"
+                ],
+                "properties": {
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "confirm": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "broadcastId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -10625,6 +11335,11 @@
               "format": "uuid"
             },
             "description": "Up to four owned uploads that have passed malware scanning."
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional immutable group audience. Omitted means church-wide; existing content is unchanged."
           }
         },
         "description": "Post body plus optional IDs of the author\u2019s clean, scanned media uploads."
@@ -10711,6 +11426,11 @@
             "type": "integer",
             "minimum": 0,
             "description": "Total comments on this post."
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional immutable group audience. Omitted means church-wide; existing content is unchanged."
           }
         }
       },
@@ -10894,6 +11614,11 @@
             "maximum": 100000,
             "nullable": true,
             "description": "Null or omitted means unlimited capacity."
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional immutable group audience. Omitted means church-wide; existing content is unchanged."
           }
         }
       },
@@ -11029,6 +11754,11 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Optional immutable group audience. Omitted means church-wide; existing content is unchanged."
           }
         }
       },
@@ -13145,6 +13875,171 @@
             "items": {
               "$ref": "#/components/schemas/BibleVerse"
             }
+          }
+        }
+      },
+      "NotificationPreferences": {
+        "type": "object",
+        "required": [
+          "pushEnabled",
+          "groups",
+          "events",
+          "pastoral",
+          "messages",
+          "announcements"
+        ],
+        "properties": {
+          "pushEnabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "groups": {
+            "type": "boolean",
+            "default": true
+          },
+          "events": {
+            "type": "boolean",
+            "default": true
+          },
+          "pastoral": {
+            "type": "boolean",
+            "default": true
+          },
+          "messages": {
+            "type": "boolean",
+            "default": true
+          },
+          "announcements": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "description": "Controls Web Push only. The durable in-app inbox is retained regardless of push preferences."
+      },
+      "PushSubscriptionInput": {
+        "type": "object",
+        "required": [
+          "endpoint",
+          "keys"
+        ],
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "format": "uri",
+            "maxLength": 2048
+          },
+          "keys": {
+            "type": "object",
+            "required": [
+              "p256dh",
+              "auth"
+            ],
+            "properties": {
+              "p256dh": {
+                "type": "string",
+                "maxLength": 100
+              },
+              "auth": {
+                "type": "string",
+                "maxLength": 32
+              }
+            }
+          }
+        }
+      },
+      "BroadcastInput": {
+        "type": "object",
+        "required": [
+          "title",
+          "body",
+          "audience"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "church",
+              "group"
+            ]
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
+      "Broadcast": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "body",
+          "audience",
+          "status",
+          "version",
+          "recipientCount",
+          "createdAt",
+          "sentAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "church",
+              "group"
+            ]
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "sent"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "recipientCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         }
       }

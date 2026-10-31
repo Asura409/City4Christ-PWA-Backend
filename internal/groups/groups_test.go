@@ -311,3 +311,21 @@ func TestStaffGroupLifecycleAndLeadershipAudienceBoundary(t *testing.T) {
 		t.Fatalf("expected one audit for each lifecycle transition, got %d err=%v", auditCount, err)
 	}
 }
+
+func TestUnverifiedMembershipCannotReadRoster(t *testing.T) {
+	db, s, admin, member, _ := groupFixture(t)
+	ctx := context.Background()
+	g, e := s.Create(ctx, admin, CreateInput{Name: "Open group", Audience: "church", JoinPolicy: "open"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Join(ctx, member, g.ID); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = db.Exec(`UPDATE accounts SET email_verified_at=NULL WHERE id=$1`, member); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Members(ctx, member, g.ID); !errors.Is(e, ErrForbidden) {
+		t.Fatal("unverified roster access", e)
+	}
+}

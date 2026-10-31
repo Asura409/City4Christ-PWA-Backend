@@ -16,8 +16,9 @@ Every route requires a verified member Bearer session. Reads are account-scoped;
 attempting to mark another account's notification read returns 404. Writes require
 an allowed browser Origin. Pagination uses a sequence cursor; clients should return it unchanged. Each notification contains plain text and an
 optional same-origin React hash route. It does not expose donor, prayer, message,
-email or other private content by design. Delivery is currently in-app only;
-there is no email, SMS, Web Push, broadcast or retry worker in this slice.
+email or other private content by design. The [notification delivery extension](notification-delivery.md) adds preferences,
+mark-all-read, audited broadcasts and an optional Web Push worker. Push is disabled
+until explicitly configured; SMS remains outside this slice.
 
 Use `Repository.CreateTx` from a domain transaction. `DedupKey` should be stable
 for one domain event and recipient, for example a group decision ID or coordinator
