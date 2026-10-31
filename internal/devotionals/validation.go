@@ -20,15 +20,10 @@ func normalize(c Content) (Content, error) {
 		min, max  int
 		multiline bool
 	}{{&c.Title, "title", 1, 200, false}, {&c.Body, "body", 1, 20000, true}, {&c.ScriptureReference, "scriptureReference", 0, 200, false}, {&c.Author, "author", 0, 200, false}} {
-		*f.value = strings.TrimSpace(*f.value)
-		n := utf8.RuneCountInString(*f.value)
-		if !utf8.ValidString(*f.value) || n < f.min || n > f.max {
-			return Content{}, invalid(f.name, "Use text within the documented length.")
-		}
-		for _, r := range *f.value {
-			if unicode.IsControl(r) && !(f.multiline && (r == '\n' || r == '\r' || r == '\t')) {
-				return Content{}, invalid(f.name, "Remove unsupported control characters.")
-			}
+		var err error
+		*f.value, err = normalizeText(*f.value, f.name, f.min, f.max, f.multiline)
+		if err != nil {
+			return Content{}, err
 		}
 	}
 	return c, nil
@@ -63,4 +58,18 @@ func options(o Options) (Options, error) {
 	}
 	_, _, err := decodeCursor(o.Cursor)
 	return o, err
+}
+
+func normalizeText(raw, field string, minimum, maximum int, multiline bool) (string, error) {
+	raw = strings.TrimSpace(raw)
+	n := utf8.RuneCountInString(raw)
+	if !utf8.ValidString(raw) || n < minimum || n > maximum {
+		return "", invalid(field, "Use text within the documented length.")
+	}
+	for _, r := range raw {
+		if unicode.IsControl(r) && !(multiline && (r == '\n' || r == '\r' || r == '\t')) {
+			return "", invalid(field, "Remove unsupported control characters.")
+		}
+	}
+	return raw, nil
 }

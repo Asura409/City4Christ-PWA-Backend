@@ -45,6 +45,8 @@ See [access management](docs/access-management.md) for scoped permissions, opera
 
 See [member profiles and privacy](docs/member-profiles.md) for own-profile edits and directory visibility, and [request validation](docs/api-validation.md) for field-specific errors and improved Swagger examples.
 
+The [managed Daily Verse](docs/daily-verse.md) replaces Home’s static verse with an editor-published selection for the fixed GMT+1 church day.
+
 The [devotional publishing foundation](docs/devotional-publishing.md) adds editorial drafts, immediate publication, withdrawal and a published reader view.
 
 The [pastoral booking foundation](docs/pastoral-bookings.md) adds explicit pastor profiles, availability, approval-based requests and private member/pastor queues. No real pastor is appointed automatically. [Appointment email delivery](docs/pastoral-email-delivery.md) adds transactional updates and scheduled reminders through the existing worker.
@@ -60,3 +62,5 @@ See [church permissions and current-access snapshots](docs/church-permissions.md
 See [church events](docs/events.md), [prayer wall](docs/prayer-wall.md), and [direct messaging](docs/messaging.md) for the connected API contracts and current scope.
 
 See [in-app notifications](docs/notifications.md) for the private inbox API and current delivery scope.
+
+Bible lookup and Daily Bread integration: [API and editorial workflow](docs/bible-lookup.md).
