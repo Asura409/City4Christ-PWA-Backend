@@ -132,6 +132,11 @@ func (r *Repository) SendMessage(ctx context.Context, conversationID, actor, cli
 	if err != nil {
 		return Message{}, false, err
 	}
+	if !duplicate {
+		if err = messageNoticesTx(ctx, tx, message.ID, actor, conversationID, ""); err != nil {
+			return Message{}, false, err
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return Message{}, false, err
 	}

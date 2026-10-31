@@ -14,6 +14,10 @@ import (
 func notificationRoutes(mux *http.ServeMux, service *notifications.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
 	fail := func(w http.ResponseWriter, err error) {
 		switch {
+		case errors.Is(err, notifications.ErrForbidden):
+			writeError(w, 403, "forbidden", "You do not have permission for this notification action.", nil)
+		case errors.Is(err, notifications.ErrConflict):
+			writeError(w, 409, "state_conflict", "Reload this notification operation before retrying.", nil)
 		case errors.Is(err, notifications.ErrInvalid):
 			writeError(w, http.StatusUnprocessableEntity, "validation_failed", "Check the notification pagination or identifier.", nil)
 		case errors.Is(err, notifications.ErrNotFound):
@@ -47,6 +51,9 @@ func notificationRoutes(mux *http.ServeMux, service *notifications.Service, sess
 		}
 		return actor.ID, true
 	}
+	notificationPushRoutes(mux, service, sessions, c, authorize, fail)
+	notificationPreferenceRoutes(mux, service, authorize, fail)
+	notificationBroadcastRoutes(mux, service, authorize, fail)
 	mux.HandleFunc("GET /api/v1/notifications", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, false)
 		if !ok {

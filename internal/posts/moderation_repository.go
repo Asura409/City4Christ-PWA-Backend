@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/groupaccess"
 )
 
 func (r *ModerationRepository) Report(ctx context.Context, actor string, input ReportInput, now time.Time) (Report, error) {
@@ -26,6 +27,12 @@ func (r *ModerationRepository) Report(ctx context.Context, actor string, input R
 		return Report{}, ErrReportNotFound
 	}
 	if err != nil {
+		return Report{}, err
+	}
+	if err = visiblePostTx(ctx, tx, actor, postID); err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return Report{}, ErrReportNotFound
+		}
 		return Report{}, err
 	}
 	if authorID == actor {
@@ -56,7 +63,7 @@ func (r *ModerationRepository) List(ctx context.Context, actor string, options R
 		return nil, err
 	}
 	defer tx.Rollback()
-	if err = access.CheckTx(ctx, tx, actor, "groups.content.moderate", ""); errors.Is(err, access.ErrForbidden) {
+	if err = groupaccess.CheckTx(ctx, tx, actor, options.GroupID, "groups.content.moderate"); errors.Is(err, access.ErrForbidden) || errors.Is(err, groupaccess.ErrDenied) {
 		return nil, ErrModerationForbidden
 	} else if err != nil {
 		return nil, err
@@ -67,8 +74,8 @@ func (r *ModerationRepository) List(ctx context.Context, actor string, options R
 		createdAt, cursorID = &after.CreatedAt, &after.ID
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT id::text,target_type,target_id::text,post_id::text,content_snapshot,reason,details,status,created_at
-		FROM post_content_reports WHERE status=$1 AND ($2::timestamptz IS NULL OR (created_at,id)>($2::timestamptz,$3::uuid))
-		ORDER BY created_at,id LIMIT $4`, options.Status, createdAt, cursorID, options.Limit+1)
+		FROM post_content_reports WHERE post_id IN(SELECT id FROM church_posts WHERE group_id IS NOT DISTINCT FROM NULLIF($5,'')::uuid) AND status=$1 AND ($2::timestamptz IS NULL OR (created_at,id)>($2::timestamptz,$3::uuid))
+		ORDER BY created_at,id LIMIT $4`, options.Status, createdAt, cursorID, options.Limit+1, options.GroupID)
 	if err != nil {
 		return nil, err
 	}
@@ -100,17 +107,22 @@ func (r *ModerationRepository) Review(ctx context.Context, permissions *access.S
 		return err
 	}
 	defer tx.Rollback()
-	if err = access.CheckTx(ctx, tx, actor, "groups.content.moderate", ""); errors.Is(err, access.ErrForbidden) {
-		return ErrModerationForbidden
-	} else if err != nil {
-		return err
-	}
 	var targetType, targetID, postID, status string
 	err = tx.QueryRowContext(ctx, `SELECT target_type,target_id::text,post_id::text,status FROM post_content_reports WHERE id=$1`, reportID).Scan(&targetType, &targetID, &postID, &status)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrReportNotFound
 	}
 	if err != nil {
+		return err
+	}
+	var groupID string
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(group_id::text,'') FROM church_posts WHERE id=$1`, postID).Scan(&groupID); err != nil {
+		return err
+	}
+	if err = groupaccess.CheckTx(ctx, tx, actor, groupID, "groups.content.moderate"); err != nil {
+		if errors.Is(err, access.ErrForbidden) || errors.Is(err, groupaccess.ErrDenied) {
+			return ErrModerationForbidden
+		}
 		return err
 	}
 	if status != "pending" {

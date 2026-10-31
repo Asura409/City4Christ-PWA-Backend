@@ -1,0 +1,19 @@
+[Unit]
+Description=City4Christ opt-in Web Push worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/city4christ-notification-worker
+EnvironmentFile=%h/.config/city4christ/notifications.env
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+UMask=0077
+
+[Install]
+WantedBy=default.target

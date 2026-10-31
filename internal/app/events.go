@@ -69,7 +69,8 @@ func eventRoutes(mux *http.ServeMux, service *events.Service, sessions *auth.Ses
 		return
 	}
 	mux.HandleFunc("GET /api/v1/events", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := url.ParseQuery(r.URL.RawQuery); err != nil || r.URL.RawQuery != "" {
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil || len(q) > 1 || (len(q) > 0 && (len(q["groupId"]) != 1 || q.Get("groupId") == "")) {
 			eventError(w, events.ErrInvalid)
 			return
 		}
@@ -77,7 +78,18 @@ func eventRoutes(mux *http.ServeMux, service *events.Service, sessions *auth.Ses
 		if !ok {
 			return
 		}
-		result, err := service.List(r.Context(), actor)
+		var result []events.Event
+		if q.Get("groupId") != "" {
+			if actor == "" {
+				actor, ok = authorize(w, r, false)
+				if !ok {
+					return
+				}
+			}
+			result, err = service.GroupList(r.Context(), actor, q.Get("groupId"), false)
+		} else {
+			result, err = service.List(r.Context(), actor)
+		}
 		if err != nil {
 			eventError(w, err)
 			return
@@ -105,14 +117,18 @@ func eventRoutes(mux *http.ServeMux, service *events.Service, sessions *auth.Ses
 			eventError(w, events.ErrInvalid)
 			return
 		}
-		calendar, err := service.Calendar(r.Context(), r.PathValue("eventId"))
+		actor, ok := viewer(w, r)
+		if !ok {
+			return
+		}
+		calendar, err := service.Calendar(r.Context(), r.PathValue("eventId"), actor)
 		if err != nil {
 			eventError(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "text/calendar; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="city4christ-event.ics"`)
-		w.Header().Set("Cache-Control", "public, max-age=60")
+		w.Header().Set("Cache-Control", "no-store")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(calendar)
 	})
@@ -121,10 +137,11 @@ func eventRoutes(mux *http.ServeMux, service *events.Service, sessions *auth.Ses
 			eventError(w, events.ErrInvalid)
 			return
 		}
-		if _, ok := authorize(w, r, false); !ok {
+		actor, ok := authorize(w, r, false)
+		if !ok {
 			return
 		}
-		result, err := service.Coordinators(r.Context(), r.PathValue("eventId"))
+		result, err := service.Coordinators(r.Context(), r.PathValue("eventId"), actor)
 		if err != nil {
 			eventError(w, err)
 			return
@@ -194,11 +211,17 @@ func eventRoutes(mux *http.ServeMux, service *events.Service, sessions *auth.Ses
 		if !ok {
 			return
 		}
-		if r.URL.RawQuery != "" {
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil || len(q) > 1 || (len(q) > 0 && (len(q["groupId"]) != 1 || q.Get("groupId") == "")) {
 			eventError(w, events.ErrInvalid)
 			return
 		}
-		result, err := service.AdminList(r.Context(), actor)
+		var result []events.Event
+		if q.Get("groupId") != "" {
+			result, err = service.GroupList(r.Context(), actor, q.Get("groupId"), true)
+		} else {
+			result, err = service.AdminList(r.Context(), actor)
+		}
 		if err != nil {
 			eventError(w, err)
 			return

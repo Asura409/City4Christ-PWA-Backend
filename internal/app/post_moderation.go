@@ -56,12 +56,12 @@ func postModerationRoutes(mux *http.ServeMux, service *posts.ModerationService, 
 			return
 		}
 		for key, values := range q {
-			if (key != "status" && key != "limit" && key != "cursor") || len(values) != 1 {
+			if (key != "status" && key != "limit" && key != "cursor" && key != "groupId") || len(values) != 1 {
 				writeErrorFor(w, posts.ErrReportInvalid)
 				return
 			}
 		}
-		options := posts.ReportOptions{Status: q.Get("status"), Cursor: q.Get("cursor")}
+		options := posts.ReportOptions{Status: q.Get("status"), Cursor: q.Get("cursor"), GroupID: q.Get("groupId")}
 		if q.Has("limit") {
 			options.Limit, err = strconv.Atoi(q.Get("limit"))
 			if err != nil {

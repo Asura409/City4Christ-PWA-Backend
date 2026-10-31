@@ -20,6 +20,9 @@ func (r *Repository) Update(ctx context.Context, authorID, postID string, in Upd
 		return Post{}, err
 	}
 	defer tx.Rollback()
+	if err = visiblePostTx(ctx, tx, authorID, postID); err != nil {
+		return Post{}, err
+	}
 	var ownedID string
 	err = tx.QueryRowContext(ctx, `SELECT id::text FROM church_posts WHERE id=$1 AND author_id=$2 AND deleted_at IS NULL FOR UPDATE`, postID, authorID).Scan(&ownedID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -44,7 +47,7 @@ FROM accounts a WHERE p.id=$2 AND p.author_id=$3 AND p.deleted_at IS NULL AND a.
 RETURNING p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,
  (SELECT count(*) FROM post_reactions pr WHERE pr.post_id=p.id AND pr.reaction='amen'),
  EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=$3 AND pr.reaction='amen'),
- (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL)`, in.Body, postID, authorID))
+ (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL),COALESCE(p.group_id::text,'')`, in.Body, postID, authorID))
 	if err != nil {
 		return Post{}, err
 	}
@@ -67,6 +70,9 @@ func (r *Repository) Delete(ctx context.Context, authorID, postID string) error 
 		return err
 	}
 	defer tx.Rollback()
+	if err = visiblePostTx(ctx, tx, authorID, postID); err != nil {
+		return err
+	}
 	result, err := tx.ExecContext(ctx, `UPDATE church_posts SET body='[Post deleted]',deleted_at=now()
 WHERE id=$1 AND author_id=$2 AND deleted_at IS NULL`, postID, authorID)
 	if err != nil {

@@ -1,6 +1,6 @@
 # Church events API
 
-Events are church-wide. Only published events appear in the public event list and detail endpoints. Times are supplied as RFC 3339 instants and paired with an IANA timezone for display.
+Events default to church-wide; an immutable optional `groupId` enables the [group audience workflow](group-content.md). Only published events appear in the public event list and detail endpoints. Times are supplied as RFC 3339 instants and paired with an IANA timezone for display.
 
 ## Public and member endpoints
 
@@ -50,3 +50,5 @@ device's timezone; the event's IANA timezone is included as calendar metadata.
 An event has no duration field yet, so the export does not invent an end time.
 
 OpenAPI schemas and response details are in `internal/app/apidocs/openapi.json`.
+
+Registered attendees receive generic transactional notices when published events change or are cancelled. See [notification delivery](notification-delivery.md).

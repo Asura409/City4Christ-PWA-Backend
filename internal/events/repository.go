@@ -26,11 +26,11 @@ func (r *Repository) Create(ctx context.Context, actor string, in CreateInput, n
 func (r *Repository) createTx(ctx context.Context, tx *sql.Tx, actor string, in CreateInput, now time.Time) (Event, error) {
 	var event Event
 	err := tx.QueryRowContext(ctx, `
-		INSERT INTO church_events(id,title,description,location,starts_at,time_zone,capacity,status,version,created_by,created_at,updated_at)
-		VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6,'draft',1,$7,$8,$8)
-		RETURNING id,title,description,location,starts_at,time_zone,capacity,status,version,created_at,updated_at`,
-		in.Title, in.Description, in.Location, in.StartsAt, in.TimeZone, in.Capacity, actor, now,
-	).Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt)
+		INSERT INTO church_events(id,title,description,location,starts_at,time_zone,capacity,status,version,created_by,created_at,updated_at,group_id)
+		VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6,'draft',1,$7,$8,$8,NULLIF($9,'')::uuid)
+		RETURNING id,title,description,location,starts_at,time_zone,capacity,status,version,created_at,updated_at,COALESCE(group_id::text,'')`,
+		in.Title, in.Description, in.Location, in.StartsAt, in.TimeZone, in.Capacity, actor, now, in.GroupID,
+	).Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt, &event.GroupID)
 	if err != nil {
 		return Event{}, err
 	}
@@ -82,9 +82,9 @@ func (r *Repository) updateTx(ctx context.Context, tx *sql.Tx, actor, eventID st
 	err := tx.QueryRowContext(ctx, `
 		UPDATE church_events SET title=$1,description=$2,location=$3,starts_at=$4,time_zone=$5,capacity=$6,status=$7,version=version+1,updated_at=$8
 		WHERE id=$9 AND version=$10
-		RETURNING id,title,description,location,starts_at,time_zone,capacity,status,version,created_at,updated_at`,
+		RETURNING id,title,description,location,starts_at,time_zone,capacity,status,version,created_at,updated_at,COALESCE(group_id::text,'')`,
 		in.Title, in.Description, in.Location, in.StartsAt, in.TimeZone, in.Capacity, in.Status, now, eventID, in.Version,
-	).Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt)
+	).Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt, &event.GroupID)
 	if err != nil {
 		return Event{}, err
 	}
@@ -94,6 +94,11 @@ func (r *Repository) updateTx(ctx context.Context, tx *sql.Tx, actor, eventID st
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO event_audit_events(event_id,actor_id,action,version,created_at) VALUES($1,$2,$3,$4,$5)`, eventID, actor, action, event.Version, now); err != nil {
 		return Event{}, err
+	}
+	if currentStatus == "published" {
+		if err = eventChangeNoticesTx(ctx, tx, event); err != nil {
+			return Event{}, err
+		}
 	}
 	return event, nil
 }
@@ -123,17 +128,21 @@ func (r *Repository) list(ctx context.Context, viewer string, now time.Time, adm
 	return result, err
 }
 
-func (r *Repository) listTx(ctx context.Context, tx *sql.Tx, viewer string, now time.Time, admin bool) ([]Event, error) {
+func (r *Repository) listTx(ctx context.Context, tx *sql.Tx, viewer string, now time.Time, admin bool, groupIDs ...string) ([]Event, error) {
+	groupID := ""
+	if len(groupIDs) > 0 {
+		groupID = groupIDs[0]
+	}
 	query := `SELECT e.id,e.title,e.description,e.location,e.starts_at,e.time_zone,e.capacity,e.status,e.version,e.created_at,e.updated_at,
 		COALESCE(sum(r.attendee_count),0)::int,
-		COALESCE(max(r.attendee_count) FILTER (WHERE r.account_id=NULLIF($1,'')::uuid),0)::int
+		COALESCE(max(r.attendee_count) FILTER (WHERE r.account_id=NULLIF($1,'')::uuid),0)::int,COALESCE(e.group_id::text,'')
 		FROM church_events e LEFT JOIN event_rsvps r ON r.event_id=e.id`
 	if admin {
-		query += ` GROUP BY e.id ORDER BY e.starts_at,e.id LIMIT 100`
+		query += ` WHERE e.group_id IS NOT DISTINCT FROM NULLIF($2,'')::uuid GROUP BY e.id ORDER BY e.starts_at,e.id LIMIT 100`
 	} else {
-		query += ` WHERE e.status='published' GROUP BY e.id ORDER BY e.starts_at,e.id LIMIT 100`
+		query += ` WHERE e.status='published' AND c4c_group_content_visible(e.group_id,NULLIF($1,'')::uuid) AND ($2='' OR e.group_id=NULLIF($2,'')::uuid) GROUP BY e.id ORDER BY e.starts_at,e.id LIMIT 100`
 	}
-	rows, err := tx.QueryContext(ctx, query, viewer)
+	rows, err := tx.QueryContext(ctx, query, viewer, groupID)
 	if err != nil {
 		return nil, err
 	}
@@ -141,7 +150,7 @@ func (r *Repository) listTx(ctx context.Context, tx *sql.Tx, viewer string, now 
 	result := []Event{}
 	for rows.Next() {
 		var event Event
-		if err := rows.Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt, &event.AttendeeCount, &event.MyAttendeeCount); err != nil {
+		if err := rows.Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt, &event.AttendeeCount, &event.MyAttendeeCount, &event.GroupID); err != nil {
 			return nil, err
 		}
 		result = append(result, event)
@@ -160,9 +169,9 @@ func (r *Repository) Detail(ctx context.Context, eventID, viewer string, now tim
 	defer tx.Rollback()
 	var event Event
 	err = tx.QueryRowContext(ctx, `SELECT e.id,e.title,e.description,e.location,e.starts_at,e.time_zone,e.capacity,e.status,e.version,e.created_at,e.updated_at,
-		COALESCE(sum(r.attendee_count),0)::int,COALESCE(max(r.attendee_count) FILTER (WHERE r.account_id=NULLIF($2,'')::uuid),0)::int
-		FROM church_events e LEFT JOIN event_rsvps r ON r.event_id=e.id WHERE e.id=$1 AND e.status='published' GROUP BY e.id`, eventID, viewer).
-		Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt, &event.AttendeeCount, &event.MyAttendeeCount)
+		COALESCE(sum(r.attendee_count),0)::int,COALESCE(max(r.attendee_count) FILTER (WHERE r.account_id=NULLIF($2,'')::uuid),0)::int,COALESCE(e.group_id::text,'')
+		FROM church_events e LEFT JOIN event_rsvps r ON r.event_id=e.id WHERE e.id=$1 AND e.status='published' AND c4c_group_content_visible(e.group_id,NULLIF($2,'')::uuid) GROUP BY e.id`, eventID, viewer).
+		Scan(&event.ID, &event.Title, &event.Description, &event.Location, &event.StartsAt, &event.TimeZone, &event.Capacity, &event.Status, &event.Version, &event.CreatedAt, &event.UpdatedAt, &event.AttendeeCount, &event.MyAttendeeCount, &event.GroupID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Event{}, ErrNotFound
 	}
@@ -184,7 +193,7 @@ func (r *Repository) RSVP(ctx context.Context, eventID, accountID string, attend
 	var status string
 	var starts time.Time
 	var capacity sql.NullInt64
-	if err = tx.QueryRowContext(ctx, `SELECT status,starts_at,capacity FROM church_events WHERE id=$1 FOR UPDATE`, eventID).Scan(&status, &starts, &capacity); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT status,starts_at,capacity FROM church_events WHERE id=$1 AND c4c_group_content_visible(group_id,$2::uuid) FOR UPDATE`, eventID, accountID).Scan(&status, &starts, &capacity); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return RSVP{}, ErrNotFound
 		}
@@ -242,7 +251,7 @@ func (r *Repository) CancelRSVP(ctx context.Context, eventID, accountID string, 
 	defer tx.Rollback()
 	var status string
 	var starts time.Time
-	if err = tx.QueryRowContext(ctx, `SELECT status,starts_at FROM church_events WHERE id=$1 FOR UPDATE`, eventID).Scan(&status, &starts); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT status,starts_at FROM church_events WHERE id=$1 AND c4c_group_content_visible(group_id,$2::uuid) FOR UPDATE`, eventID, accountID).Scan(&status, &starts); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return false, ErrNotFound
 		}

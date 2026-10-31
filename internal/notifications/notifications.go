@@ -31,6 +31,7 @@ type Notification struct {
 }
 
 type CreateInput struct {
+	GroupID      string
 	AccountID    string
 	Kind         string
 	Title        string
@@ -70,7 +71,7 @@ func validID(value string) bool {
 }
 
 func validInput(input CreateInput) bool {
-	if !validID(input.AccountID) || len(input.Kind) < 2 || len(input.Kind) > 64 || input.Kind[0] < 'a' || input.Kind[0] > 'z' {
+	if (input.GroupID != "" && !validID(input.GroupID)) || !validID(input.AccountID) || len(input.Kind) < 2 || len(input.Kind) > 64 || input.Kind[0] < 'a' || input.Kind[0] > 'z' {
 		return false
 	}
 	for _, char := range input.Kind[1:] {
@@ -94,12 +95,15 @@ func (r *Repository) CreateTx(ctx context.Context, tx *sql.Tx, input CreateInput
 	if tx == nil || !validInput(input) {
 		return Notification{}, ErrInvalid
 	}
-	query := `INSERT INTO notifications(account_id,kind,title,body,resource_path,dedupe_key,created_at)
-		VALUES($1,$2,$3,$4,$5,NULLIF($6,''),now())
+	query := `INSERT INTO notifications(account_id,kind,title,body,resource_path,dedupe_key,created_at,group_id)
+		VALUES($1,$2,$3,$4,$5,NULLIF($6,''),now(),NULLIF($7,'')::uuid)
 		ON CONFLICT (account_id,dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
 		RETURNING sequence,id,kind,title,body,resource_path,created_at,read_at`
-	notice, err := scanNotification(tx.QueryRowContext(ctx, query, input.AccountID, input.Kind, strings.TrimSpace(input.Title), strings.TrimSpace(input.Body), input.ResourcePath, input.DedupKey))
+	notice, err := scanNotification(tx.QueryRowContext(ctx, query, input.AccountID, input.Kind, strings.TrimSpace(input.Title), strings.TrimSpace(input.Body), input.ResourcePath, input.DedupKey, input.GroupID))
 	if err == nil {
+		if err = queuePushTx(ctx, tx, notice.ID); err != nil {
+			return Notification{}, err
+		}
 		return notice, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) || input.DedupKey == "" {
@@ -141,7 +145,7 @@ func (r *Repository) List(ctx context.Context, accountID string, options Options
 		before = sequence
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT sequence,id,kind,title,body,resource_path,created_at,read_at FROM notifications
-		WHERE account_id=$1 AND ($2::bigint IS NULL OR sequence<$2) ORDER BY sequence DESC LIMIT $3`, accountID, before, limit+1)
+		WHERE account_id=$1 AND c4c_group_content_visible(group_id,$1::uuid) AND ($2::bigint IS NULL OR sequence<$2) ORDER BY sequence DESC LIMIT $3`, accountID, before, limit+1)
 	if err != nil {
 		return Page{}, err
 	}
@@ -166,7 +170,7 @@ func (r *Repository) List(ctx context.Context, accountID string, options Options
 
 func (r *Repository) UnreadCount(ctx context.Context, accountID string) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM notifications WHERE account_id=$1 AND read_at IS NULL`, accountID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM notifications WHERE account_id=$1 AND read_at IS NULL AND c4c_group_content_visible(group_id,$1::uuid)`, accountID).Scan(&count)
 	return count, err
 }
 
@@ -174,7 +178,7 @@ func (r *Repository) MarkRead(ctx context.Context, accountID, notificationID str
 	if !validID(accountID) || !validID(notificationID) {
 		return false, ErrInvalid
 	}
-	result, err := r.db.ExecContext(ctx, `UPDATE notifications SET read_at=$3 WHERE account_id=$1 AND id=$2 AND read_at IS NULL`, accountID, notificationID, now.UTC())
+	result, err := r.db.ExecContext(ctx, `UPDATE notifications SET read_at=$3 WHERE account_id=$1 AND id=$2 AND read_at IS NULL AND c4c_group_content_visible(group_id,$1::uuid)`, accountID, notificationID, now.UTC())
 	if err != nil {
 		return false, err
 	}
@@ -186,7 +190,7 @@ func (r *Repository) MarkRead(ctx context.Context, accountID, notificationID str
 		return true, nil
 	}
 	var exists bool
-	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notifications WHERE account_id=$1 AND id=$2)`, accountID, notificationID).Scan(&exists); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notifications WHERE account_id=$1 AND id=$2 AND c4c_group_content_visible(group_id,$1::uuid))`, accountID, notificationID).Scan(&exists); err != nil {
 		return false, err
 	}
 	if !exists {

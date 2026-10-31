@@ -84,6 +84,6 @@ to each group; role IDs and protected-group visibility are always checked by the
 API.
 
 The React group directory, details, My Groups, roster, join/leave, request
-review, and staff administration screens use these APIs. Notifications remain
-open. No member content feed or media upload endpoints are implied by group
-membership.
+review, and staff administration screens use these APIs. Membership approvals and
+declines create transactional, retry-safe notices. See [group posts/events](group-content.md)
+for scoped content and [notification delivery](notification-delivery.md) for opt-in push.

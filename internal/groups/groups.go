@@ -614,7 +614,7 @@ func (s *Service) Members(ctx context.Context, actor, groupID string) ([]Member,
 	}
 	if !canManage {
 		var active bool
-		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM group_memberships WHERE group_id=$1 AND account_id=$2 AND status='active')`, groupID, actor).Scan(&active); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT c4c_group_content_visible($1::uuid,$2::uuid)`, groupID, actor).Scan(&active); err != nil {
 			return nil, err
 		}
 		if !active {

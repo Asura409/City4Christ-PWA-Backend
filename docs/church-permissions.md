@@ -46,7 +46,8 @@ unknown names currently deny access and are not advertised as usable permissions
 | `roles.operational.manage` | Super Admin, Assistant Pastor/Staff | Global authority to appoint leaders to registered ministry scopes |
 | `ministry.members.manage` | `ministry_leader` | Assigned registered ministry only; ministry routes remain future work |
 | `prayer.moderate` | Super Admin, Assistant Pastor/Staff, scoped `ministry_leader` | Community scope for global roles; active assigned group only for group leaders; Super Admin also group-wide |
-| `groups.content.moderate` | Super Admin, Assistant Pastor/Staff globally; `ministry_leader` by ministry | Global church feed is active for global roles. Group-scoped content routes must check the exact assigned scope when group posts are added. |
+| `groups.content.moderate` | Super Admin, Assistant Pastor/Staff globally; `ministry_leader` by ministry | Global church feed is active for global roles. Group-scoped feeds/reports now check current membership and the exact assigned moderation scope. |
+| `broadcasts.send` | Super Admin, Assistant Pastor, Staff | Global broadcasts; group leaders use their exact `ministry.members.manage` scope |
 
 | Planned capability | Super Admin | Assistant Pastor / Staff | Ministry Leader / task assignee | Member |
 | --- | --- | --- | --- | --- |
@@ -70,7 +71,7 @@ separate from staff-role capabilities. Future group participation, giving, RSVP,
 prayer reports use `prayer.moderate` plus request visibility and current membership.
 Church-wide post and comment reports require the global `groups.content.moderate`
 scope; a ministry-scoped leader cannot read or act on the church-wide queue. Group
-post moderation remains unimplemented until group posts exist.
+post moderation is now implemented with exact active group scope checks.
 private requests stay owner-only for every role. Direct messaging and other future
 domains still require their own ownership/audience checks.
 
@@ -203,3 +204,8 @@ Release the backend's 1.7.0 contract before the connected frontend. No additiona
 environment variable or database migration is needed for this slice. This document
 records implementation/local checks; it does not establish remote CI, deployment,
 new-role activation or live appointment acceptance.
+
+`broadcasts.send` is implemented for Super Admin, Assistant Pastor and Staff globally.
+Group broadcasts and group event management also permit the exact assigned
+`ministry.members.manage` scope, subject to active group/leadership eligibility.
+Neither grants group membership or authority over another group.

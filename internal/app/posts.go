@@ -35,12 +35,12 @@ func postRoutes(mux *http.ServeMux, service *posts.Service, sessions *auth.Sessi
 			return
 		}
 		for key, values := range q {
-			if (key != "limit" && key != "cursor") || len(values) != 1 {
+			if (key != "limit" && key != "cursor" && key != "groupId") || len(values) != 1 {
 				writeErrorFor(w, posts.ErrInvalid)
 				return
 			}
 		}
-		o := posts.Options{Cursor: q.Get("cursor")}
+		o := posts.Options{Cursor: q.Get("cursor"), GroupID: q.Get("groupId")}
 		if q.Has("limit") {
 			o.Limit, err = strconv.Atoi(q.Get("limit"))
 			if err != nil || o.Limit < 1 || o.Limit > 100 {

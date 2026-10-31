@@ -22,8 +22,7 @@ and defaults to 20 posts per page (maximum 100).
 
 Writes require a valid Bearer access token, an allowed `Origin`, and JSON. Text
 is trimmed and must contain 1–5,000 Unicode characters. Reads and writes have
-per-account and shared-IP rate limits. The feed is church-wide; this slice does
-not introduce private group audiences. Each post includes `amenCount` and a
+per-account and shared-IP rate limits. The default feed is church-wide; immutable `groupId` selects a private group audience; see [group content](group-content.md). Each post includes `amenCount` and a
 viewer-specific `reacted` boolean. Amen writes are idempotent and return the
 current count and the caller’s reaction state.
 
@@ -46,8 +45,7 @@ documented reason category. Members cannot report their own content; one pending
 report per member and target is accepted. Only verified Super Admins, Assistant
 Pastors and Staff with the global `groups.content.moderate` capability can read
 or act on church-wide reports. A ministry leader's scoped capability does not
-grant access to the church-wide queue. Group-specific moderation will require an
-exact group-scope check when that content is implemented.
+grant access to the church-wide queue. Group-specific queues and reviews now enforce the exact assigned group scope; see [group content](group-content.md).
 
 Reports retain a snapshot of the reported text so staff can review it. Moderators
 must record a reason to hide content or dismiss a report. Hiding a post scrubs

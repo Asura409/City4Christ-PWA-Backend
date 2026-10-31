@@ -15,6 +15,9 @@ type roleRule struct {
 // Only implemented policy belongs here. Future finance/care/group actions
 // remain denied until their domain flows and authorization boundaries exist.
 var roleRules = [...]roleRule{
+	{role: "super_administrator", permission: "broadcasts.send"},
+	{role: "assistant_pastor", permission: "broadcasts.send"},
+	{role: "staff", permission: "broadcasts.send"},
 	{role: "super_administrator", permission: "roles.read"},
 	{role: "super_administrator", permission: "roles.operational.manage"},
 	{role: "super_administrator", permission: "roles.privileged.manage"},

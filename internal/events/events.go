@@ -28,6 +28,7 @@ var (
 const maxAttendeesPerRSVP = 10
 
 type Event struct {
+	GroupID         string    `json:"groupId,omitempty"`
 	ID              string    `json:"id"`
 	Title           string    `json:"title"`
 	Description     string    `json:"description"`
@@ -60,6 +61,7 @@ type Coordinator struct {
 }
 
 type CreateInput struct {
+	GroupID     string    `json:"groupId,omitempty"`
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Location    string    `json:"location"`
@@ -103,7 +105,7 @@ func normalizeInput(in CreateInput) (CreateInput, error) {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Description = strings.TrimSpace(in.Description)
 	in.Location = strings.TrimSpace(in.Location)
-	if !utf8.ValidString(in.Title) || !utf8.ValidString(in.Description) || !utf8.ValidString(in.Location) ||
+	if (in.GroupID != "" && !validID(in.GroupID)) || !utf8.ValidString(in.Title) || !utf8.ValidString(in.Description) || !utf8.ValidString(in.Location) ||
 		strings.ContainsRune(in.Title, 0) || strings.ContainsRune(in.Description, 0) || strings.ContainsRune(in.Location, 0) ||
 		utf8.RuneCountInString(in.Title) < 1 || utf8.RuneCountInString(in.Title) > 160 ||
 		utf8.RuneCountInString(in.Description) > 5000 || utf8.RuneCountInString(in.Location) > 300 ||
@@ -155,7 +157,7 @@ func (s *Service) Create(ctx context.Context, actor string, raw CreateInput) (Ev
 		return Event{}, ErrForbidden
 	}
 	var result Event
-	err := s.checkManager(ctx, actor, func(tx *sql.Tx) error {
+	err := s.checkGroupManager(ctx, actor, raw.GroupID, "", func(tx *sql.Tx) error {
 		in, e := normalizeInput(raw)
 		if e != nil {
 			return e
@@ -174,7 +176,7 @@ func (s *Service) Update(ctx context.Context, actor, eventID string, raw UpdateI
 		return Event{}, ErrForbidden
 	}
 	var result Event
-	err := s.checkManager(ctx, actor, func(tx *sql.Tx) error {
+	err := s.checkGroupManager(ctx, actor, "", eventID, func(tx *sql.Tx) error {
 		in, e := validateUpdate(raw)
 		if e != nil {
 			return e
