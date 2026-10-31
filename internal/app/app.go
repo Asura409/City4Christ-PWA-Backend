@@ -11,6 +11,7 @@ import (
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/devotionals"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/events"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/groups"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
@@ -55,6 +56,7 @@ func New(db *sql.DB, config Config) http.Handler {
 		sessions, _ = auth.NewSessionService(db, auth.SessionConfig{Key: config.VerificationKey, Now: config.Now})
 		limiter = auth.NewRateLimiter(db, config.VerificationKey, config.Now)
 	}
+	devotionalRoutes(mux, devotionals.NewService(devotionals.NewRepository(db), config.Now), sessions, limiter, config)
 	pastoralRoutes(mux, pastoral.NewService(pastoral.NewRepository(db), config.Now), sessions, limiter, config)
 	sermonMemberRoutes(mux, sermons.NewMemberService(sermons.NewRepository(db), config.Now), sessions, limiter, config)
 	mux.HandleFunc("POST /api/v1/auth/register", registrationHandler(service, config.RegistrationEnabled, limiter))

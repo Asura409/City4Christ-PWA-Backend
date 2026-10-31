@@ -52,7 +52,7 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []Capability{{Permission: "groups.content.moderate", Scope: a}, {Permission: "groups.content.moderate", Scope: b}, {Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
+	expected := []Capability{{Permission: "devotionals.manage", Scope: ""}, {Permission: "groups.content.moderate", Scope: a}, {Permission: "groups.content.moderate", Scope: b}, {Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
 	if len(current.Roles) != 5 || !reflect.DeepEqual(current.Capabilities, expected) {
 		t.Fatalf("incorrect scoped/deduplicated snapshot: %+v", current)
 	}

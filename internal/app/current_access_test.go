@@ -103,7 +103,7 @@ func TestCurrentAccessThroughGlobalApp(t *testing.T) {
 		t.Fatal("grant failed", w.Code, w.Body.String())
 	}
 	got = read(member.AccessToken)
-	if len(got.Roles) != 1 || len(got.Capabilities) != 1 || got.Capabilities[0].Permission != "sermons.manage" {
+	if len(got.Roles) != 1 || len(got.Capabilities) != 2 || got.Capabilities[0].Permission != "devotionals.manage" || got.Capabilities[1].Permission != "sermons.manage" {
 		t.Fatal("same JWT did not gain capability", got)
 	}
 	if w := request("POST", path+"/revoke", admin.AccessToken, body); w.Code != 200 {
@@ -116,7 +116,7 @@ func TestCurrentAccessThroughGlobalApp(t *testing.T) {
 	if w := request("POST", "/api/v1/admin/sermons", member.AccessToken, `{"title":"Forbidden","speaker":"Test","preachedAt":"2026-10-17T12:00:00Z"}`); w.Code != 403 {
 		t.Fatal("revoked publishing remains authorized", w.Code)
 	}
-	if got := read(other.AccessToken); len(got.Capabilities) != 1 || got.Capabilities[0].Permission != "sermons.manage" {
+	if got := read(other.AccessToken); len(got.Capabilities) != 2 || got.Capabilities[0].Permission != "devotionals.manage" || got.Capabilities[1].Permission != "sermons.manage" {
 		t.Fatal("own role snapshot incorrect", got)
 	}
 	// Database failures cannot turn into empty/successful privilege snapshots.

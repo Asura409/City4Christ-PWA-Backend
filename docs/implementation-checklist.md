@@ -440,6 +440,12 @@ checks. Shared fanout is deferred unless the API runs more than one instance.
 
 ## M11 — Complete Word/live and the home/install experience
 
+Local devotional slice: editorial drafts, immediate publication/withdrawal, bounded
+published/editorial catalogs, capability checks and metadata audits are implemented
+with a React reader/editor. See [contract and rollout](devotional-publishing.md).
+Managed daily-verse selection and livestream metadata remain outside this slice;
+staging acceptance stays with the testing team.
+
 - [ ] **M11.1:** Published series discovery and filtering plus member-owned
   playback progress and private sermon notes are implemented locally, with
   PostgreSQL/service/global-app and desktop/mobile browser coverage. Progress
