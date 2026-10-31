@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/bible"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/testpg"
 )
@@ -39,7 +40,7 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	}
 	server := httptest.NewUnstartedServer(nil)
 	origin := "https://" + server.Listener.Addr().String()
-	config := Config{RegistrationEnabled: true, VerificationKey: key, AppOrigin: origin, GoogleProvider: &browserReauthenticationProvider{}}
+	config := Config{RegistrationEnabled: true, VerificationKey: key, AppOrigin: origin, GoogleProvider: &browserReauthenticationProvider{}, BibleProvider: browserBibleProvider{}}
 	api := New(db, config)
 	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key})
 	if err != nil {
@@ -122,7 +123,7 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	args := []string{"exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs", "tests/browser/google-real.spec.mjs", "tests/browser/pastoral-real.spec.mjs", "tests/browser/devotionals-real.spec.mjs", "--output", filepath.Join(t.TempDir(), "browser-results")}
+	args := []string{"exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs", "tests/browser/google-real.spec.mjs", "tests/browser/pastoral-real.spec.mjs", "tests/browser/devotionals-real.spec.mjs", "tests/browser/dailyverse-real.spec.mjs", "--output", filepath.Join(t.TempDir(), "browser-results")}
 	if pattern := os.Getenv("FRONTEND_E2E_GREP"); pattern != "" {
 		args = append(args, "--grep", pattern)
 	}
@@ -134,4 +135,17 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+}
+
+// Synthetic scripture exists only in the disposable, build-tagged browser harness.
+type browserBibleProvider struct{}
+
+func (browserBibleProvider) Lookup(_ context.Context, q bible.Query) (bible.Passage, error) {
+	var tr bible.Translation
+	for _, t := range bible.Translations() {
+		if t.ID == q.Translation {
+			tr = t
+		}
+	}
+	return bible.Passage{Reference: "John 3:16", Translation: tr, Text: "Synthetic Bible passage for local browser testing.", Verses: []bible.Verse{{BookID: "JHN", BookName: "John", Chapter: 3, Number: 16, Text: "Synthetic Bible passage for local browser testing."}}, Source: "Local test fixture", SourceURL: "https://example.com/test-scripture"}, nil
 }

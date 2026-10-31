@@ -91,8 +91,9 @@ Do not serve the new UI as a fake fallback when the API is unavailable.
 
 No push, merge, deployment, live editor assignment or live content seeding is part
 of this local implementation. Staging acceptance remains with the testing team.
-Daily-verse selection and timezone rules, scheduled publication, rich text, media,
-notifications and full content revision history remain later slices.
+[Managed Daily Verse](daily-verse.md) now adds dated selection in fixed GMT+1.
+Scheduled long-form publication, rich text, media, notifications and full content
+revision history remain later slices.
 
 ## Verified local checks
 

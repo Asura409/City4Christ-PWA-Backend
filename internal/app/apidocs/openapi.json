@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.18.0",
+    "version": "1.20.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -79,6 +79,14 @@
     {
       "name": "Devotionals",
       "description": "Plain-text publication. Published content is public; editorial operations require current global devotionals.manage authority."
+    },
+    {
+      "name": "Daily verse",
+      "description": "Owner-selected fixed GMT+1 (UTC+01:00), no daylight saving. One published verse per church date."
+    },
+    {
+      "name": "Bible",
+      "description": "Public Bible passage lookup"
     }
   ],
   "paths": {
@@ -8739,6 +8747,472 @@
           }
         }
       }
+    },
+    "/api/v1/daily-verse": {
+      "get": {
+        "operationId": "GetTodayDailyVerse",
+        "tags": [
+          "Daily verse"
+        ],
+        "summary": "Read today\u2019s church verse and next boundary",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Success. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TodayDailyVerse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "description": "Public, fixed GMT+1 calendar, independent of client and PostgreSQL timezones. Only the assigned-date published verse is returned; empty days return 200 with verse:null. No date/timezone/preview query is accepted. Shares the devotional public-read IP limit of 120/minute."
+      }
+    },
+    "/api/v1/admin/daily-verses": {
+      "get": {
+        "operationId": "ListEditorialDailyVerses",
+        "tags": [
+          "Daily verse"
+        ],
+        "summary": "List dated verse drafts and publications",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditorialDailyVersePage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "description": "Requires verified global devotionals.manage authority. Mutations require allowed Origin. Shares existing devotional account/IP limits and metadata audit conventions. Unknown JSON fields/queries are rejected. Changing a published record changes its date/content immediately. Future dates remain hidden until their church day.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "CreateDailyVerseDraft",
+        "tags": [
+          "Daily verse"
+        ],
+        "summary": "Create dated verse draft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EditorialDailyVerse"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Location": {
+                "description": "Editorial verse detail URL.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "description": "Requires verified global devotionals.manage authority. Mutations require allowed Origin. Shares existing devotional account/IP limits and metadata audit conventions. Unknown JSON fields/queries are rejected. Changing a published record changes its date/content immediately. Future dates remain hidden until their church day.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyVerseDraftInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/daily-verses/{verseId}": {
+      "get": {
+        "operationId": "GetEditorialDailyVerse",
+        "tags": [
+          "Daily verse"
+        ],
+        "summary": "Read editorial verse",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EditorialDailyVerse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "description": "Requires verified global devotionals.manage authority. Mutations require allowed Origin. Shares existing devotional account/IP limits and metadata audit conventions. Unknown JSON fields/queries are rejected. Changing a published record changes its date/content immediately. Future dates remain hidden until their church day.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verseId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "UpdateDailyVerse",
+        "tags": [
+          "Daily verse"
+        ],
+        "summary": "Edit, publish or withdraw dated verse",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success. Cache-Control: no-store.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/EditorialDailyVerse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "description": "Requires verified global devotionals.manage authority. Mutations require allowed Origin. Shares existing devotional account/IP limits and metadata audit conventions. Unknown JSON fields/queries are rejected. Changing a published record changes its date/content immediately. Future dates remain hidden until their church day.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verseId",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DailyVerseUpdateInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/bible/translations": {
+      "get": {
+        "summary": "List supported Bible translations",
+        "operationId": "bibleTranslations",
+        "tags": [
+          "Bible"
+        ],
+        "security": [],
+        "description": "Public-domain WEB, WEB British Edition and ASV (1901). Lookup uses bible-api.com with a five-second timeout, one-hour bounded in-memory cache, a shared 12 uncached requests per 30 seconds quota and 60 requests per IP per minute. Upstream outages return 503; no translation fallback. Saving or publishing Daily Bread is a separate editorial operation.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/BibleTranslation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid query or unsupported reference/translation"
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later"
+          },
+          "503": {
+            "description": "Bible lookup unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/bible/passages": {
+      "get": {
+        "summary": "Look up a Bible passage",
+        "operationId": "biblePassages",
+        "tags": [
+          "Bible"
+        ],
+        "security": [],
+        "description": "Public-domain WEB, WEB British Edition and ASV (1901). Lookup uses bible-api.com with a five-second timeout, one-hour bounded in-memory cache, a shared 12 uncached requests per 30 seconds quota and 60 requests per IP per minute. Upstream outages return 503; no translation fallback. Saving or publishing Daily Bread is a separate editorial operation.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BiblePassage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid query or unsupported reference/translation"
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry later"
+          },
+          "503": {
+            "description": "Bible lookup unavailable"
+          }
+        },
+        "parameters": [
+          {
+            "name": "reference",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 128
+            },
+            "example": "John 3:16-18"
+          },
+          {
+            "name": "translation",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "web",
+                "webbe",
+                "asv"
+              ],
+              "default": "web"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -12321,6 +12795,355 @@
                 "type": "string",
                 "description": "Opaque position, empty at the end. It grants no access."
               }
+            }
+          }
+        }
+      },
+      "PublishedDailyVerse": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayDate",
+          "text",
+          "scriptureReference",
+          "translation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayDate": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "Assigned church calendar date in fixed GMT+1; years 0001\u20139999."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Plain verse text; render escaped, without HTML."
+          },
+          "scriptureReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 100
+          }
+        }
+      },
+      "EditorialDailyVerse": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayDate",
+          "text",
+          "scriptureReference",
+          "translation",
+          "status",
+          "version",
+          "publishedAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "displayDate": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "Assigned church calendar date in fixed GMT+1; years 0001\u20139999."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Plain verse text; render escaped, without HTML."
+          },
+          "scriptureReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 100
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "DailyVerseDraftInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "displayDate",
+          "text",
+          "scriptureReference"
+        ],
+        "properties": {
+          "displayDate": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "Assigned church calendar date in fixed GMT+1; years 0001\u20139999."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Plain verse text; render escaped, without HTML."
+          },
+          "scriptureReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 100
+          }
+        },
+        "example": {
+          "displayDate": "2026-11-01",
+          "text": "An editor-supplied verse.",
+          "scriptureReference": "Book 1:1",
+          "translation": ""
+        }
+      },
+      "DailyVerseUpdateInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "displayDate": {
+            "type": "string",
+            "format": "date",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+            "description": "Assigned church calendar date in fixed GMT+1; years 0001\u20139999."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Plain verse text; render escaped, without HTML."
+          },
+          "scriptureReference": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "translation": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 100
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published"
+            ]
+          }
+        },
+        "description": "At least one editable field or status is required with the current version. Publishing approves the verse for its assigned GMT+1 date. Draft withdraws it. A competing published verse for that date returns 409 verse_date_conflict; stale versions return 409 version_conflict. No automatic replacement.",
+        "example": {
+          "version": 1,
+          "status": "published"
+        }
+      },
+      "TodayDailyVerse": {
+        "type": "object",
+        "required": [
+          "date",
+          "timeZone",
+          "serverTime",
+          "nextDayAt",
+          "verse"
+        ],
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date"
+          },
+          "timeZone": {
+            "type": "string",
+            "enum": [
+              "UTC+01:00"
+            ]
+          },
+          "serverTime": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "nextDayAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Next church midnight, always 23:00 UTC. Refresh then; elapsed request time should be subtracted from nextDayAt minus serverTime."
+          },
+          "verse": {
+            "type": "object",
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublishedDailyVerse"
+              }
+            ],
+            "description": "Null if no verse is published for exactly this date. No previous-day fallback."
+          }
+        }
+      },
+      "EditorialDailyVersePage": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EditorialDailyVerse"
+            }
+          },
+          "meta": {
+            "type": "object",
+            "required": [
+              "nextCursor"
+            ],
+            "properties": {
+              "nextCursor": {
+                "type": "string",
+                "description": "Opaque createdAt/id descending position; empty at the end."
+              }
+            }
+          }
+        }
+      },
+      "BibleTranslation": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "language",
+          "license",
+          "canImport"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "canImport": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BibleVerse": {
+        "type": "object",
+        "required": [
+          "bookId",
+          "bookName",
+          "text",
+          "chapter",
+          "number"
+        ],
+        "properties": {
+          "bookId": {
+            "type": "string"
+          },
+          "bookName": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "chapter": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "BiblePassage": {
+        "type": "object",
+        "required": [
+          "reference",
+          "text",
+          "source",
+          "sourceUrl",
+          "translation",
+          "verses"
+        ],
+        "properties": {
+          "reference": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "sourceUrl": {
+            "type": "string"
+          },
+          "translation": {
+            "$ref": "#/components/schemas/BibleTranslation"
+          },
+          "verses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BibleVerse"
             }
           }
         }

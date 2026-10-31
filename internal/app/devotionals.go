@@ -8,6 +8,7 @@ import (
 
 func devotionalRoutes(mux *http.ServeMux, s *devotionals.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
 	d := devotionalHTTP{s, sessions, limiter, c}
+	dailyVerseRoutes(mux, d)
 	mux.HandleFunc("GET /api/v1/devotionals", func(w http.ResponseWriter, r *http.Request) {
 		if !d.ipLimit(w, r, "public") {
 			return

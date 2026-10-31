@@ -443,7 +443,11 @@ checks. Shared fanout is deferred unless the API runs more than one instance.
 Local devotional slice: editorial drafts, immediate publication/withdrawal, bounded
 published/editorial catalogs, capability checks and metadata audits are implemented
 with a React reader/editor. See [contract and rollout](devotional-publishing.md).
-Managed daily-verse selection and livestream metadata remain outside this slice;
+Managed daily verses now select one published entry for the fixed GMT+1 church
+date, with a server-driven Home card and dated editorial workflow. See
+[Daily Verse rules](daily-verse.md). Public Bible lookup and a reviewed passage-copy
+helper are implemented locally; see [Bible lookup](bible-lookup.md).
+Livestream metadata remains outside this slice;
 staging acceptance stays with the testing team.
 
 - [ ] **M11.1:** Published series discovery and filtering plus member-owned
