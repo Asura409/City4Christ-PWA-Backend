@@ -216,6 +216,15 @@ roles, and no real account gains privileged access without the approved procedur
 
 ## M2 — Member, family, visitor and recovery workflows
 
+First visitor slice (local, 31 October 2026): owner-approved 90-day retention,
+explicit consent, encrypted contact intake, private audited staff follow-up,
+idempotent retries, withdrawal and bounded expiry scrubbing are implemented.
+The welcome URL accepts ordinary/QR entry. Intake remains disabled until a
+dedicated private key is configured and rollout is approved. Account claiming,
+family/guardian/member administration, automated visitor welcome email/SMS and
+explicit Welcome Team task delegation remain deferred. See [visitor welcome](visitor-welcome.md).
+
+
 - [ ] **M2.1:** Decide and document member fields, directory/staff visibility,
   consent, retention and sensitive-field encryption/key/lookup design (S01–S02).
 - [ ] **M2.2:** Add contact details, family/guardian relationships, member/visitor
@@ -625,3 +634,34 @@ Migrations 44–45 are additive and were tested only against disposable database
 Live push remains disabled until the operator configures matching VAPID settings,
 verified database access and the worker, then completes approved device acceptance.
 No real push, broadcast, email or personal test data was sent by these checks.
+
+### Visitor welcome first slice — local evidence (31 October 2026)
+
+Owner approved 90-day contact retention. Both repositories use local branch
+`feat/visitor-welcome`; no commit, push, deployment, real intake or private-key
+configuration was performed during this work.
+
+Visitor repository/service tests first failed on missing implementation, followed
+by missing global routes/configuration, missing frontend routes, missing OpenAPI
+operations and a revoked-staff UI privacy failure. Each was implemented/fixed and
+rerun. A shared-IP case exposed an overly restrictive initial quota; final tests
+verify several Welcome Desk visitors and the enforced 60/hour IP budget.
+
+Final targeted race checks passed for visitors (14.737s), API configuration/commands
+(1.100s), related push integration (5.840s), global-app visitor routes/contracts
+(15.210s) and shared-IP/rate checks (15.402s), all using disposable PostgreSQL.
+The tests cover encrypted persistence, no account linking, consent, retry safety,
+transactional audits/notices, role revocation, concurrent version conflicts,
+record-bound ciphertext, key rotation, withdrawal and the 90-day expiry boundary.
+
+Frontend unit tests passed 45/45. Visitor/auth/inbox desktop/mobile browser checks
+passed 22/22. The real Go API desktop/mobile visitor intake → private staff review →
+status change → withdrawal flow passed (70.750s). Vet, formatting, whitespace,
+Swagger configuration and OpenAPI 1.22 validation passed, with eight existing
+contract warnings. A complete backend-suite run is not claimed for this slice.
+
+The initial Docker export hit local disk exhaustion. Only obsolete, unused project
+verification images and four exact old API compilation-cache records were removed;
+running services and every data volume were preserved. The unchanged image then
+built successfully, and the final disposable-PostgreSQL startup/migration smoke
+passed, including repeat migration preservation and disabled visitor intake.

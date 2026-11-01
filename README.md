@@ -66,3 +66,5 @@ See [in-app notifications](docs/notifications.md) for the private inbox API and 
 Bible lookup and Daily Bread integration: [API and editorial workflow](docs/bible-lookup.md).
 
 Group workflow completion: [group content](docs/group-content.md). Notification preferences, broadcasts and optional push: [delivery and worker rollout](docs/notification-delivery.md).
+
+Visitor welcome and private staff follow-up: [workflow, privacy and rollout](docs/visitor-welcome.md).

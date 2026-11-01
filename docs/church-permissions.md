@@ -209,3 +209,8 @@ new-role activation or live appointment acceptance.
 Group broadcasts and group event management also permit the exact assigned
 `ministry.members.manage` scope, subject to active group/leadership eligibility.
 Neither grants group membership or authority over another group.
+
+`visitors.follow_up` now grants Super Admin, Assistant Pastor and Staff access to
+the private visitor welcome queue. Reads are audited, lists omit contact methods,
+and no member/finance/technical/ministry role gains access implicitly. See
+[visitor welcome](visitor-welcome.md) for consent, encryption and 90-day retention.
