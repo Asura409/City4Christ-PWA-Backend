@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.21.0",
+    "version": "1.22.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -87,6 +87,10 @@
     {
       "name": "Bible",
       "description": "Public Bible passage lookup"
+    },
+    {
+      "name": "Visitors",
+      "description": "Consented private visitor intake and staff follow-up, separate from login accounts."
     }
   ],
   "paths": {
@@ -9923,6 +9927,356 @@
           }
         ]
       }
+    },
+    "/api/v1/visitors/config": {
+      "get": {
+        "tags": [
+          "Visitors"
+        ],
+        "summary": "Read current welcome form availability and privacy notice",
+        "operationId": "GetVisitorWelcomeConfig",
+        "security": [],
+        "description": "Public, no contact data. Intake is disabled by default and requires a dedicated encryption key. Use the returned consent text/version. Configuration reads are IP-limited.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VisitorConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        }
+      }
+    },
+    "/api/v1/visitors": {
+      "post": {
+        "tags": [
+          "Visitors"
+        ],
+        "summary": "Submit a consented visitor welcome form",
+        "operationId": "SubmitVisitorWelcome",
+        "security": [],
+        "description": "Requires an allowed Origin and positive current-policy consent. 60 attempts per IP/hour and 300/day, including shared Welcome Desk traffic. Generic acknowledgment returns no record/account IDs or existing-account information. Unchanged submissionId retries create no duplicate record or notice; changed retries return 409. All contacts are unverified and encrypted separately from accounts. Stored contacts expire after 90 days.",
+        "responses": {
+          "202": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "message"
+                      ],
+                      "properties": {
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorSubmission"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/visitors": {
+      "get": {
+        "tags": [
+          "Visitors"
+        ],
+        "summary": "List private visitor follow-up summaries",
+        "operationId": "ListVisitorFollowUp",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires current global visitors.follow_up: Super Admin, Assistant Pastor or Staff. Verified active Bearer session, account/IP limits and no-store responses. Sensitive name/contact reads are audited without storing those values in the audit. Defaults to New. Expired/withdrawn contacts are excluded; collection responses include meta.nextCursor.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/VisitorSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "new",
+                "contacted",
+                "closed"
+              ],
+              "default": "new"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/visitors/{visitorId}": {
+      "get": {
+        "tags": [
+          "Visitors"
+        ],
+        "summary": "Open an audited visitor contact record",
+        "operationId": "GetVisitorContact",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires current global visitors.follow_up: Super Admin, Assistant Pastor or Staff. Verified active Bearer session, account/IP limits and no-store responses. Sensitive name/contact reads are audited without storing those values in the audit. Contact methods are not ownership verification. Expired/withdrawn details return 404.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VisitorDetail"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "parameters": [
+          {
+            "name": "visitorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Visitors"
+        ],
+        "summary": "Record follow-up status or withdraw contact details",
+        "operationId": "UpdateVisitorFollowUp",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Requires current global visitors.follow_up: Super Admin, Assistant Pastor or Staff. Verified active Bearer session, account/IP limits and no-store responses. Sensitive name/contact reads are audited without storing those values in the audit. Writes require an allowed Origin and the current version. Stale versions return 409. withdrawn irreversibly clears encrypted contact, key ID and request digest while retaining consent/audit metadata. Contact editing, account claiming and retention extension are not supported.",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/VisitorSummary"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "409": {
+            "$ref": "#/components/responses/409"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisitorUpdate"
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "visitorId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -14040,6 +14394,221 @@
             "type": "string",
             "format": "date-time",
             "nullable": true
+          }
+        }
+      },
+      "VisitorSubmission": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "submissionId",
+          "fullName",
+          "consent",
+          "policyVersion"
+        ],
+        "properties": {
+          "submissionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fullName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "Optional international E.164 format, e.g. +441234567890."
+          },
+          "consent": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "visitor-welcome-v1"
+            ]
+          }
+        },
+        "description": "Provide email or phone. A client-generated submissionId makes unchanged retries safe. Contact is unverified; accounts are never created or linked. Unknown family, prayer, account and membership fields are rejected.",
+        "example": {
+          "submissionId": "11111111-1111-4111-8111-111111111111",
+          "fullName": "Synthetic Visitor",
+          "email": "visitor@example.invalid",
+          "phone": "",
+          "consent": true,
+          "policyVersion": "visitor-welcome-v1"
+        }
+      },
+      "VisitorConfig": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "retentionDays",
+          "policyVersion",
+          "consentText"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "retentionDays": {
+            "type": "integer",
+            "enum": [
+              90
+            ]
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "consentText": {
+            "type": "string"
+          }
+        }
+      },
+      "VisitorSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "fullName",
+          "status",
+          "version",
+          "createdAt",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fullName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "contacted",
+              "closed",
+              "withdrawn",
+              "expired"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "Authorized list metadata and decrypted name only. Contact methods, payload, key IDs and submission identifiers are omitted. Withdrawal responses have an empty name."
+      },
+      "VisitorDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "fullName",
+          "status",
+          "version",
+          "createdAt",
+          "expiresAt",
+          "email",
+          "phone",
+          "contactVerified",
+          "policyVersion",
+          "consentText"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "fullName": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "contacted",
+              "closed",
+              "withdrawn",
+              "expired"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "type": "string",
+            "maxLength": 254
+          },
+          "phone": {
+            "type": "string",
+            "maxLength": 16
+          },
+          "contactVerified": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
+          },
+          "policyVersion": {
+            "type": "string"
+          },
+          "consentText": {
+            "type": "string"
+          }
+        }
+      },
+      "VisitorUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "version"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "new",
+              "contacted",
+              "closed",
+              "withdrawn"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
           }
         }
       }

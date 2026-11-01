@@ -23,22 +23,25 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/prayer"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/profiles"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/sermons"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/visitors"
 	"github.com/google/uuid"
 )
 
 type Config struct {
-	PushEnabled         bool
-	PushPublicKey       string
-	BibleProvider       bible.Provider
-	RegistrationEnabled bool
-	VerificationKey     []byte
-	Now                 func() time.Time
-	AppOrigin           string
-	AllowedOrigins      []string
-	CrossSiteCookies    bool
-	TrustedProxyCIDRs   []string
-	GoogleProvider      auth.GoogleProvider
-	MediaStorage        media.UploadStorage
+	VisitorIntakeEnabled bool
+	VisitorProtection    *visitors.Protection
+	PushEnabled          bool
+	PushPublicKey        string
+	BibleProvider        bible.Provider
+	RegistrationEnabled  bool
+	VerificationKey      []byte
+	Now                  func() time.Time
+	AppOrigin            string
+	AllowedOrigins       []string
+	CrossSiteCookies     bool
+	TrustedProxyCIDRs    []string
+	GoogleProvider       auth.GoogleProvider
+	MediaStorage         media.UploadStorage
 }
 
 func New(db *sql.DB, config Config) http.Handler {
@@ -92,6 +95,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	directMessagingRoutes(mux, messagingService, sessions, limiter, realtimeHub, config)
 	realtimeTicketRoutes(mux, realtimeTickets, sessions, limiter, config)
 	realtimeSocketRoutes(mux, realtimeTickets, sessions, realtimeHub, config)
+	visitorRoutes(mux, db, sessions, limiter, config)
 	notificationRoutes(mux, notifications.NewService(notifications.NewRepository(db), config.Now), sessions, limiter, config)
 	mediaRoutes(mux, media.NewService(media.NewRepository(db), config.MediaStorage, config.Now), sessions, limiter, config)
 	accessRoutes(mux, accessService, sessions, limiter, config)

@@ -50,6 +50,9 @@ test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/auth/reau
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/auth/mfa")" = 401
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/admin/role-candidates?query=Smoke")" = 401
 test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/admin/accounts/11111111-1111-4111-8111-111111111111/church-roles")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/visitors/config")" = 200
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/admin/visitors")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/visitors")" = 503
 curl --fail --silent "$endpoint/docs/swagger-ui-bundle.js" >/dev/null
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/auth/register")" = 403
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/admin/sermons")" = 401

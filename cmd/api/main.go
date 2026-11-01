@@ -23,11 +23,14 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/googleoidc"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/notifications"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/visitors"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type serverConfig struct {
+	visitorEnabled                     bool
+	visitorProtection                  *visitors.Protection
 	pushEnabled                        bool
 	pushPublicKey                      string
 	databaseURL                        string
@@ -45,6 +48,11 @@ type serverConfig struct {
 
 func loadConfig(getenv func(string) string) (serverConfig, error) {
 	c := serverConfig{databaseURL: getenv("DATABASE_URL"), port: getenv("PORT")}
+	visitorEnabled, visitorProtection, visitorErr := loadVisitorConfig(getenv)
+	if visitorErr != nil {
+		return c, visitorErr
+	}
+	c.visitorEnabled, c.visitorProtection = visitorEnabled, visitorProtection
 	switch getenv("PUSH_ENABLED") {
 	case "", "false":
 	case "true":
@@ -145,7 +153,10 @@ func loadConfig(getenv func(string) string) (serverConfig, error) {
 func migrate(ctx context.Context, db *sql.DB) error { return database.Migrate(ctx, db) }
 
 func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfig) error {
-	appConfig := app.Config{PushEnabled: c.pushEnabled, PushPublicKey: c.pushPublicKey, RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
+	retentionCtx, stopRetention := context.WithCancel(ctx)
+	defer stopRetention()
+	go runVisitorRetention(retentionCtx, db)
+	appConfig := app.Config{VisitorIntakeEnabled: c.visitorEnabled, VisitorProtection: c.visitorProtection, PushEnabled: c.pushEnabled, PushPublicKey: c.pushPublicKey, RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
 	if c.r2Configured {
 		store, err := media.NewR2Storage(c.r2Config, nil)
 		if err != nil {
@@ -184,6 +195,9 @@ func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfi
 }
 
 func run(ctx context.Context, args []string) error {
+	if len(args) == 2 && args[0] == "visitor-keygen" {
+		return generateVisitorKeys(args[1])
+	}
 	var bootstrap *bootstrapOptions
 	if len(args) > 0 && args[0] == "bootstrap-super-admin" {
 		options, err := parseBootstrapOptions(args[1:])
@@ -191,8 +205,8 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		bootstrap = &options
-	} else if len(args) > 1 || (len(args) == 1 && args[0] != "migrate" && args[0] != "migrate-and-serve") {
-		return errors.New("usage: api [migrate|migrate-and-serve|bootstrap-super-admin --account-id UUID --confirm-account-id SAME_UUID --reason TEXT]")
+	} else if len(args) > 1 || (len(args) == 1 && args[0] != "migrate" && args[0] != "migrate-and-serve" && args[0] != "visitors-purge") {
+		return errors.New("usage: api [visitor-keygen NEW_PRIVATE_FILE|visitors-purge|migrate|migrate-and-serve|bootstrap-super-admin --account-id UUID --confirm-account-id SAME_UUID --reason TEXT]")
 	}
 	c, err := loadConfig(os.Getenv)
 	if err != nil {
@@ -210,6 +224,14 @@ func run(ctx context.Context, args []string) error {
 	defer cancel()
 	if err := db.PingContext(startup); err != nil {
 		return errors.New("database connection failed")
+	}
+	if len(args) == 1 && args[0] == "visitors-purge" {
+		count, e := visitorRetentionPass(startup, db, time.Now().UTC())
+		if e != nil {
+			return errors.New("visitor retention pass failed")
+		}
+		slog.Info("Expired visitor contacts removed", "count", count)
+		return nil
 	}
 	if bootstrap != nil {
 		return bootstrapSuperAdmin(startup, db, *bootstrap)

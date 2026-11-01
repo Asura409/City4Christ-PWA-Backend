@@ -17,6 +17,7 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/bible"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/testpg"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/visitors"
 )
 
 // This optional suite serves the independent frontend checkout against the global
@@ -41,6 +42,12 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	server := httptest.NewUnstartedServer(nil)
 	origin := "https://" + server.Listener.Addr().String()
 	config := Config{RegistrationEnabled: true, VerificationKey: key, AppOrigin: origin, GoogleProvider: &browserReauthenticationProvider{}, BibleProvider: browserBibleProvider{}}
+	vp, err := visitors.NewProtection("test", map[string][]byte{"test": []byte(strings.Repeat("v", 32))})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.VisitorIntakeEnabled = true
+	config.VisitorProtection = vp
 	api := New(db, config)
 	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key})
 	if err != nil {
@@ -50,6 +57,9 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	scenarioIPs := &browserScenarioIPs{}
 	server.Config.Handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		scenarioIPs.apply(r)
+		if browserVisitorFixture(w, r, db, sessions, config) {
+			return
+		}
 		if browserGroupContentFixture(w, r, db, sessions, config) {
 			return
 		}
@@ -126,7 +136,7 @@ func TestFrontendWithRealAPI(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
-	args := []string{"exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs", "tests/browser/google-real.spec.mjs", "tests/browser/pastoral-real.spec.mjs", "tests/browser/devotionals-real.spec.mjs", "tests/browser/dailyverse-real.spec.mjs", "tests/browser/group-notifications-real.spec.mjs", "--output", filepath.Join(t.TempDir(), "browser-results")}
+	args := []string{"exec", "--yes", "--package=node@22", "--", "node", "node_modules/playwright/cli.js", "test", "tests/browser/real-api.spec.mjs", "tests/browser/google-real.spec.mjs", "tests/browser/pastoral-real.spec.mjs", "tests/browser/devotionals-real.spec.mjs", "tests/browser/dailyverse-real.spec.mjs", "tests/browser/group-notifications-real.spec.mjs", "tests/browser/visitors-real.spec.mjs", "--output", filepath.Join(t.TempDir(), "browser-results")}
 	if pattern := os.Getenv("FRONTEND_E2E_GREP"); pattern != "" {
 		args = append(args, "--grep", pattern)
 	}
