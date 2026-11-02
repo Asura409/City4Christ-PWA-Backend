@@ -41,6 +41,10 @@
       "description": "Authenticated member directory. Only verified, explicitly opted-in members are listed; email and account security fields remain private."
     },
     {
+      "name": "Member administration",
+      "description": "Read-only search for verified, active members. Restricted to Super Admin, Assistant Pastor, and Staff; returns basic identity and join date only."
+    },
+    {
       "name": "Groups",
       "description": "Church-wide groups with scoped leadership and audited staff lifecycle management."
     },
@@ -1106,6 +1110,28 @@
           "503": {
             "$ref": "#/components/responses/503"
           }
+        }
+      }
+    },
+    "/api/v1/admin/members": {
+      "get": {
+        "tags": ["Member administration"],
+        "summary": "Search verified active members",
+        "operationId": "SearchAdminMembers",
+        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Search by name or email using at least three characters. Returns basic identity and account join date only. Email and contact fields are private to staff for this endpoint. Results exclude unverified and deletion-requested accounts. Account and IP rate limits apply; responses use Cache-Control: no-store.",
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {"name": "query", "in": "query", "required": true, "schema": {"type": "string", "minLength": 3, "maxLength": 100}},
+          {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string", "format": "uuid"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}}
+        ],
+        "responses": {
+          "200": {"description": "Member page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AdminMemberPage"}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "422": {"$ref": "#/components/responses/422"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
         }
       }
     },
@@ -11736,6 +11762,26 @@
               "format": "uuid"
             }
           }
+        }
+      },
+      "AdminMember": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "firstName", "lastName", "email", "joinedAt"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "firstName": {"type": "string"},
+          "lastName": {"type": "string"},
+          "email": {"type": "string", "format": "email"},
+          "joinedAt": {"type": "string", "format": "date-time"}
+        }
+      },
+      "AdminMemberPage": {
+        "type": "object",
+        "required": ["data", "meta"],
+        "properties": {
+          "data": {"type": "array", "items": {"$ref": "#/components/schemas/AdminMember"}},
+          "meta": {"type": "object", "required": ["nextCursor"], "properties": {"nextCursor": {"type": "string"}}}
         }
       },
       "EditorialSermonPage": {

@@ -103,6 +103,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	mediaRoutes(mux, media.NewService(media.NewRepository(db), config.MediaStorage, config.Now), sessions, limiter, config)
 	accessRoutes(mux, accessService, sessions, limiter, config)
 	churchRoleRoutes(mux, accessService, sessions, limiter, config)
+	adminMemberRoutes(mux, accessService, sessions, limiter, config)
 	currentAccessRoutes(mux, accessService, sessions, limiter, config)
 	var google *auth.GoogleService
 	if sessions != nil && config.GoogleProvider != nil {

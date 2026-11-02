@@ -23,7 +23,7 @@ func TestDocumentationThroughGlobalApp(t *testing.T) {
 			if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
 				t.Fatal(err)
 			}
-			for _, route := range []string{"/api/v1/members", "/api/v1/admin/accounts/{accountId}/roles", "/api/v1/admin/accounts/{accountId}/roles/revoke", "/api/v1/admin/sermons", "/api/v1/admin/sermons/{sermonId}", "/api/v1/sermons", "/api/v1/sermons/{sermonId}", "/api/v1/groups", "/api/v1/admin/groups", "/api/v1/admin/groups/{groupId}", "/api/v1/admin/groups/{groupId}/leaders", "/api/v1/groups/{groupId}/membership", "/api/v1/groups/{groupId}/members", "/api/v1/groups/{groupId}/members/{accountId}/remove", "/api/v1/groups/{groupId}/messages", "/api/v1/groups/{groupId}/messages/{messageId}", "/api/v1/groups/{groupId}/read", "/api/v1/group-conversations", "/api/v1/groups/{groupId}/membership-requests", "/api/v1/groups/{groupId}/membership-requests/{accountId}", "/api/v1/posts", "/api/v1/posts/{postId}", "/api/v1/posts/{postId}/reaction", "/api/v1/posts/{postId}/comments", "/api/v1/posts/{postId}/comments/{commentId}", "/api/v1/content-reports", "/api/v1/moderation/content-reports", "/api/v1/moderation/content-reports/{reportId}/review", "/api/v1/events", "/api/v1/events/{eventId}", "/api/v1/events/{eventId}/calendar.ics", "/api/v1/events/{eventId}/coordinators", "/api/v1/events/{eventId}/coordinators/{accountId}", "/api/v1/prayer/requests", "/api/v1/prayer/requests/{requestId}", "/api/v1/prayer/requests/{requestId}/encouragements", "/api/v1/prayer/requests/{requestId}/reports", "/api/v1/prayer/reports", "/api/v1/prayer/reports/{reportId}", "/api/v1/conversations", "/api/v1/conversations/{conversationId}/messages", "/api/v1/conversations/{conversationId}/read", "/api/v1/realtime/tickets", "/api/v1/events/{eventId}/rsvp", "/api/v1/notifications", "/api/v1/notifications/unread-count", "/api/v1/notifications/{notificationId}/read", "/api/v1/admin/events", "/api/v1/admin/events/{eventId}", "/health/live", "/health/ready", "/api/v1/auth/register", "/api/v1/auth/verification/verify", "/api/v1/auth/verification/resend", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/me", "/api/v1/auth/google/start", "/api/v1/auth/google/link", "/api/v1/auth/google/callback"} {
+			for _, route := range []string{"/api/v1/members", "/api/v1/admin/members", "/api/v1/admin/accounts/{accountId}/roles", "/api/v1/admin/accounts/{accountId}/roles/revoke", "/api/v1/admin/sermons", "/api/v1/admin/sermons/{sermonId}", "/api/v1/sermons", "/api/v1/sermons/{sermonId}", "/api/v1/groups", "/api/v1/admin/groups", "/api/v1/admin/groups/{groupId}", "/api/v1/admin/groups/{groupId}/leaders", "/api/v1/groups/{groupId}/membership", "/api/v1/groups/{groupId}/members", "/api/v1/groups/{groupId}/members/{accountId}/remove", "/api/v1/groups/{groupId}/messages", "/api/v1/groups/{groupId}/messages/{messageId}", "/api/v1/groups/{groupId}/read", "/api/v1/group-conversations", "/api/v1/groups/{groupId}/membership-requests", "/api/v1/groups/{groupId}/membership-requests/{accountId}", "/api/v1/posts", "/api/v1/posts/{postId}", "/api/v1/posts/{postId}/reaction", "/api/v1/posts/{postId}/comments", "/api/v1/posts/{postId}/comments/{commentId}", "/api/v1/content-reports", "/api/v1/moderation/content-reports", "/api/v1/moderation/content-reports/{reportId}/review", "/api/v1/events", "/api/v1/events/{eventId}", "/api/v1/events/{eventId}/calendar.ics", "/api/v1/events/{eventId}/coordinators", "/api/v1/events/{eventId}/coordinators/{accountId}", "/api/v1/prayer/requests", "/api/v1/prayer/requests/{requestId}", "/api/v1/prayer/requests/{requestId}/encouragements", "/api/v1/prayer/requests/{requestId}/reports", "/api/v1/prayer/reports", "/api/v1/prayer/reports/{reportId}", "/api/v1/conversations", "/api/v1/conversations/{conversationId}/messages", "/api/v1/conversations/{conversationId}/read", "/api/v1/realtime/tickets", "/api/v1/events/{eventId}/rsvp", "/api/v1/notifications", "/api/v1/notifications/unread-count", "/api/v1/notifications/{notificationId}/read", "/api/v1/admin/events", "/api/v1/admin/events/{eventId}", "/health/live", "/health/ready", "/api/v1/auth/register", "/api/v1/auth/verification/verify", "/api/v1/auth/verification/resend", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/v1/me", "/api/v1/auth/google/start", "/api/v1/auth/google/link", "/api/v1/auth/google/callback"} {
 				if _, ok := spec.Paths[route]; !ok {
 					t.Fatalf("missing contract: %s", route)
 				}
@@ -150,6 +150,27 @@ func TestSermonEditorialListOpenAPIContract(t *testing.T) {
 	security, ok := operation["security"].([]any)
 	if !ok || len(security) != 1 {
 		t.Fatal("editorial sermon list must require Bearer authentication")
+	}
+}
+
+func TestAdminMemberSearchOpenAPIContract(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	operation := paths["/api/v1/admin/members"].(map[string]any)["get"].(map[string]any)
+	if len(operation["security"].([]any)) != 1 {
+		t.Fatal("member search must require Bearer authentication")
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	member := schemas["AdminMember"].(map[string]any)
+	fields := member["properties"].(map[string]any)
+	if len(fields) != 5 || fields["email"] == nil || fields["joinedAt"] == nil || fields["password"] != nil || fields["mfaEnabled"] != nil || fields["roles"] != nil {
+		t.Fatal("admin member schema exposes unapproved account fields")
 	}
 }
 
