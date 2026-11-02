@@ -132,6 +132,79 @@ func TestGroupsThroughGlobalApp(t *testing.T) {
 	}
 }
 
+func TestGroupMemberRemovalThroughGlobalApp(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	key := []byte(strings.Repeat("g", 32))
+	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := func(email, role string) (string, string) {
+		t.Helper()
+		var id string
+		if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES($1,'Group','Tester',now()) RETURNING id`, email).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if role != "" {
+			if _, err := db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,$2,'')`, id, role); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tokens, err := sessions.Start(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id, tokens.AccessToken
+	}
+	_, adminToken := actor("removal-admin@example.invalid", "super_administrator")
+	_, memberToken := actor("removal-member@example.invalid", "")
+	target, targetToken := actor("removal-target@example.invalid", "")
+	h := New(db, Config{VerificationKey: key, AppOrigin: "https://api.example"})
+	request := func(method, path, token, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		if body != "" {
+			r.Header.Set("Content-Type", "application/json")
+		}
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		if method != "GET" {
+			r.Header.Set("Origin", "https://api.example")
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	w := request("POST", "/api/v1/admin/groups", adminToken, `{"name":"Choir","audience":"church","joinPolicy":"open"}`)
+	if w.Code != 201 {
+		t.Fatalf("create group: %d %s", w.Code, w.Body.String())
+	}
+	var groupID string
+	if err := db.QueryRow(`SELECT id FROM groups WHERE name='Choir'`).Scan(&groupID); err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{memberToken, targetToken} {
+		if w = request("POST", "/api/v1/groups/"+groupID+"/membership", token, `{}`); w.Code != 200 {
+			t.Fatalf("join group: %d %s", w.Code, w.Body.String())
+		}
+	}
+	path := "/api/v1/groups/" + groupID + "/members/" + target + "/remove"
+	if w = request("POST", path, memberToken, `{"reason":"Repeated disruption"}`); w.Code != 403 {
+		t.Fatalf("ordinary member removed another member: %d %s", w.Code, w.Body.String())
+	}
+	if w = request("POST", path, adminToken, `{"reason":"Repeated disruption"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"changed":true`) {
+		t.Fatalf("authorized manager removal: %d %s", w.Code, w.Body.String())
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM group_memberships WHERE group_id=$1 AND account_id=$2`, groupID, target).Scan(&status); err != nil || status != "left" {
+		t.Fatalf("target membership status=%q err=%v", status, err)
+	}
+}
+
 func TestGroupAdministrationThroughGlobalApp(t *testing.T) {
 	db := testpg.New(t)
 	ctx := context.Background()

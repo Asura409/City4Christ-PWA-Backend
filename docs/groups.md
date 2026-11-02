@@ -62,6 +62,21 @@ Use `decline` for a rejection. The request actor cannot approve their own reques
 Repeated identical decisions return `changed: false`; a different decision after
 the request has already been resolved returns a validation error.
 
+`POST /api/v1/groups/{groupId}/members/{accountId}/remove` ends an active
+member's membership. Super Admin and Assistant Pastors can manage church-group
+members; Ministry Leaders can manage members only in their assigned group. It
+requires a reason of 1–500 characters, records that reason in the group audit
+trail, and sends the member an in-app notification in the same transaction.
+Removing yourself is not allowed through this route; use the leave endpoint.
+An appointed Ministry Leader cannot be removed as an ordinary member because
+their role appointment still carries group-scoped authority. Repeated removal
+returns `{"data":{"changed":false}}` without creating duplicate audit or
+notification records.
+
+```json
+{"reason":"Repeated disruption"}
+```
+
 Staff managers use `GET /api/v1/admin/groups` to list church groups. Add
 `?includeArchived=true` to include archived groups. The leadership-audience group
 is omitted from the response unless the actor is Super Admin, Assistant Pastor,
