@@ -32,4 +32,32 @@ func TestGroupNotificationOpenAPIContract(t *testing.T) {
 			t.Fatal("undocumented group audience", name)
 		}
 	}
+	var listBroadcasts struct {
+		Parameters []struct {
+			Name string `json:"name"`
+		} `json:"parameters"`
+	}
+	if err := json.Unmarshal(s.Paths["/api/v1/admin/broadcasts"]["get"], &listBroadcasts); err != nil {
+		t.Fatal(err)
+	}
+	hasAudience := false
+	for _, parameter := range listBroadcasts.Parameters {
+		hasAudience = hasAudience || parameter.Name == "audience"
+	}
+	if !hasAudience {
+		t.Fatal("broadcast list omits audience query")
+	}
+	var broadcastAudience struct {
+		Enum []string `json:"enum"`
+	}
+	if err := json.Unmarshal(s.Components.Schemas["BroadcastInput"].Properties["audience"], &broadcastAudience); err != nil {
+		t.Fatal(err)
+	}
+	hasStaff := false
+	for _, value := range broadcastAudience.Enum {
+		hasStaff = hasStaff || value == "staff"
+	}
+	if !hasStaff {
+		t.Fatal("broadcast input omits staff audience")
+	}
 }

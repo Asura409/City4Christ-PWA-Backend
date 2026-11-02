@@ -107,9 +107,9 @@ func (s *Service) Unsubscribe(ctx context.Context, actor, endpoint string) error
 }
 
 // Push preferences never suppress the durable in-app inbox.
-const pushCategorySQL = `CASE WHEN (n.kind IN ('church.broadcast','group.broadcast') OR n.kind LIKE 'visitor.%') THEN COALESCE(p.announcements,true) WHEN n.kind LIKE 'group.%' THEN COALESCE(p.groups,true) WHEN n.kind LIKE 'event.%' THEN COALESCE(p.events,true) WHEN n.kind LIKE 'pastoral.%' OR n.kind LIKE 'appointment.%' THEN COALESCE(p.pastoral,true) WHEN n.kind LIKE 'message.%' THEN COALESCE(p.messages,true) ELSE true END`
+const pushCategorySQL = `CASE WHEN (n.kind IN ('church.broadcast','group.broadcast','staff.broadcast') OR n.kind LIKE 'visitor.%') THEN COALESCE(p.announcements,true) WHEN n.kind LIKE 'group.%' THEN COALESCE(p.groups,true) WHEN n.kind LIKE 'event.%' THEN COALESCE(p.events,true) WHEN n.kind LIKE 'pastoral.%' OR n.kind LIKE 'appointment.%' THEN COALESCE(p.pastoral,true) WHEN n.kind LIKE 'message.%' THEN COALESCE(p.messages,true) ELSE true END`
 
 func queuePushTx(ctx context.Context, tx *sql.Tx, id string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO notification_push_jobs(notification_id,subscription_id) SELECT n.id,s.id FROM notifications n JOIN notification_push_subscriptions s ON s.account_id=n.account_id JOIN auth_sessions a ON a.id=s.session_id JOIN notification_preferences p ON p.account_id=n.account_id WHERE n.id=$1 AND p.push_enabled AND a.revoked_at IS NULL AND a.expires_at>now() AND `+pushCategorySQL+` ON CONFLICT(notification_id,subscription_id) DO NOTHING`, id)
+	_, err := tx.ExecContext(ctx, `INSERT INTO notification_push_jobs(notification_id,subscription_id) SELECT n.id,s.id FROM notifications n JOIN notification_push_subscriptions s ON s.account_id=n.account_id JOIN auth_sessions a ON a.id=s.session_id JOIN notification_preferences p ON p.account_id=n.account_id WHERE n.id=$1 AND p.push_enabled AND a.revoked_at IS NULL AND a.expires_at>now() AND `+pushCategorySQL+` AND `+staffNotificationVisibleSQL+` ON CONFLICT(notification_id,subscription_id) DO NOTHING`, id)
 	return err
 }

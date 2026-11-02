@@ -2,14 +2,13 @@ package notifications
 
 import (
 	"context"
-	"database/sql"
 )
 
-func (s *Service) Broadcasts(ctx context.Context, actor, group string) ([]Broadcast, error) {
-	if group != "" && !validID(group) {
+func (s *Service) Broadcasts(ctx context.Context, actor, audience, group string) ([]Broadcast, error) {
+	if (audience != "church" && audience != "group" && audience != "staff") || (audience != "group" && group != "") || (audience == "group" && !validID(group)) {
 		return nil, ErrInvalid
 	}
-	tx, err := s.repo.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	tx, err := s.repo.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -17,17 +16,15 @@ func (s *Service) Broadcasts(ctx context.Context, actor, group string) ([]Broadc
 	if err = broadcastPermission(ctx, tx, actor, group); err != nil {
 		return nil, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id,title,body,status,version,recipient_count,created_at,sent_at FROM notification_broadcasts WHERE group_id IS NOT DISTINCT FROM NULLIF($1,'')::uuid ORDER BY created_at DESC,id DESC LIMIT 50`, group)
+	staffOnly := audience == "staff"
+	rows, err := tx.QueryContext(ctx, `SELECT id,title,body,status,version,recipient_count,created_at,sent_at FROM notification_broadcasts WHERE group_id IS NOT DISTINCT FROM NULLIF($1,'')::uuid AND staff_only=$2 ORDER BY created_at DESC,id DESC LIMIT 50`, group, staffOnly)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	out := []Broadcast{}
 	for rows.Next() {
-		b := Broadcast{BroadcastInput: BroadcastInput{GroupID: group, Audience: "church"}}
-		if group != "" {
-			b.Audience = "group"
-		}
+		b := Broadcast{BroadcastInput: BroadcastInput{GroupID: group, Audience: audience}}
 		if err = rows.Scan(&b.ID, &b.Title, &b.Body, &b.Status, &b.Version, &b.RecipientCount, &b.CreatedAt, &b.SentAt); err != nil {
 			return nil, err
 		}

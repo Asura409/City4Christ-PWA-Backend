@@ -46,3 +46,17 @@ func TestBroadcastHTTPRequiresAudienceReviewAndExplicitSend(t *testing.T) {
 		t.Fatal(sent)
 	}
 }
+
+func TestStaffBroadcastHTTPUsesAudienceQuery(t *testing.T) {
+	f := newChurchHTTPFixture(t)
+	_, staff := f.account(t, "staff", false)
+	body := `{"title":"Staff update","body":"Team briefing","audience":"staff"}`
+	draft := pastoralData[notifications.Broadcast](t, f.request("POST", "/api/v1/admin/broadcasts", staff, body), 201)
+	if draft.Audience != "staff" {
+		t.Fatalf("staff broadcast audience = %q", draft.Audience)
+	}
+	listed := pastoralData[[]notifications.Broadcast](t, f.request("GET", "/api/v1/admin/broadcasts?audience=staff", staff, ""), 200)
+	if len(listed) != 1 || listed[0].ID != draft.ID {
+		t.Fatalf("staff broadcast list = %+v", listed)
+	}
+}
