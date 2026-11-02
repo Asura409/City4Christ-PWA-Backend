@@ -1,0 +1,41 @@
+name: city4christ-local
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: city4christ
+      POSTGRES_PASSWORD: city4christ-local
+      POSTGRES_DB: city4christ
+    volumes:
+      - city4christ-local-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U city4christ -d city4christ"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["/app/api", "migrate-and-serve"]
+    ports:
+      - "127.0.0.1:10000:10000"
+    environment:
+      DATABASE_URL: postgres://city4christ:city4christ-local@postgres:5432/city4christ?sslmode=disable
+      VERIFICATION_KEY_BASE64: ${VERIFICATION_KEY_BASE64:-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
+      PORT: "10000"
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      APP_ORIGIN: ${APP_ORIGIN:-https://local.city4christ.test}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://local.city4christ.test}
+      REFRESH_COOKIE_SAME_SITE: ${REFRESH_COOKIE_SAME_SITE:-none}
+      EMAIL_DELIVERY_MODE: disabled
+      PUSH_ENABLED: "false"
+      VISITOR_INTAKE_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  city4christ-local-postgres:
