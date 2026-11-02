@@ -6,11 +6,14 @@ Editors use a verified, active Bearer session. The backend checks PostgreSQL for
 
 | Method | Path | Purpose |
 | --- | --- | --- |
+| GET | `/api/v1/admin/sermons` | List all sermons for editors, including drafts and scheduled items |
 | POST | `/api/v1/admin/sermons` | Create a draft; always starts at version 1 |
 | GET | `/api/v1/admin/sermons/{sermonId}` | Read current metadata, status and version, including drafts |
 | PATCH | `/api/v1/admin/sermons/{sermonId}` | Edit metadata or change publication state using the current version |
 
 POST/PATCH require an allowed Origin, application/json, an active editor session and are limited to 60 attempts per editor per minute. Bodies are capped at 16 KiB; unknown fields are rejected. CORS preflight supports PATCH. Visitors continue to use the public catalog endpoints, which hide drafts and future publications.
+
+The editorial list requires `sermons.manage` and supports `query`, `status` (`draft`, `published` or `scheduled`), `limit` (default 20, maximum 100) and opaque `cursor` parameters. It returns each sermon’s current status, version, metadata and attachment IDs, ordered newest-created first. Continue with the `meta.nextCursor` from the response. Public catalog filtering is independent; drafts and future publications are never exposed through public routes.
 
 Create a draft:
 

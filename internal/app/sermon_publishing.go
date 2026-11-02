@@ -3,6 +3,8 @@ package app
 import (
 	"errors"
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
@@ -23,6 +25,8 @@ func sermonPublishingRoutes(mux *http.ServeMux, service *sermons.Service, sessio
 				fields = validation.Fields
 			}
 			writeError(w, 422, "validation_failed", "Check the indicated sermon fields.", fields)
+		case errors.Is(err, sermons.ErrInvalidOptions):
+			writeError(w, 422, "validation_failed", "Check the editorial list filters, limit and cursor.", nil)
 		case errors.Is(err, sermons.ErrVersionConflict):
 			writeError(w, 409, "version_conflict", "The sermon changed. Reload its latest version before editing.", nil)
 		default:
@@ -52,6 +56,43 @@ func sermonPublishingRoutes(mux *http.ServeMux, service *sermons.Service, sessio
 		}
 		return actor.ID, true
 	}
+	mux.HandleFunc("GET /api/v1/admin/sermons", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		q, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			fail(w, sermons.ErrInvalidOptions)
+			return
+		}
+		for key, values := range q {
+			switch key {
+			case "limit", "cursor", "query", "status":
+			default:
+				fail(w, sermons.ErrInvalidOptions)
+				return
+			}
+			if len(values) != 1 {
+				fail(w, sermons.ErrInvalidOptions)
+				return
+			}
+		}
+		opts := sermons.EditorialOptions{Cursor: q.Get("cursor"), Query: q.Get("query"), Status: q.Get("status")}
+		if q.Has("limit") {
+			opts.Limit, err = strconv.Atoi(q.Get("limit"))
+			if err != nil || opts.Limit < 1 || opts.Limit > 100 {
+				fail(w, sermons.ErrInvalidOptions)
+				return
+			}
+		}
+		page, err := service.ListEditorial(r.Context(), actor, opts)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": page.Items, "meta": map[string]string{"nextCursor": page.NextCursor}})
+	})
 	mux.HandleFunc("POST /api/v1/admin/sermons", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {

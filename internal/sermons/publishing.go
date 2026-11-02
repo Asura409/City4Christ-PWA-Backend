@@ -1,9 +1,13 @@
 package sermons
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
+	"io"
 	"net/url"
 	"regexp"
 	"strings"
@@ -43,6 +47,18 @@ type EditorialSermon struct {
 	Version       int        `json:"version"`
 	Status        string     `json:"status"`
 	AttachmentIDs []string   `json:"attachmentIds"`
+}
+type EditorialOptions struct {
+	Limit                 int
+	Cursor, Query, Status string
+}
+type EditorialPage struct {
+	Items      []EditorialSermon
+	NextCursor string
+}
+type editorialCursor struct {
+	CreatedAt time.Time `json:"createdAt"`
+	ID        string    `json:"id"`
 }
 type UpdateInput struct {
 	Version       int        `json:"version"`
@@ -157,6 +173,51 @@ func (s *Service) GetEditorial(ctx context.Context, actorID, id string) (Editori
 	}
 	return s.repo.getEditorial(ctx, actorID, id, s.now().UTC())
 }
+
+func (s *Service) ListEditorial(ctx context.Context, actorID string, o EditorialOptions) (EditorialPage, error) {
+	if o.Limit == 0 {
+		o.Limit = 20
+	}
+	if o.Limit < 1 || o.Limit > 100 || len(o.Cursor) > 2048 || !utf8.ValidString(o.Query) || utf8.RuneCountInString(o.Query) > 200 {
+		return EditorialPage{}, ErrInvalidOptions
+	}
+	o.Query = strings.TrimSpace(o.Query)
+	if o.Status != "" && o.Status != "draft" && o.Status != "published" && o.Status != "scheduled" {
+		return EditorialPage{}, ErrInvalidOptions
+	}
+	var after *editorialCursor
+	if o.Cursor != "" {
+		raw, err := base64.RawURLEncoding.DecodeString(o.Cursor)
+		if err != nil {
+			return EditorialPage{}, ErrInvalidOptions
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.DisallowUnknownFields()
+		var cursor *editorialCursor
+		if decoder.Decode(&cursor) != nil || cursor == nil || decoder.Decode(new(any)) != io.EOF || !validDate(cursor.CreatedAt) || !canonicalID(cursor.ID) {
+			return EditorialPage{}, ErrInvalidOptions
+		}
+		after = cursor
+	}
+	items, err := s.repo.listEditorial(ctx, actorID, o, after, s.now().UTC())
+	if err != nil {
+		return EditorialPage{}, err
+	}
+	page := EditorialPage{Items: make([]EditorialSermon, 0, min(len(items), o.Limit))}
+	for i := 0; i < len(items) && i < o.Limit; i++ {
+		page.Items = append(page.Items, items[i].sermon)
+	}
+	if len(items) > o.Limit {
+		last := items[o.Limit-1]
+		raw, err := json.Marshal(editorialCursor{CreatedAt: last.createdAt.UTC(), ID: last.sermon.ID})
+		if err != nil {
+			return EditorialPage{}, err
+		}
+		page.NextCursor = base64.RawURLEncoding.EncodeToString(raw)
+	}
+	return page, nil
+}
+
 func (s *Service) Update(ctx context.Context, actorID, id string, input UpdateInput) (EditorialSermon, error) {
 	if !canonicalID(id) {
 		return EditorialSermon{}, ErrNotFound
