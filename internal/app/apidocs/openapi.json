@@ -1140,7 +1140,7 @@
         "tags": ["Member administration"],
         "summary": "Read audited member details",
         "operationId": "GetAdminMember",
-        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Returns basic identity and join date for a verified active member. Email is disclosed only on this explicit detail request and an audit event is written in the same transaction; audit failure prevents disclosure. Password, MFA, sessions, roles and private care/family information are excluded. Responses use Cache-Control: no-store. No query parameters.",
+        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Returns basic identity, join date and current profile version for a verified active member. Email is disclosed only on this explicit detail request and an audit event is written in the same transaction; audit failure prevents disclosure. Password, MFA, sessions, roles and private care/family information are excluded. Responses use Cache-Control: no-store. No query parameters.",
         "security": [{"bearerAuth": []}],
         "parameters": [{"name": "accountId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
         "responses": {
@@ -1152,14 +1152,33 @@
           "429": {"$ref": "#/components/responses/429"},
           "503": {"$ref": "#/components/responses/503"}
         }
+      },
+      "patch": {
+        "tags": ["Member administration"],
+        "summary": "Correct a member's name",
+        "operationId": "UpdateAdminMemberName",
+        "description": "Requires a verified session and members.records.manage (Super Admin, Assistant Pastor, or Staff), an allowed Origin, a reason, and the current expectedVersion from the member detail response. Only firstName and lastName may be changed. Stale versions return 409. Each change and its reason are recorded transactionally; audit failure rolls back the update. Do not include private care details in the reason. Email, contact, family, authentication and role fields cannot be changed here. Responses use Cache-Control: no-store.",
+        "security": [{"bearerAuth": []}],
+        "parameters": [{"name": "accountId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AdminMemberNameUpdate"}}}},
+        "responses": {
+          "200": {"description": "Corrected member name and new version", "content": {"application/json": {"schema": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/AdminMemberName"}}}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "404": {"description": "Member does not exist, is unverified, or is disabled", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "409": {"description": "Member record version is stale", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "422": {"$ref": "#/components/responses/422"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
       }
     },
     "/api/v1/admin/members/{accountId}/access-audit": {
       "get": {
         "tags": ["Member administration"],
-        "summary": "Review member email access history",
+        "summary": "Review member record history",
         "operationId": "ListAdminMemberAccessAudit",
-        "description": "Requires a verified session and members.records.audit.read (Super Admin only). Returns a paginated, read-only record of staff member-search results and explicit member detail reads. Each entry identifies the staff account, action, fields disclosed, and time; no email, credentials, or request query are included. Each history review is itself recorded as audit_view and excluded from the returned email-access entries. Only verified active members are addressable. Responses use Cache-Control: no-store; exports are not supported.",
+        "description": "Requires a verified session and members.records.audit.read (Super Admin only). Returns paginated member search results, explicit detail reads and name corrections. Each entry identifies the staff account, action, fields disclosed or changed, optional correction reason, and time; no email value or credentials are included. Each history review is itself recorded as audit_view and excluded from returned entries. Only verified active members are addressable. Responses use Cache-Control: no-store; exports are not supported.",
         "security": [{"bearerAuth": []}],
         "parameters": [
           {"name": "accountId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
@@ -11879,7 +11898,32 @@
           "firstName": {"type": "string"},
           "lastName": {"type": "string"},
           "email": {"type": "string", "format": "email"},
-          "joinedAt": {"type": "string", "format": "date-time"}
+          "joinedAt": {"type": "string", "format": "date-time"},
+          "version": {"type": "integer", "minimum": 1, "description": "Member profile version returned by detail reads for conflict-safe corrections."}
+        }
+      },
+      "AdminMemberNameUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expectedVersion", "reason"],
+        "properties": {
+          "firstName": {"type": "string", "minLength": 1, "maxLength": 100},
+          "lastName": {"type": "string", "minLength": 1, "maxLength": 100},
+          "expectedVersion": {"type": "integer", "minimum": 1},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+        },
+        "anyOf": [{"required": ["firstName"]}, {"required": ["lastName"]}]
+      },
+      "AdminMemberName": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "firstName", "lastName", "joinedAt", "version"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "firstName": {"type": "string"},
+          "lastName": {"type": "string"},
+          "joinedAt": {"type": "string", "format": "date-time"},
+          "version": {"type": "integer", "minimum": 1}
         }
       },
       "AdminMemberPage": {
@@ -11905,8 +11949,9 @@
         "properties": {
           "id": {"type": "string", "description": "Audit row ID; use only as the opaque continuation cursor."},
           "actorId": {"type": "string", "format": "uuid"},
-          "action": {"type": "string", "enum": ["search_result", "detail_view"]},
-          "sensitiveFields": {"type": "array", "items": {"type": "string", "enum": ["email"]}},
+          "action": {"type": "string", "enum": ["search_result", "detail_view", "name_update"]},
+          "sensitiveFields": {"type": "array", "items": {"type": "string", "enum": ["email", "firstName", "lastName"]}},
+          "reason": {"type": "string", "maxLength": 500},
           "occurredAt": {"type": "string", "format": "date-time"}
         }
       },

@@ -42,6 +42,9 @@ unknown names currently deny access and are not advertised as usable permissions
 | `sermons.manage` | `content_editor`, legacy `system_administrator`, Super Admin, Assistant Pastor/Staff | Global |
 | `roles.manage` | `access_administrator`, Super Admin | Global; existing editor/leader delegation only |
 | `roles.read` | Super Admin, Assistant Pastor/Staff | Global; authorized candidate/assignment lookup |
+| `members.records.read` | Super Admin, Assistant Pastor, Staff | Global; verified active member lookup, audited detail |
+| `members.records.manage` | Super Admin, Assistant Pastor, Staff | Global; name correction only, with current version, reason, and audit |
+| `members.records.audit.read` | Super Admin | Global; member-specific record audit history |
 | `roles.privileged.manage` | Super Admin | Global; protected church appointments only |
 | `roles.operational.manage` | Super Admin, Assistant Pastor/Staff | Global authority to appoint leaders to registered ministry scopes |
 | `ministry.members.manage` | `ministry_leader` | Assigned registered ministry only; ministry routes remain future work |

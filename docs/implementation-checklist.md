@@ -260,7 +260,9 @@ with updated consent; broader visitor operations remain open. See [visitor welco
   /api/v1/admin/members/{accountId}` now gives an explicit, audited detail read;
   each search result that discloses an email is audited too, and audit failure
   blocks the response. Super Admins can inspect a paginated, value-redacted
-  member email-access history. Family/care fields, richer field-specific
+  member email-access history. Authorized staff can correct first/last names
+  with a reason and profile version; both self-edits and staff edits advance
+  that version, and name changes appear in the audit history. Family/care fields, richer field-specific
   authorization, and exports remain open, so M2.3 is not complete.
 - [ ] **M2.4:** Implement private visitor intake and QR entry, duplicate handling,
   New Visitors follow-up list and secure verification/account claiming. Existing

@@ -21,8 +21,8 @@ func (s *Service) MemberDetail(ctx context.Context, actor, memberID string) (Mem
 	if err = CheckTx(ctx, tx, actor, "members.records.read", ""); err != nil {
 		return member, err
 	}
-	err = tx.QueryRowContext(ctx, `SELECT a.id,a.first_name,a.last_name,a.email,a.created_at FROM accounts a WHERE a.id=$1 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL FOR SHARE OF a`, memberID).
-		Scan(&member.ID, &member.FirstName, &member.LastName, &member.Email, &member.JoinedAt)
+	err = tx.QueryRowContext(ctx, `SELECT a.id,a.first_name,a.last_name,a.email,a.created_at,a.profile_version FROM accounts a WHERE a.id=$1 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL FOR SHARE OF a`, memberID).
+		Scan(&member.ID, &member.FirstName, &member.LastName, &member.Email, &member.JoinedAt, &member.Version)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MemberRecord{}, ErrMemberNotFound
 	}

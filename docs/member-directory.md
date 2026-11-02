@@ -56,21 +56,31 @@ selects a person.
 `GET /api/v1/admin/members/{accountId}` returns the same basic fields for one
 verified, active account. Every detail response records an audit event naming
 the staff account, member account, `email` field and time. The response is not
-sent if that audit insert fails. Both operations are rate-limited and use
+sent if that audit insert fails. The detail includes a profile `version` used
+for conflict-safe name corrections. Both operations are rate-limited and use
 `Cache-Control: no-store`. They do not expose password state, MFA state, role
 assignments, sessions, private profile preferences, phone/address fields or
 family/care records. Staff member editing, additional sensitive fields,
 field-specific policies and exports remain future work. See `GET /openapi.json`
 for the request and response contract.
 
+`PATCH /api/v1/admin/members/{accountId}` allows Super Admin, Assistant Pastor,
+and Staff to correct only `firstName` and/or `lastName`. Require the latest
+`expectedVersion` from the detail read and a 1–500 character reason. A stale
+version returns 409; concurrent member self-edits also advance the version. The
+change and a reasoned audit event commit together, and an audit failure rolls the
+change back. Do not put care information in the reason. Email, passwords,
+contact, family and care information are not editable through this endpoint.
+
 `GET /api/v1/admin/members/{accountId}/access-audit` is restricted to Super
-Administrators. It pages through the audited search-result and detail reads for
-one verified, active member. Entries show the staff account ID, action, disclosed
-field names and timestamp; they contain no email value or query text. Use the
-returned numeric `nextCursor` only to continue the same member's history. The
-endpoint is rate-limited, non-cacheable, and has no export operation. Each audit
-history review is itself recorded as `audit_view`; those review records are
-excluded from the email-access history shown to avoid recursive noise.
+Administrators. It pages through the audited search-result, detail-read and name
+correction events for one verified, active member. Entries show the staff account
+ID, action, disclosed or changed field names, optional reason, and timestamp;
+they contain no email value or credentials. Use the returned numeric
+`nextCursor` only to continue the same member's history. The endpoint is
+rate-limited, non-cacheable, and has no export operation. Each audit-history
+review is itself recorded as `audit_view`; those review records are excluded
+from the displayed events.
 
 ## TDD evidence
 

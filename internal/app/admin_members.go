@@ -42,6 +42,48 @@ func adminMembersActor(w http.ResponseWriter, r *http.Request, service *access.S
 }
 
 func adminMemberRoutes(mux *http.ServeMux, service *access.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
+	mux.HandleFunc("PATCH /api/v1/admin/members/{accountId}", func(w http.ResponseWriter, r *http.Request) {
+		if !originAllowed(c, r.Header.Get("Origin")) {
+			writeError(w, 403, "origin_not_allowed", "Supply an allowed Origin header.", nil)
+			return
+		}
+		actor, ok := adminMembersActor(w, r, service, sessions, limiter, c)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" || r.URL.ForceQuery {
+			writeError(w, 422, "validation_failed", "This endpoint does not accept query parameters.", nil)
+			return
+		}
+		if !accountLimit(w, r, limiter, "admin-member-name-update", actor, 20, time.Minute) {
+			return
+		}
+		input, ok := decodeJSON[access.MemberNameUpdate](w, r)
+		if !ok {
+			return
+		}
+		member, err := service.UpdateMemberName(r.Context(), actor, r.PathValue("accountId"), input)
+		var validation *access.MemberValidationError
+		switch {
+		case errors.As(err, &validation):
+			writeError(w, 422, "validation_failed", "Check the indicated name correction fields.", validation.Fields)
+			return
+		case errors.Is(err, access.ErrForbidden):
+			writeError(w, 403, "forbidden", "Member record management permission is required.", nil)
+			return
+		case errors.Is(err, access.ErrMemberNotFound):
+			writeError(w, 404, "not_found", "Active member not found.", nil)
+			return
+		case errors.Is(err, access.ErrVersionConflict):
+			writeError(w, 409, "version_conflict", "The member record changed. Reload its latest version before editing.", nil)
+			return
+		case err != nil:
+			sessionError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, 200, map[string]any{"data": member})
+	})
 	mux.HandleFunc("GET /api/v1/admin/members/{accountId}/access-audit", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := adminMembersActor(w, r, service, sessions, limiter, c)
 		if !ok {

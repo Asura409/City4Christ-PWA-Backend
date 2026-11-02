@@ -126,5 +126,5 @@ func (r *Repository) Get(ctx context.Context, actor string) (Profile, error) {
 
 // Atomic partial updates preserve concurrent edits to fields omitted by this request.
 func (r *Repository) Update(ctx context.Context, actor string, in Update) (Profile, error) {
-	return scan(r.db.QueryRowContext(ctx, `UPDATE accounts SET first_name=COALESCE($2,first_name),last_name=COALESCE($3,last_name),directory_visible=COALESCE($4,directory_visible) WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL RETURNING `+columns, actor, in.FirstName, in.LastName, in.DirectoryVisible))
+	return scan(r.db.QueryRowContext(ctx, `UPDATE accounts SET first_name=COALESCE($2,first_name),last_name=COALESCE($3,last_name),directory_visible=COALESCE($4,directory_visible),profile_version=profile_version+CASE WHEN $2 IS NOT NULL OR $3 IS NOT NULL THEN 1 ELSE 0 END WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL RETURNING `+columns, actor, in.FirstName, in.LastName, in.DirectoryVisible))
 }
