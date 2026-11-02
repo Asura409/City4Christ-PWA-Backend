@@ -48,15 +48,31 @@ for Super Admin, Assistant Pastor, and Staff. It searches verified, active
 accounts by literal case-insensitive substring in name or email and returns
 `id`, `firstName`, `lastName`, `email`, and `joinedAt`. Results are paginated by
 opaque UUID cursor, limited to 50 rows per page, and excluded for unverified or
-deletion-requested accounts. The endpoint has account and IP rate limits and
-uses `Cache-Control: no-store`. It does not expose password state, MFA state,
-role assignments, sessions, private profile preferences, phone/address fields,
-or member detail records. The roster is read-only; detailed member records,
-field-level authorization, and sensitive-read/export auditing remain future
-work. See `GET /openapi.json` for the response contract.
+deletion-requested accounts. Each returned email is recorded as an audited
+search result; the query text is not copied into the audit log. The frontend
+shows names and join dates first, then fetches details only when a staff member
+selects a person.
+
+`GET /api/v1/admin/members/{accountId}` returns the same basic fields for one
+verified, active account. Every detail response records an audit event naming
+the staff account, member account, `email` field and time. The response is not
+sent if that audit insert fails. Both operations are rate-limited and use
+`Cache-Control: no-store`. They do not expose password state, MFA state, role
+assignments, sessions, private profile preferences, phone/address fields or
+family/care records. Staff member editing, additional sensitive fields,
+field-specific policies and exports remain future work. See `GET /openapi.json`
+for the request and response contract.
 
 ## TDD evidence
 
-Repository/service tests first failed on absent directory symbols. The global-app route test failed with 404 before wiring. An additional failing test caught empty error.fields for invalid parameters, and contract tests failed on the missing route/DTO. Tests run against disposable PostgreSQL and cover literal/name-only search, exclusion of hidden/unverified accounts, stable pagination, malformed/cross-search cursors, privacy on cursor replay, account and shared-IP limits, revoked sessions and the restricted response fields.
+Repository/service tests cover member lookup audit writes, audited detail reads,
+audit failure preventing disclosure, staff-only access and exclusion of inactive
+accounts. Global-app tests cover detail lookup, unknown/inactive member handling,
+authorization and rate limits; frontend browser tests confirm private email is
+shown only after selecting a member and that detail is fetched on demand.
 
-Executed verification: full `go test -race ./... -count=1 -timeout=5m`, focused directory regressions, go vet, formatting/whitespace checks, Swagger initializer, Redocly 2.63.0 OpenAPI validation, Docker build and disposable PostgreSQL smoke verification passed locally. No live staging acceptance is claimed for this unpushed directory slice.
+For the audited-detail slice, local verification used the full `internal/access`
+package plus focused global-app member/OpenAPI tests against disposable
+PostgreSQL, `go vet`, OpenAPI JSON parsing, frontend `npm test`, production build,
+and desktop/mobile Playwright flows. No live staging acceptance is claimed for
+this unpushed slice.
