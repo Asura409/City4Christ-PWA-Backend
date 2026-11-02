@@ -246,6 +246,26 @@ func groupRoutes(mux *http.ServeMux, service *groups.Service, sessions *auth.Ses
 		}
 		writeJSON(w, 200, map[string]any{"data": members})
 	})
+	mux.HandleFunc("POST /api/v1/groups/{groupId}/members/{accountId}/remove", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[groups.RemovalInput](w, r)
+		if !ok {
+			return
+		}
+		changed, err := service.RemoveMember(r.Context(), actor, r.PathValue("groupId"), r.PathValue("accountId"), in.Reason)
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": map[string]bool{"changed": changed}})
+	})
 	mux.HandleFunc("PATCH /api/v1/groups/{groupId}/membership-requests/{accountId}", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {

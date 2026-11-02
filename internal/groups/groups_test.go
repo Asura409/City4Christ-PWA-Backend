@@ -102,6 +102,55 @@ func TestGroupCreationMembershipApprovalAndLeave(t *testing.T) {
 	}
 }
 
+func TestRemoveActiveMemberRequiresScopedManagerAndAudits(t *testing.T) {
+	db, service, admin, member, other := groupFixture(t)
+	ctx := context.Background()
+	g, err := service.Create(ctx, admin, CreateInput{Name: "Choir", Audience: "church", JoinPolicy: "open"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Join(ctx, member, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.RemoveMember(ctx, other, g.ID, member, "Repeated disruption"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("unassigned account removed active member: %v", err)
+	}
+	if _, err = service.RemoveMember(ctx, admin, g.ID, member, "   "); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("empty removal reason accepted: %v", err)
+	}
+	if _, err = service.RemoveMember(ctx, admin, g.ID, admin, "Repeated disruption"); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("manager removed self through administrative route: %v", err)
+	}
+	if _, err = db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,'ministry_leader',$2)`, member, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.RemoveMember(ctx, admin, g.ID, member, "Repeated disruption"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("appointed Ministry Leader removed without revoking appointment: %v", err)
+	}
+	if _, err = db.Exec(`DELETE FROM account_roles WHERE account_id=$1 AND role='ministry_leader' AND scope=$2`, member, g.ID); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := service.RemoveMember(ctx, admin, g.ID, member, "Repeated disruption")
+	if err != nil || !changed {
+		t.Fatalf("authorized removal: changed=%v err=%v", changed, err)
+	}
+	changed, err = service.RemoveMember(ctx, admin, g.ID, member, "Repeated disruption")
+	if err != nil || changed {
+		t.Fatalf("repeat removal should be idempotent: changed=%v err=%v", changed, err)
+	}
+	var status, action, reason string
+	if err = db.QueryRow(`SELECT status FROM group_memberships WHERE group_id=$1 AND account_id=$2`, g.ID, member).Scan(&status); err != nil || status != "left" {
+		t.Fatalf("membership status=%q err=%v", status, err)
+	}
+	if err = db.QueryRow(`SELECT action,reason FROM group_audit_events WHERE group_id=$1 AND actor_id=$2 AND target_id=$3`, g.ID, admin, member).Scan(&action, &reason); err != nil || action != "removed" || reason != "Repeated disruption" {
+		t.Fatalf("removal audit action=%q reason=%q err=%v", action, reason, err)
+	}
+	var notices int
+	if err = db.QueryRow(`SELECT count(*) FROM notifications WHERE account_id=$1 AND kind='group.membership_removed' AND resource_path=$2`, member, "/#/groups/"+g.ID).Scan(&notices); err != nil || notices != 1 {
+		t.Fatalf("removal notices=%d err=%v", notices, err)
+	}
+}
+
 func TestGroupAudiencesAndAuthorization(t *testing.T) {
 	db, service, admin, member, other := groupFixture(t)
 	ctx := context.Background()

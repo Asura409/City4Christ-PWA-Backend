@@ -315,6 +315,11 @@ false successful delivery.
 - [ ] **M4.5:** React directory, My Groups, group detail, rosters and Pending
   Requests are implemented locally. Run the browser suite and verify leaders of
   group A against every read/write operation on group B before checking this.
+- [x] **M4.6:** Authorized church-wide and exact-group managers can remove an
+  active member with a required reason. Membership change, audit event and inbox
+  notice commit together; removing yourself or an appointed Ministry Leader
+  through this route is denied. PostgreSQL service/global-app and desktop/mobile
+  roster tests pass.
 
 **Exit:** W02 works; approval updates the roster/inbox once and membership
 determines subsequent group-specific content access server-side.
