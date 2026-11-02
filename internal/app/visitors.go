@@ -158,4 +158,24 @@ func visitorFollowUpRoutes(mux *http.ServeMux, s *visitors.Service, sessions *au
 		}
 		writeJSON(w, 200, map[string]any{"data": v})
 	})
+	mux.HandleFunc("POST /api/v1/admin/visitors/{visitorId}/assignment", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authn(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" || r.URL.ForceQuery {
+			visitorError(w, visitors.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[visitors.AssignmentInput](w, r)
+		if !ok {
+			return
+		}
+		v, e := s.Assign(r.Context(), actor, r.PathValue("visitorId"), in)
+		if e != nil {
+			visitorError(w, e)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": v})
+	})
 }

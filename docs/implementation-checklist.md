@@ -243,8 +243,9 @@ explicit consent, encrypted contact intake, private audited staff follow-up,
 idempotent retries, withdrawal and bounded expiry scrubbing are implemented.
 The welcome URL accepts ordinary/QR entry. Intake remains disabled until a
 dedicated private key is configured and rollout is approved. Account claiming,
-family/guardian/member administration, automated visitor welcome email/SMS and
-explicit Welcome Team task delegation remain deferred. See [visitor welcome](visitor-welcome.md).
+family/guardian/member administration and automated visitor welcome email/SMS
+remain deferred. One-record Welcome Team volunteer assignment is implemented
+with updated consent; broader visitor operations remain open. See [visitor welcome](visitor-welcome.md).
 
 
 - [ ] **M2.1:** Decide and document member fields, directory/staff visibility,
@@ -295,8 +296,10 @@ gates are detailed in the [status audit](implementation-status-2026-11-01.md).
   Admin may broadcast church-wide; leaders cannot widen a group audience. Audit
   recipients/counts without leaking sensitive payloads. Current-role checks also
   restrict staff-only inbox reads and pending push delivery.
-- [ ] **M3.5:** Wire welcome-team/visitor welcome events; select SMS only when its
-  provider, consent and costs are approved. Use inbox fallback and safe push previews.
+- [ ] **M3.5:** Generic transactional inbox notices now cover new visitor intake
+  and explicit volunteer task assignment. Choose any email/SMS follow-up only
+  after the provider, separate consent, costs and delivery behavior are approved.
+  Keep the inbox fallback and safe push previews.
 - [ ] **M3.6:** Complete notification preferences/broadcast UIs and test duplicate jobs,
   provider outage, unsubscribed devices, recipient isolation and safe retries.
 
