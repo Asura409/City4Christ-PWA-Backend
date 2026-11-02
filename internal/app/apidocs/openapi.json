@@ -1154,6 +1154,29 @@
         }
       }
     },
+    "/api/v1/admin/members/{accountId}/access-audit": {
+      "get": {
+        "tags": ["Member administration"],
+        "summary": "Review member email access history",
+        "operationId": "ListAdminMemberAccessAudit",
+        "description": "Requires a verified session and members.records.audit.read (Super Admin only). Returns a paginated, read-only record of staff member-search results and explicit member detail reads. Each entry identifies the staff account, action, fields disclosed, and time; no email, credentials, or request query are included. Each history review is itself recorded as audit_view and excluded from the returned email-access entries. Only verified active members are addressable. Responses use Cache-Control: no-store; exports are not supported.",
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {"name": "accountId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+          {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string", "pattern": "^[1-9][0-9]*$"}},
+          {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}}
+        ],
+        "responses": {
+          "200": {"description": "Member access audit page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AdminMemberAccessAuditPage"}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "404": {"description": "Member does not exist, is unverified, or is disabled", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "422": {"$ref": "#/components/responses/422"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      }
+    },
     "/api/v1/admin/sermons": {
       "get": {
         "tags": ["Sermon editing"],
@@ -11865,6 +11888,26 @@
         "properties": {
           "data": {"type": "array", "items": {"$ref": "#/components/schemas/AdminMember"}},
           "meta": {"type": "object", "required": ["nextCursor"], "properties": {"nextCursor": {"type": "string"}}}
+        }
+      },
+      "AdminMemberAccessAuditPage": {
+        "type": "object",
+        "required": ["data", "meta"],
+        "properties": {
+          "data": {"type": "array", "items": {"$ref": "#/components/schemas/AdminMemberAccessAuditEvent"}},
+          "meta": {"type": "object", "required": ["nextCursor"], "properties": {"nextCursor": {"type": "string"}}}
+        }
+      },
+      "AdminMemberAccessAuditEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "actorId", "action", "sensitiveFields", "occurredAt"],
+        "properties": {
+          "id": {"type": "string", "description": "Audit row ID; use only as the opaque continuation cursor."},
+          "actorId": {"type": "string", "format": "uuid"},
+          "action": {"type": "string", "enum": ["search_result", "detail_view"]},
+          "sensitiveFields": {"type": "array", "items": {"type": "string", "enum": ["email"]}},
+          "occurredAt": {"type": "string", "format": "date-time"}
         }
       },
       "EditorialSermonPage": {

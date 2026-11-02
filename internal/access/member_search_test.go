@@ -110,3 +110,43 @@ func TestAdminMemberDetailAuditsSensitiveEmailAndFailsClosed(t *testing.T) {
 		}
 	}
 }
+
+func TestMemberAccessAuditIsSuperAdminOnlyAndPaginated(t *testing.T) {
+	db, service, staff, target := fixture(t)
+	ctx := context.Background()
+	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id IN ($1,$2)`, staff, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'staff')`, staff); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.MemberDetail(ctx, staff, target); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.MemberDetail(ctx, staff, target); err != nil {
+		t.Fatal(err)
+	}
+	super := account(t, db)
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'super_administrator')`, super); err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.MemberAccessAudit(ctx, super, target, "", 1)
+	if err != nil || len(page.Data) != 1 || page.Data[0].ActorID != staff || page.Data[0].Action != "detail_view" || len(page.Data[0].SensitiveFields) != 1 || page.Data[0].SensitiveFields[0] != "email" || page.NextCursor == "" {
+		t.Fatalf("member access audit %+v %v", page, err)
+	}
+	older, err := service.MemberAccessAudit(ctx, super, target, page.NextCursor, 1)
+	if err != nil || len(older.Data) != 1 || older.Data[0].ID == page.Data[0].ID || older.NextCursor != "" {
+		t.Fatalf("older member access audit %+v %v", older, err)
+	}
+	if _, err := service.MemberAccessAudit(ctx, staff, target, "", 1); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-super-admin audit access: %v", err)
+	}
+	if _, err := service.MemberAccessAudit(ctx, super, "not-a-uuid", "", 1); !errors.Is(err, ErrMemberNotFound) {
+		t.Fatalf("invalid target: %v", err)
+	}
+	for _, cursor := range []string{"0", "-1", "not-a-number", "9223372036854775808"} {
+		if _, err := service.MemberAccessAudit(ctx, super, target, cursor, 1); !errors.Is(err, ErrInvalid) {
+			t.Fatalf("invalid audit cursor %q: %v", cursor, err)
+		}
+	}
+}

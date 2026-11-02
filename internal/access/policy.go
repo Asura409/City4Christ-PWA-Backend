@@ -24,6 +24,7 @@ var roleRules = [...]roleRule{
 	{role: "staff", permission: "broadcasts.send"},
 	{role: "super_administrator", permission: "roles.read"},
 	{role: "super_administrator", permission: "members.records.read"},
+	{role: "super_administrator", permission: "members.records.audit.read"},
 	{role: "super_administrator", permission: "roles.operational.manage"},
 	{role: "super_administrator", permission: "roles.privileged.manage"},
 	{role: "super_administrator", permission: "roles.manage"},

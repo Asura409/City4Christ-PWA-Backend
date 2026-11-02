@@ -63,6 +63,15 @@ family/care records. Staff member editing, additional sensitive fields,
 field-specific policies and exports remain future work. See `GET /openapi.json`
 for the request and response contract.
 
+`GET /api/v1/admin/members/{accountId}/access-audit` is restricted to Super
+Administrators. It pages through the audited search-result and detail reads for
+one verified, active member. Entries show the staff account ID, action, disclosed
+field names and timestamp; they contain no email value or query text. Use the
+returned numeric `nextCursor` only to continue the same member's history. The
+endpoint is rate-limited, non-cacheable, and has no export operation. Each audit
+history review is itself recorded as `audit_view`; those review records are
+excluded from the email-access history shown to avoid recursive noise.
+
 ## TDD evidence
 
 Repository/service tests cover member lookup audit writes, audited detail reads,

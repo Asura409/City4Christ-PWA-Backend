@@ -42,6 +42,48 @@ func adminMembersActor(w http.ResponseWriter, r *http.Request, service *access.S
 }
 
 func adminMemberRoutes(mux *http.ServeMux, service *access.Service, sessions *auth.SessionService, limiter *auth.RateLimiter, c Config) {
+	mux.HandleFunc("GET /api/v1/admin/members/{accountId}/access-audit", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := adminMembersActor(w, r, service, sessions, limiter, c)
+		if !ok {
+			return
+		}
+		query, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			writeError(w, 422, "validation_failed", "Check the audit cursor and limit.", nil)
+			return
+		}
+		for name, values := range query {
+			if (name != "cursor" && name != "limit") || len(values) != 1 {
+				writeError(w, 422, "validation_failed", "Check the audit cursor and limit.", nil)
+				return
+			}
+		}
+		limit := 20
+		if values, ok := query["limit"]; ok {
+			limit, err = strconv.Atoi(values[0])
+			if err != nil || limit < 1 || limit > 100 {
+				writeError(w, 422, "validation_failed", "Check the audit cursor and limit.", nil)
+				return
+			}
+		}
+		page, err := service.MemberAccessAudit(r.Context(), actor, r.PathValue("accountId"), query.Get("cursor"), limit)
+		switch {
+		case errors.Is(err, access.ErrForbidden):
+			writeError(w, 403, "forbidden", "Member access audit permission is required.", nil)
+			return
+		case errors.Is(err, access.ErrMemberNotFound):
+			writeError(w, 404, "not_found", "Active member not found.", nil)
+			return
+		case errors.Is(err, access.ErrInvalid):
+			writeError(w, 422, "validation_failed", "Check the audit cursor and limit.", nil)
+			return
+		case err != nil:
+			sessionError(w, err)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		writeJSON(w, 200, map[string]any{"data": page.Data, "meta": map[string]string{"nextCursor": page.NextCursor}})
+	})
 	mux.HandleFunc("GET /api/v1/admin/members", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := adminMembersActor(w, r, service, sessions, limiter, c)
 		if !ok {
