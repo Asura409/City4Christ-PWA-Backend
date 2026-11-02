@@ -174,6 +174,26 @@ func TestAdminMemberSearchOpenAPIContract(t *testing.T) {
 	}
 }
 
+func TestVisitorAssignmentOpenAPIContract(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	paths := spec["paths"].(map[string]any)
+	operation := paths["/api/v1/admin/visitors/{visitorId}/assignment"].(map[string]any)["post"].(map[string]any)
+	if len(operation["security"].([]any)) != 1 {
+		t.Fatal("visitor assignment must require Bearer authentication")
+	}
+	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
+	input := schemas["VisitorAssignmentInput"].(map[string]any)
+	if input["additionalProperties"] != false || len(input["properties"].(map[string]any)) != 3 {
+		t.Fatal("assignment input is not constrained")
+	}
+}
+
 func TestPasswordRecoveryContract(t *testing.T) {
 	h := New(nil, Config{})
 	w := httptest.NewRecorder()

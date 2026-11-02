@@ -14,8 +14,8 @@ visit, not marketing. The server supplies the exact consent text and version;
 both are retained with receipt time. Unsupported family, children, prayer, baptism,
 account-linking and member-management fields are rejected in this first slice.
 No welcome email/SMS is sent to an unverified supplied address or number. Secure
-account claiming, family relationships and further welcome-team task delegation
-remain later work. The existing verified login/signup flows are unchanged.
+account claiming and family relationships remain later work. The verified
+login/signup flows are unchanged.
 
 ## Privacy and authority
 
@@ -36,6 +36,14 @@ remain later work. The existing verified login/signup flows are unchanged.
 - Every disclosed name/contact read and workflow change writes metadata audit in
   the same transaction. Audit failure aborts the response/change. Current roles
   are checked again for each service operation; same-session revocation applies.
+- A staff member can assign one consented contact record to any verified active
+  account as a designated volunteer. Assignees can list, read and update only
+  their assigned records; they cannot assign records or withdraw contact data.
+  Assignments include a required reason, version check and audit record. Expiry
+  or withdrawal clears the assignee. Assignment sends a generic in-app notice.
+- The volunteer-sharing consent is `visitor-welcome-v2`. Existing v1 records
+  remain staff-only and cannot be assigned. New submissions use the current text
+  served by `/api/v1/visitors/config`.
 
 Public receipt is generic, whether an email is new or already used by an account.
 A matching email never creates, verifies, changes or links an account. Client UUIDs
@@ -96,6 +104,7 @@ limits. No account, contact lookup or public status endpoint exists.
 | GET | `/api/v1/admin/visitors?status=new&limit=20&cursor=...` | Audited names-only queue |
 | GET | `/api/v1/admin/visitors/{visitorId}` | Audited contact detail |
 | PATCH | `/api/v1/admin/visitors/{visitorId}` | Versioned status/withdrawal |
+| POST | `/api/v1/admin/visitors/{visitorId}/assignment` | Assign or unassign one consented follow-up task |
 
 Example public input (generate a new UUID for a new form; preserve it for retries):
 
@@ -106,7 +115,7 @@ Example public input (generate a new UUID for a new form; preserve it for retrie
   "email": "visitor@example.invalid",
   "phone": "",
   "consent": true,
-  "policyVersion": "visitor-welcome-v1"
+  "policyVersion": "visitor-welcome-v2"
 }
 ```
 

@@ -21,6 +21,32 @@ func permit(ctx context.Context, tx *sql.Tx, actor string) error {
 	}
 	return err
 }
+
+func permitOrAssigned(ctx context.Context, tx *sql.Tx, actor, visitorID string, now time.Time) (bool, error) {
+	if !validID(actor) {
+		return false, ErrForbidden
+	}
+	err := access.CheckTx(ctx, tx, actor, "visitors.follow_up", "")
+	if err == nil {
+		return true, nil
+	}
+	if !errors.Is(err, access.ErrForbidden) {
+		return false, err
+	}
+	var assigned bool
+	if visitorID == "" {
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM visitor_intakes v JOIN accounts a ON a.id=v.assigned_to WHERE v.assigned_to=$1 AND v.sealed_payload IS NOT NULL AND v.expires_at>$2 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL)`, actor, now.UTC()).Scan(&assigned)
+	} else {
+		err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM visitor_intakes v JOIN accounts a ON a.id=v.assigned_to WHERE v.id=$1 AND v.assigned_to=$2 AND v.sealed_payload IS NOT NULL AND v.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL)`, visitorID, actor, now.UTC()).Scan(&assigned)
+	}
+	if err != nil {
+		return false, err
+	}
+	if !assigned {
+		return false, ErrForbidden
+	}
+	return false, nil
+}
 func audit(ctx context.Context, tx *sql.Tx, actor string, v Summary, action, old string, now time.Time) error {
 	_, e := tx.ExecContext(ctx, `INSERT INTO visitor_audit_events(visitor_id,actor_id,action,previous_status,status,version,occurred_at) VALUES($1,NULLIF($2,'')::uuid,$3,$4,$5,$6,$7)`, v.ID, actor, action, old, v.Status, v.Version, now.UTC())
 	return e
@@ -56,7 +82,7 @@ func PurgeExpired(ctx context.Context, db *sql.DB, now time.Time, limit int) (in
 		old := v.Status
 		v.Status = "expired"
 		v.Version++
-		if _, e = tx.ExecContext(ctx, `UPDATE visitor_intakes SET sealed_payload=NULL,key_id=NULL,request_digest=NULL,status='expired',version=version+1,updated_at=$2 WHERE id=$1`, v.ID, now.UTC()); e != nil {
+		if _, e = tx.ExecContext(ctx, `UPDATE visitor_intakes SET sealed_payload=NULL,key_id=NULL,request_digest=NULL,assigned_to=NULL,status='expired',version=version+1,updated_at=$2 WHERE id=$1`, v.ID, now.UTC()); e != nil {
 			return 0, e
 		}
 		if e = audit(ctx, tx, "", v, "expired", old, now); e != nil {

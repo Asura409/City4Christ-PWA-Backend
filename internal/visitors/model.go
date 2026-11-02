@@ -12,9 +12,9 @@ import (
 	"unicode/utf8"
 )
 
-const PolicyVersion = "visitor-welcome-v1"
+const PolicyVersion = "visitor-welcome-v2"
 const RetentionDays = 90
-const ConsentText = "I agree that City4Christ may store these details for up to 90 days and contact me about my visit. This is not consent to marketing or a mailing list."
+const ConsentText = "I agree that City4Christ may store these details for up to 90 days and contact me about my visit. My contact details may be shared with a volunteer assigned by the church to follow up about my visit. This is not consent to marketing or a mailing list."
 
 var (
 	ErrInvalid     = errors.New("invalid visitor fields")
@@ -43,12 +43,13 @@ type contact struct {
 	Phone    string `json:"phone"`
 }
 type Summary struct {
-	ID        string    `json:"id"`
-	FullName  string    `json:"fullName"`
-	Status    string    `json:"status"`
-	Version   int       `json:"version"`
-	CreatedAt time.Time `json:"createdAt"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	ID         string    `json:"id"`
+	FullName   string    `json:"fullName"`
+	Status     string    `json:"status"`
+	Version    int       `json:"version"`
+	CreatedAt  time.Time `json:"createdAt"`
+	ExpiresAt  time.Time `json:"expiresAt"`
+	AssignedTo string    `json:"assignedTo,omitempty"`
 }
 type Detail struct {
 	Summary
@@ -69,6 +70,12 @@ type Page struct {
 type Update struct {
 	Status  string `json:"status"`
 	Version int    `json:"version"`
+}
+
+type AssignmentInput struct {
+	AccountID string `json:"accountId"`
+	Reason    string `json:"reason"`
+	Version   int    `json:"version"`
 }
 
 func validID(s string) bool {

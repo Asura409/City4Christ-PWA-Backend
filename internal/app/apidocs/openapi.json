@@ -94,7 +94,7 @@
     },
     {
       "name": "Visitors",
-      "description": "Consented private visitor intake and staff follow-up, separate from login accounts."
+      "description": "Consented private visitor intake, staff follow-up, and individual assignment to a designated verified volunteer."
     },
     {
       "name": "Account deletion",
@@ -4638,7 +4638,9 @@
             "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
           }
         ]
-      },
+      }
+    },
+    "/api/v1/admin/events": {
       "post": {
         "tags": [
           "Event management"
@@ -10359,7 +10361,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Requires current global visitors.follow_up: Super Admin, Assistant Pastor or Staff. Verified active Bearer session, account/IP limits and no-store responses. Sensitive name/contact reads are audited without storing those values in the audit. Defaults to New. Expired/withdrawn contacts are excluded; collection responses include meta.nextCursor.",
+        "description": "Requires current global visitors.follow_up (Super Admin, Assistant Pastor or Staff), or an active individual assignment for a designated volunteer. Verified active Bearer session, account/IP limits and no-store responses. Volunteers see only records assigned to them. Sensitive name/contact reads are audited without storing those values in the audit. Defaults to New. Expired/withdrawn contacts are excluded; collection responses include meta.nextCursor.",
         "responses": {
           "200": {
             "description": "Success",
@@ -10452,7 +10454,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Requires current global visitors.follow_up: Super Admin, Assistant Pastor or Staff. Verified active Bearer session, account/IP limits and no-store responses. Sensitive name/contact reads are audited without storing those values in the audit. Contact methods are not ownership verification. Expired/withdrawn details return 404.",
+        "description": "Requires current global visitors.follow_up (Super Admin, Assistant Pastor or Staff), or an active individual assignment for this record. Verified active Bearer session, account/IP limits and no-store responses. Contact details are audited on read. Contact methods are not ownership verification. Expired/withdrawn details return 404.",
         "responses": {
           "200": {
             "description": "Success",
@@ -10582,6 +10584,27 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/admin/visitors/{visitorId}/assignment": {
+      "post": {
+        "tags": ["Visitors"],
+        "summary": "Assign or unassign one visitor follow-up task",
+        "operationId": "AssignVisitorFollowUp",
+        "security": [{"bearerAuth": []}],
+        "description": "Requires current global visitors.follow_up (Super Admin, Assistant Pastor or Staff), a verified active Bearer session, allowed Origin, and account/IP limits. Assign only to a verified active account. The new consent version explicitly permits sharing details with a designated volunteer; legacy consent records cannot be assigned. Each assignment change requires the current version and a reason, is audited transactionally, and sends a generic in-app notice. Volunteers can only read and update the assigned record; they cannot delegate or withdraw contact data. Set accountId to an empty string to unassign.",
+        "parameters": [{"name": "visitorId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/VisitorAssignmentInput"}, "example": {"accountId": "22222222-2222-4222-8222-222222222222", "reason": "Welcome Team follow-up", "version": 1}}}},
+        "responses": {
+          "200": {"description": "Assignment updated", "content": {"application/json": {"schema": {"type": "object", "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/VisitorSummary"}}}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "404": {"$ref": "#/components/responses/404"},
+          "409": {"$ref": "#/components/responses/409"},
+          "422": {"$ref": "#/components/responses/422"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
       }
     },
     "/api/v1/auth/password/change": {
@@ -15424,7 +15447,7 @@
           "policyVersion": {
             "type": "string",
             "enum": [
-              "visitor-welcome-v1"
+              "visitor-welcome-v2"
             ]
           }
         },
@@ -15435,7 +15458,7 @@
           "email": "visitor@example.invalid",
           "phone": "",
           "consent": true,
-          "policyVersion": "visitor-welcome-v1"
+          "policyVersion": "visitor-welcome-v2"
         }
       },
       "VisitorConfig": {
@@ -15506,6 +15529,11 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "assignedTo": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Account ID of the assigned volunteer, omitted when unassigned."
           }
         },
         "description": "Authorized list metadata and decrypted name only. Contact methods, payload, key IDs and submission identifiers are omitted. Withdrawal responses have an empty name."
@@ -15557,6 +15585,11 @@
             "type": "string",
             "format": "date-time"
           },
+          "assignedTo": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Account ID of the assigned volunteer, omitted when unassigned."
+          },
           "email": {
             "type": "string",
             "maxLength": 254
@@ -15577,6 +15610,16 @@
           "consentText": {
             "type": "string"
           }
+        }
+      },
+      "VisitorAssignmentInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accountId", "reason", "version"],
+        "properties": {
+          "accountId": {"type": "string", "description": "Verified active account UUID, or an empty string to unassign."},
+          "reason": {"type": "string", "minLength": 3, "maxLength": 500},
+          "version": {"type": "integer", "minimum": 1}
         }
       },
       "VisitorUpdate": {
