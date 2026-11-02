@@ -214,3 +214,13 @@ Neither grants group membership or authority over another group.
 the private visitor welcome queue. Reads are audited, lists omit contact methods,
 and no member/finance/technical/ministry role gains access implicitly. See
 [visitor welcome](visitor-welcome.md) for consent, encryption and 90-day retention.
+
+### Reviewed account-deletion requests
+
+Global `accounts.deletion.review` belongs only to Super Admin. Every queue/detail
+read and review mutation also requires fresh primary proof and application MFA.
+Staff, Assistant Pastor, technical and group roles do not inherit it. Submission
+is an own-account operation, requiring fresh primary proof and enrolled MFA.
+Deletion-pending accounts confer no effective capability. See
+[request policy and limits](account-deletion.md); review does not permanently erase
+data or reactivate the account.

@@ -5,7 +5,7 @@ import "context"
 func (r *Repository) directRealtimeRecipients(ctx context.Context, conversationID string) ([]string, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT m.account_id::text
 FROM direct_conversation_members m
-JOIN accounts a ON a.id=m.account_id AND a.email_verified_at IS NOT NULL
+JOIN accounts a ON a.id=m.account_id AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL
 WHERE m.conversation_id=$1 ORDER BY m.account_id`, conversationID)
 	if err != nil {
 		return nil, err
@@ -17,7 +17,7 @@ WHERE m.conversation_id=$1 ORDER BY m.account_id`, conversationID)
 func (r *Repository) groupRealtimeRecipients(ctx context.Context, groupID string) ([]string, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT a.id::text
 FROM groups g
-JOIN accounts a ON a.email_verified_at IS NOT NULL
+JOIN accounts a ON a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL
 WHERE g.id=$1 AND g.archived_at IS NULL AND (
  (g.audience='church' AND EXISTS(
   SELECT 1 FROM group_memberships gm WHERE gm.group_id=g.id AND gm.account_id=a.id AND gm.status='active'

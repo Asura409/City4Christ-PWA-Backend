@@ -70,7 +70,7 @@ func (m *MFAService) beginTx(ctx context.Context, access string) (*sql.Tx, *sess
 		return nil, nil, err
 	}
 	var id string
-	err = tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL FOR UPDATE`, claims.Subject).Scan(&id)
+	err = tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FOR UPDATE`, claims.Subject).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrInvalidSession
 	}
@@ -99,7 +99,7 @@ func (m *MFAService) Status(ctx context.Context, access string) (MFAStatus, erro
 	var status MFAStatus
 	var confirmed, pending, proof, primary *time.Time
 	var expiry time.Time
-	err = m.db.QueryRowContext(ctx, `SELECT f.confirmed_at,f.pending_expires_at,p.verified_at,COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at,(SELECT count(*) FROM mfa_recovery_codes r WHERE r.factor_id=f.id AND r.consumed_at IS NULL) FROM auth_sessions s JOIN accounts a ON a.id=s.account_id LEFT JOIN mfa_factors f ON f.account_id=a.id LEFT JOIN mfa_session_proofs p ON p.session_id=s.id AND p.factor_id=f.id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL`, c.SessionID, c.Subject, m.sessions.now().UTC()).Scan(&confirmed, &pending, &proof, &primary, &expiry, &status.RecoveryCodesRemaining)
+	err = m.db.QueryRowContext(ctx, `SELECT f.confirmed_at,f.pending_expires_at,p.verified_at,COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at,(SELECT count(*) FROM mfa_recovery_codes r WHERE r.factor_id=f.id AND r.consumed_at IS NULL) FROM auth_sessions s JOIN accounts a ON a.id=s.account_id LEFT JOIN mfa_factors f ON f.account_id=a.id LEFT JOIN mfa_session_proofs p ON p.session_id=s.id AND p.factor_id=f.id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL`, c.SessionID, c.Subject, m.sessions.now().UTC()).Scan(&confirmed, &pending, &proof, &primary, &expiry, &status.RecoveryCodesRemaining)
 	if errors.Is(err, sql.ErrNoRows) {
 		return status, ErrInvalidSession
 	}

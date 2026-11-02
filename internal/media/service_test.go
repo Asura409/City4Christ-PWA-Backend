@@ -3,6 +3,7 @@ package media
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -81,6 +82,20 @@ func TestMediaServiceValidatesMediaPolicyBeforeSigning(t *testing.T) {
 	}
 	if len(storage.keys) != 0 {
 		t.Fatalf("invalid requests reached storage: %#v", storage.keys)
+	}
+}
+
+func TestMediaServiceSupportsScannedMessageAttachmentUploads(t *testing.T) {
+	db := mediaTestDB(t)
+	owner := mediaTestAccount(t, db)
+	storage := &fakeUploadStorage{request: SignedRequest{URL: "https://r2.example.invalid/upload"}}
+	service := NewService(NewRepository(db), storage, time.Now)
+	result, err := service.Presign(context.Background(), owner, PresignInput{Purpose: UploadPurpose("message_attachment"), ContentType: "image/png", Size: 128})
+	if err != nil {
+		t.Fatalf("message Presign() error = %v", err)
+	}
+	if result.UploadID == "" || len(storage.keys) != 1 || !strings.HasPrefix(storage.keys[0], "messages/"+owner+"/") {
+		t.Fatalf("message upload was not reserved in its private namespace: result=%+v keys=%v", result, storage.keys)
 	}
 }
 

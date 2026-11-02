@@ -95,7 +95,7 @@ func (s *GoogleService) CompleteReauthentication(ctx context.Context, state, bro
 	}
 	defer tx.Rollback()
 	var account string
-	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a JOIN auth_sessions s ON s.account_id=a.id WHERE s.id=$1 AND a.email_verified_at IS NOT NULL FOR SHARE OF a`, sid).Scan(&account)
+	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a JOIN auth_sessions s ON s.account_id=a.id WHERE s.id=$1 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL FOR SHARE OF a`, sid).Scan(&account)
 	if errors.Is(err, sql.ErrNoRows) {
 		return true, target, ErrInvalidSession
 	}

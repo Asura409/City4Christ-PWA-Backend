@@ -193,6 +193,7 @@ func TestRealtimeDirectMessageDeliveredAsMetadataAfterRESTSend(t *testing.T) {
 	}
 
 	// Each participant receives identifiers and the sequence; message content remains in REST history.
+	var messageID string
 	for _, conn := range connections {
 		var event map[string]any
 		if err := wsjson.Read(ctx, conn, &event); err != nil {
@@ -201,8 +202,140 @@ func TestRealtimeDirectMessageDeliveredAsMetadataAfterRESTSend(t *testing.T) {
 		if event["type"] != "message.created" || event["scope"] != "direct" || event["conversationId"] != conversation.ID {
 			t.Fatalf("unexpected realtime event: %#v", event)
 		}
+		messageID, _ = event["messageId"].(string)
 		if _, hasBody := event["body"]; hasBody {
 			t.Fatalf("realtime event must not include message body: %#v", event)
 		}
+	}
+	mutate := func(method, payload string) *http.Response {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, method, server.URL+"/api/v1/conversations/"+conversation.ID+"/messages/"+messageID, strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Authorization", "Bearer "+senderAccess)
+		req.Header.Set("Origin", origin)
+		if payload != "" {
+			req.Header.Set("Content-Type", "application/json")
+		}
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return response
+	}
+	updated := mutate(http.MethodPatch, `{"body":"corrected private message"}`)
+	if updated.StatusCode != http.StatusOK {
+		t.Fatalf("edit status = %d", updated.StatusCode)
+	}
+	updated.Body.Close()
+	for _, conn := range connections {
+		var event map[string]any
+		if err := wsjson.Read(ctx, conn, &event); err != nil || event["type"] != "message.updated" || event["messageId"] != messageID {
+			t.Fatalf("edit realtime event = %#v, err=%v", event, err)
+		}
+		if _, hasBody := event["body"]; hasBody {
+			t.Fatalf("edit realtime event leaked body: %#v", event)
+		}
+	}
+	deleted := mutate(http.MethodDelete, "")
+	if deleted.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete status = %d", deleted.StatusCode)
+	}
+	deleted.Body.Close()
+	for _, conn := range connections {
+		var event map[string]any
+		if err := wsjson.Read(ctx, conn, &event); err != nil || event["type"] != "message.deleted" || event["messageId"] != messageID {
+			t.Fatalf("delete realtime event = %#v, err=%v", event, err)
+		}
+		if _, hasBody := event["body"]; hasBody {
+			t.Fatalf("delete realtime event leaked body: %#v", event)
+		}
+	}
+}
+
+func TestRealtimeTypingSignalIsParticipantScopedAndContainsNoMessageContent(t *testing.T) {
+	db, sessions, senderID, senderAccess := realtimeFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+	defer cancel()
+	var recipientID string
+	if err := db.QueryRowContext(ctx, `INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES('realtime-typing-recipient@example.invalid','Receive','Typing',now()) RETURNING id`).Scan(&recipientID); err != nil {
+		t.Fatal(err)
+	}
+	recipientTokens, err := sessions.Start(ctx, recipientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var outsiderID string
+	if err := db.QueryRowContext(ctx, `INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES('realtime-typing-outsider@example.invalid','Outside','Member',now()) RETURNING id`).Scan(&outsiderID); err != nil {
+		t.Fatal(err)
+	}
+	outsiderTokens, err := sessions.Start(ctx, outsiderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := messaging.NewService(messaging.NewRepository(db), nil)
+	conversation, _, err := service.CreateConversation(ctx, senderID, recipientID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	origin := "https://pwa.example.invalid"
+	h := New(db, Config{VerificationKey: bytes.Repeat([]byte{73}, 32), AppOrigin: "https://api.example.invalid", AllowedOrigins: []string{origin}})
+	server := httptest.NewServer(h)
+	defer server.Close()
+	open := func(access string) *websocket.Conn {
+		t.Helper()
+		actor, sessionID, expiresAt, err := sessions.AuthenticateSession(ctx, access)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ticket, err := messaging.NewRealtimeTicketService(messaging.NewRepository(db), nil).Issue(ctx, actor.ID, sessionID, expiresAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http")+"/api/v1/realtime", &websocket.DialOptions{HTTPHeader: http.Header{"Origin": []string{origin}}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := wsjson.Write(ctx, conn, map[string]string{"type": "authenticate", "ticket": ticket.Value}); err != nil {
+			t.Fatal(err)
+		}
+		var ready map[string]string
+		if err := wsjson.Read(ctx, conn, &ready); err != nil || ready["type"] != "ready" {
+			t.Fatalf("ready = %v, err = %v", ready, err)
+		}
+		return conn
+	}
+	sender, recipient, outsider := open(senderAccess), open(recipientTokens.AccessToken), open(outsiderTokens.AccessToken)
+	defer sender.CloseNow()
+	defer recipient.CloseNow()
+	defer outsider.CloseNow()
+	if err := wsjson.Write(ctx, sender, map[string]string{"type": "typing.start", "scope": "direct", "conversationId": conversation.ID}); err != nil {
+		t.Fatal(err)
+	}
+	var event map[string]any
+	if err := wsjson.Read(ctx, recipient, &event); err != nil {
+		t.Fatalf("read typing signal: %v", err)
+	}
+	if event["type"] != "typing.start" || event["scope"] != "direct" || event["conversationId"] != conversation.ID {
+		t.Fatalf("typing event = %#v", event)
+	}
+	if _, exists := event["body"]; exists {
+		t.Fatalf("typing signal unexpectedly includes content: %#v", event)
+	}
+	quietCtx, quietCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer quietCancel()
+	var privateEcho map[string]any
+	if err := wsjson.Read(quietCtx, sender, &privateEcho); err == nil {
+		t.Fatalf("sender received own typing event: %#v", privateEcho)
+	}
+	if err := wsjson.Write(ctx, outsider, map[string]string{"type": "typing.start", "scope": "direct", "conversationId": conversation.ID}); err != nil {
+		t.Fatal(err)
+	}
+	unauthorizedCtx, unauthorizedCancel := context.WithTimeout(ctx, 100*time.Millisecond)
+	defer unauthorizedCancel()
+	var unauthorizedEvent map[string]any
+	if err := wsjson.Read(unauthorizedCtx, recipient, &unauthorizedEvent); err == nil {
+		t.Fatalf("nonparticipant typing event leaked: %#v", unauthorizedEvent)
 	}
 }

@@ -96,7 +96,7 @@ func (r *Repository) ListDirectory(ctx context.Context, o DirectoryOptions, afte
 		id = &after.ID
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT id,first_name,last_name FROM accounts
- WHERE directory_visible AND email_verified_at IS NOT NULL
+ WHERE directory_visible AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL
  AND ($1='' OR strpos(lower(first_name||' '||last_name),lower($1))>0)
  AND ($2::uuid IS NULL OR id>$2::uuid)
  ORDER BY id ASC LIMIT $3`, o.Query, id, o.Limit+1)

@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	DownloadURLTTL       = 30 * time.Minute
-	MaxPostAttachments   = 4
-	MaxSermonAttachments = 10
+	DownloadURLTTL        = 30 * time.Minute
+	MaxPostAttachments    = 4
+	MaxSermonAttachments  = 10
+	MaxMessageAttachments = 4
 )
 
 var ErrInvalidAttachment = errors.New("media attachment is not available to this owner")
@@ -85,6 +86,7 @@ func SignAttachments(ctx context.Context, signer DownloadSigner, items []Attachm
 		}
 		items[i].URL = signed.URL
 		items[i].ExpiresAt = signed.ExpiresAt.UTC()
+		items[i].ObjectKey = ""
 	}
 	return items, nil
 }

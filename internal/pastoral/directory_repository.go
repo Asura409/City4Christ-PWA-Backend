@@ -9,7 +9,7 @@ import (
 )
 
 const profileColumns = `p.account_id,a.first_name,a.last_name,p.bio,p.time_zone,p.listed`
-const eligiblePastor = `EXISTS(SELECT 1 FROM account_roles r WHERE r.account_id=p.account_id AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator')) AND a.email_verified_at IS NOT NULL`
+const eligiblePastor = `EXISTS(SELECT 1 FROM account_roles r WHERE r.account_id=p.account_id AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator')) AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL`
 
 func lockPastor(ctx context.Context, tx *sql.Tx, id string, listed bool) error {
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('pastoral:'||$1,0))`, id); err != nil {
@@ -28,7 +28,7 @@ func lockPastor(ctx context.Context, tx *sql.Tx, id string, listed bool) error {
 	}
 	// Keep verification and pastoral-role revocation serialized with this action.
 	var role string
-	err = tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator') AND a.email_verified_at IS NOT NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, id).Scan(&role)
+	err = tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator') AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, id).Scan(&role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrForbidden
 	}
@@ -60,7 +60,7 @@ func (r *Repository) Appoint(ctx context.Context, actor string, in ProfileInput,
 		return Profile{}, err
 	}
 	var target string
-	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a JOIN account_roles r ON r.account_id=a.id WHERE a.id=$1 AND a.email_verified_at IS NOT NULL AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator') ORDER BY r.role LIMIT 1 FOR SHARE OF a,r`, in.AccountID).Scan(&target)
+	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a JOIN account_roles r ON r.account_id=a.id WHERE a.id=$1 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator') ORDER BY r.role LIMIT 1 FOR SHARE OF a,r`, in.AccountID).Scan(&target)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Profile{}, ErrInvalid
 	}

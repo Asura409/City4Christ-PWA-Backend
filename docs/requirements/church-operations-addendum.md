@@ -67,9 +67,13 @@ All successful reads must also enforce the relevant privacy/audience policy.
 - Overrides remain audited and bounded by security rules: no bypass of verified
   payment events, MFA, secret handling or immutable audit history.
 
-### R1.3 Relationship to current implementation
+### R1.3 Relationship to implementation at the 20 October planning baseline
 
-Current `access_administrator`, `system_administrator`, `content_editor` and scoped
+Historical baseline only: protected church roles and MFA have since been implemented
+and merged. See the [current status audit](../implementation-status-2026-11-01.md);
+this paragraph does not describe current release status.
+
+At that baseline, `access_administrator`, `system_administrator`, `content_editor` and scoped
 `ministry_leader` are technical roles with limited implemented capabilities.
 `access_administrator` currently delegates editors/leaders; `system_administrator`
 currently grants sermon editing. Neither is today's implementation of universal

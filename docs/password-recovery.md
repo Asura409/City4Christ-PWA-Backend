@@ -10,6 +10,13 @@ Links expire after 15 minutes and work once. Resending after the 60-second coold
 
 Google-only accounts have no local password. They must use **Continue with Google**, and recover their Google account through Google if necessary. Recovery cannot add a local password to these accounts. Unverified email/password accounts must verify their email first.
 
+Members who can already sign in and know their local password can instead use
+[signed-in password change](password-change.md). It proves the current password
+through a Bearer-authenticated request and invalidates outstanding recovery links
+when the change commits. It also revokes all sessions and queues the same encrypted
+password-change notice; sign in again afterward. Email-address changes and assisted
+account recovery remain separate workflows.
+
 ## API
 
 All requests require JSON and an allowed `Origin`. Browser requests use `credentials: 'include'`. No Bearer token is required. Responses have `Cache-Control: no-store`.

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/accountdeletion"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/auth"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/bible"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/devotionals"
@@ -75,9 +76,11 @@ func New(db *sql.DB, config Config) http.Handler {
 		recovery = auth.NewPasswordRecoveryService(db, verification)
 	}
 	passwordRecoveryRoutes(mux, recovery, limiter, config)
+	passwordChangeRoutes(mux, auth.NewPasswordChangeService(db, sessions, recovery), sessions, limiter, config)
 	sessionRoutes(mux, sessions, limiter, config)
 	profileService := profiles.NewService(profiles.NewRepository(db))
 	profileRoutes(mux, profileService, sessions, limiter, config)
+	accountDeletionRoutes(mux, accountdeletion.NewService(db, config.Now), sessions, limiter, config)
 	directoryRoutes(mux, profileService, sessions, limiter, config)
 	accessService := access.NewService(db)
 	postRoutes(mux, posts.NewService(posts.NewRepository(db), downloadSigner), sessions, limiter, config)
@@ -89,12 +92,12 @@ func New(db *sql.DB, config Config) http.Handler {
 	groupRoutes(mux, groups.NewService(groups.NewRepository(db), config.Now), sessions, limiter, config)
 	prayerRoutes(mux, prayer.NewService(prayer.NewRepository(db)), sessions, limiter, config)
 	messagingRepository := messaging.NewRepository(db)
-	messagingService := messaging.NewService(messagingRepository, config.Now)
+	messagingService := messaging.NewService(messagingRepository, config.Now, downloadSigner)
 	realtimeTickets := messaging.NewRealtimeTicketService(messagingRepository, config.Now)
 	realtimeHub := messaging.NewRealtimeHub()
 	directMessagingRoutes(mux, messagingService, sessions, limiter, realtimeHub, config)
 	realtimeTicketRoutes(mux, realtimeTickets, sessions, limiter, config)
-	realtimeSocketRoutes(mux, realtimeTickets, sessions, realtimeHub, config)
+	realtimeSocketRoutes(mux, realtimeTickets, messagingService, sessions, realtimeHub, config)
 	visitorRoutes(mux, db, sessions, limiter, config)
 	notificationRoutes(mux, notifications.NewService(notifications.NewRepository(db), config.Now), sessions, limiter, config)
 	mediaRoutes(mux, media.NewService(media.NewRepository(db), config.MediaStorage, config.Now), sessions, limiter, config)

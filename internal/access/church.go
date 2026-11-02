@@ -26,13 +26,16 @@ func protectedChurchRole(role string) bool {
 	return false
 }
 func lockChurchTarget(ctx context.Context, tx *sql.Tx, target string, requireMFA bool) error {
-	var verified bool
-	err := tx.QueryRowContext(ctx, `SELECT email_verified_at IS NOT NULL FROM accounts WHERE id=$1 FOR SHARE`, target).Scan(&verified)
+	var verified, active bool
+	err := tx.QueryRowContext(ctx, `SELECT email_verified_at IS NOT NULL,deletion_requested_at IS NULL FROM accounts WHERE id=$1 FOR SHARE`, target).Scan(&verified, &active)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrInvalid
 	}
 	if err != nil {
 		return err
+	}
+	if !active {
+		return ErrInvalid
 	}
 	if requireMFA {
 		var enabled bool
@@ -121,7 +124,7 @@ func (s *Service) churchChange(ctx context.Context, actor, target string, in Cha
 	}
 	if grant && !protectedChurchRole(in.Role) {
 		var verified bool
-		if err = tx.QueryRowContext(ctx, `SELECT email_verified_at IS NOT NULL FROM accounts WHERE id=$1`, target).Scan(&verified); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FROM accounts WHERE id=$1`, target).Scan(&verified); err != nil {
 			return false, err
 		}
 		if !verified {
@@ -155,10 +158,10 @@ func (s *Service) churchChange(ctx context.Context, actor, target string, in Cha
 			return false, lockErr
 		}
 		var active, count int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM account_roles r JOIN accounts a ON a.id=r.account_id JOIN mfa_factors m ON m.account_id=a.id AND m.confirmed_at IS NOT NULL WHERE r.role='super_administrator' AND r.scope='' AND a.email_verified_at IS NOT NULL`).Scan(&count); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM account_roles r JOIN accounts a ON a.id=r.account_id JOIN mfa_factors m ON m.account_id=a.id AND m.confirmed_at IS NOT NULL WHERE r.role='super_administrator' AND r.scope='' AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL`).Scan(&count); err != nil {
 			return false, err
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM account_roles r JOIN accounts a ON a.id=r.account_id JOIN mfa_factors m ON m.account_id=a.id AND m.confirmed_at IS NOT NULL WHERE r.role='super_administrator' AND r.scope='' AND r.account_id=$1 AND a.email_verified_at IS NOT NULL`, target).Scan(&active); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM account_roles r JOIN accounts a ON a.id=r.account_id JOIN mfa_factors m ON m.account_id=a.id AND m.confirmed_at IS NOT NULL WHERE r.role='super_administrator' AND r.scope='' AND r.account_id=$1 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL`, target).Scan(&active); err != nil {
 			return false, err
 		}
 		if active > 0 && count <= 1 {

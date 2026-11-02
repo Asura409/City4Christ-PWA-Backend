@@ -1,6 +1,6 @@
 # Media storage setup
 
-Cloudflare R2 is the selected object store for post and sermon attachments. The
+Cloudflare R2 is the selected object store for post, sermon, and message attachments. The
 backend has a tested R2 adapter, PostgreSQL upload/scan-job repository,
 authenticated upload reservation/completion/status routes, post and sermon
 attachment associations, short-lived signed read URLs, and a standalone
@@ -113,6 +113,12 @@ must not be exposed by changing the bucket to public.
 - `POST /api/v1/uploads/{uploadId}/complete` verifies R2 metadata and queues one
   durable scan job. Send `{}` as the JSON request body.
 - `GET /api/v1/uploads/{uploadId}` returns status only to the reservation owner.
+- Use purpose `message_attachment` to reserve chat files. Direct or group message
+  sends accept up to four `attachmentIds` after their uploads reach `available`;
+  only the upload owner may attach them. Message reads return 30-minute signed
+  URLs only to current conversation participants. Message deletion and group
+  moderation detach files and queue clean objects for durable asynchronous R2
+  deletion once no direct or group message still references them.
 - `POST /api/v1/posts` accepts optional `attachmentIds` after their uploads reach
   `available`; `GET /api/v1/posts` returns short-lived signed URLs.
 - Sermon draft creation and update accept `attachmentIds`. Public sermon list and

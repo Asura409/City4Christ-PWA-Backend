@@ -20,7 +20,7 @@ func (s *VerificationService) DeliverNext(ctx context.Context, sender Verificati
 	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a
  JOIN verification_email_outbox o ON o.account_id=a.id
  LEFT JOIN email_verifications c ON c.account_id=a.id AND c.challenge_id=o.challenge_id
- WHERE c.account_id IS NULL OR a.email_verified_at IS NOT NULL OR c.consumed_at IS NOT NULL
+ WHERE a.deletion_requested_at IS NOT NULL OR c.account_id IS NULL OR a.email_verified_at IS NOT NULL OR c.consumed_at IS NOT NULL
  OR c.attempts>=5 OR c.expires_at<=$1 OR (o.failed_at IS NULL AND o.next_attempt_at<=$1)
  ORDER BY o.created_at,o.account_id LIMIT 1 FOR UPDATE OF a SKIP LOCKED`, s.now().UTC()).Scan(&accountID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -59,7 +59,7 @@ func (s *VerificationService) deliverClaimed(ctx context.Context, tx *sql.Tx, ac
 		}
 		return true, tx.Commit()
 	}
-	if errors.Is(err, sql.ErrNoRows) || account.EmailVerifiedAt != nil || challenge.id != challengeID || challenge.consumedAt != nil || challenge.attempts >= VerificationMaxAttempts || !now.Before(challenge.expiresAt) {
+	if errors.Is(err, sql.ErrNoRows) || account.EmailVerifiedAt != nil || account.DeletionRequestedAt != nil || challenge.id != challengeID || challenge.consumedAt != nil || challenge.attempts >= VerificationMaxAttempts || !now.Before(challenge.expiresAt) {
 		return discard()
 	}
 	// Candidate selection may have used a snapshot from before another worker

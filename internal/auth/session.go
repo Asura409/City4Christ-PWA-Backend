@@ -79,11 +79,11 @@ func (s *SessionService) Login(ctx context.Context, email, password string) (Ses
 		return SessionTokens{}, err
 	}
 	hash := dummyPassword.hash
-	if err == nil && a.PasswordHash != nil {
+	if err == nil && a.PasswordHash != nil && a.DeletionRequestedAt == nil {
 		hash = *a.PasswordHash
 	}
 	valid := NewPasswordHasher().Verify(password, hash)
-	if err != nil || a.PasswordHash == nil || !valid {
+	if err != nil || a.PasswordHash == nil || a.DeletionRequestedAt != nil || !valid {
 		return SessionTokens{}, ErrInvalidCredentials
 	}
 	return s.start(ctx, a.ID, a.PasswordHash)
@@ -117,8 +117,12 @@ func (s *SessionService) startWithAuthentication(ctx context.Context, accountID 
 	defer tx.Rollback()
 	var verified *time.Time
 	var currentHash *string
-	if err := tx.QueryRowContext(ctx, `SELECT email_verified_at,password_hash FROM accounts WHERE id=$1 FOR UPDATE`, accountID).Scan(&verified, &currentHash); err != nil {
+	var deletionRequested *time.Time
+	if err := tx.QueryRowContext(ctx, `SELECT email_verified_at,password_hash,deletion_requested_at FROM accounts WHERE id=$1 FOR UPDATE`, accountID).Scan(&verified, &currentHash, &deletionRequested); err != nil {
 		return SessionTokens{}, err
+	}
+	if deletionRequested != nil {
+		return SessionTokens{}, ErrInvalidSession
 	}
 	if expectedHash != nil && (currentHash == nil || *currentHash != *expectedHash) {
 		return SessionTokens{}, ErrInvalidCredentials
@@ -174,10 +178,29 @@ func (s *SessionService) Refresh(ctx context.Context, raw string) (SessionTokens
 		return SessionTokens{}, err
 	}
 	defer tx.Rollback()
-	var sid, accountID string
+	// Resolve the token without locking its session, then take the account lock
+	// first, matching login, recovery and account-deletion requests. The token
+	// and session are checked again after that lock is acquired.
+	var accountID string
+	err = tx.QueryRowContext(ctx, `SELECT s.account_id FROM auth_sessions s JOIN refresh_tokens t ON t.session_id=s.id WHERE t.token_digest=$1`, tokenDigest(raw)).Scan(&accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SessionTokens{}, ErrInvalidSession
+	}
+	if err != nil {
+		return SessionTokens{}, err
+	}
+	var lockedID string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FOR SHARE`, accountID).Scan(&lockedID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return SessionTokens{}, ErrInvalidSession
+	}
+	if err != nil {
+		return SessionTokens{}, err
+	}
+	var sid string
 	var expires time.Time
 	var revoked *time.Time
-	err = tx.QueryRowContext(ctx, `SELECT s.id,s.account_id,s.expires_at,s.revoked_at FROM auth_sessions s JOIN refresh_tokens t ON t.session_id=s.id WHERE t.token_digest=$1 FOR UPDATE OF s`, tokenDigest(raw)).Scan(&sid, &accountID, &expires, &revoked)
+	err = tx.QueryRowContext(ctx, `SELECT s.id,s.account_id,s.expires_at,s.revoked_at FROM auth_sessions s JOIN refresh_tokens t ON t.session_id=s.id WHERE t.token_digest=$1 AND s.account_id=$2 FOR UPDATE OF s`, tokenDigest(raw), lockedID).Scan(&sid, &accountID, &expires, &revoked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return SessionTokens{}, ErrInvalidSession
 	}
@@ -226,7 +249,7 @@ func (s *SessionService) AuthenticateSession(ctx context.Context, raw string) (A
 	if err != nil {
 		return Account{}, "", time.Time{}, err
 	}
-	a, err := scanAccount(s.db.QueryRowContext(ctx, `SELECT `+prefixedAccountColumns+` FROM accounts a JOIN auth_sessions s ON s.account_id=a.id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL`, claims.SessionID, claims.Subject, s.now().UTC()))
+	a, err := scanAccount(s.db.QueryRowContext(ctx, `SELECT `+prefixedAccountColumns+` FROM accounts a JOIN auth_sessions s ON s.account_id=a.id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL`, claims.SessionID, claims.Subject, s.now().UTC()))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, "", time.Time{}, ErrInvalidSession
 	}
@@ -238,7 +261,7 @@ func (s *SessionService) AuthenticateSession(ctx context.Context, raw string) (A
 
 func (s *SessionService) SessionActive(ctx context.Context, accountID, sessionID string) (bool, error) {
 	var active bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND s.account_id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL)`, sessionID, accountID, s.now().UTC()).Scan(&active)
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND s.account_id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL)`, sessionID, accountID, s.now().UTC()).Scan(&active)
 	return active, err
 }
 

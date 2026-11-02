@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -19,13 +20,15 @@ func (r *Repository) ListGroupConversations(ctx context.Context, actor string) (
 		return nil, ErrForbidden
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT g.id,g.name,g.audience,COALESCE(r.last_read_sequence,0),
- COALESCE(unread.count,0),last.id,last.group_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.deleted_at IS NOT NULL,
+ COALESCE(unread.count,0),last.id,last.group_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.deleted_at IS NOT NULL,COALESCE(last.attachment_count,0),
  (EXISTS(SELECT 1 FROM account_roles ar WHERE ar.account_id=$1 AND ar.scope='' AND ar.role IN ('super_administrator','assistant_pastor','staff'))
   OR EXISTS(SELECT 1 FROM account_roles ar WHERE ar.account_id=$1 AND ar.scope=g.id::text AND ar.role='ministry_leader')) AS can_moderate
  FROM groups g
  LEFT JOIN group_chat_reads r ON r.group_id=g.id AND r.account_id=$1
  LEFT JOIN LATERAL (SELECT count(*)::int AS count FROM group_chat_messages m WHERE m.group_id=g.id AND m.sender_id<>$1 AND m.sequence>COALESCE(r.last_read_sequence,0) AND m.deleted_at IS NULL) unread ON true
- LEFT JOIN LATERAL (SELECT id,group_id,sender_id,client_message_id,body,sequence,created_at,deleted_at FROM group_chat_messages m WHERE m.group_id=g.id ORDER BY sequence DESC LIMIT 1) last ON true
+ LEFT JOIN LATERAL (SELECT m.id,m.group_id,m.sender_id,m.client_message_id,m.body,m.sequence,m.created_at,m.deleted_at,
+  (SELECT count(*)::int FROM group_chat_message_media_attachments a WHERE a.message_id=m.id) attachment_count
+  FROM group_chat_messages m WHERE m.group_id=g.id ORDER BY m.sequence DESC LIMIT 1) last ON true
  WHERE g.archived_at IS NULL AND (
    (g.audience='church' AND EXISTS(SELECT 1 FROM group_memberships gm WHERE gm.group_id=g.id AND gm.account_id=$1 AND gm.status='active'))
    OR (g.audience='leadership' AND EXISTS(SELECT 1 FROM account_roles ar WHERE ar.account_id=$1 AND ((ar.role IN ('super_administrator','assistant_pastor') AND ar.scope='') OR ar.role='ministry_leader')))
@@ -41,8 +44,9 @@ func (r *Repository) ListGroupConversations(ctx context.Context, actor string) (
 		var lastSequence sql.NullInt64
 		var lastAt sql.NullTime
 		var lastDeleted bool
+		var lastAttachmentCount int
 		if err = rows.Scan(&item.GroupID, &item.GroupName, &item.Audience, &item.MyLastReadSequence, &item.UnreadCount,
-			&lastID, &lastGroupID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastDeleted, &item.CanModerate); err != nil {
+			&lastID, &lastGroupID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastDeleted, &lastAttachmentCount, &item.CanModerate); err != nil {
 			return nil, err
 		}
 		if lastID.Valid {
@@ -50,7 +54,7 @@ func (r *Repository) ListGroupConversations(ctx context.Context, actor string) (
 			if lastDeleted {
 				body = ""
 			}
-			item.LastMessage = &GroupMessage{ID: lastID.String, GroupID: lastGroupID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: body, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time, Deleted: lastDeleted}
+			item.LastMessage = &GroupMessage{ID: lastID.String, GroupID: lastGroupID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: body, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time, Deleted: lastDeleted, AttachmentCount: lastAttachmentCount}
 		}
 		items = append(items, item)
 	}
@@ -58,6 +62,10 @@ func (r *Repository) ListGroupConversations(ctx context.Context, actor string) (
 }
 
 func (r *Repository) SendGroupMessage(ctx context.Context, groupID, actor, clientMessageID, body string, now time.Time) (GroupMessage, bool, error) {
+	return r.SendGroupMessageWithAttachments(ctx, groupID, actor, clientMessageID, body, nil, now)
+}
+
+func (r *Repository) SendGroupMessageWithAttachments(ctx context.Context, groupID, actor, clientMessageID, body string, attachmentIDs []string, now time.Time) (GroupMessage, bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return GroupMessage{}, false, err
@@ -72,14 +80,33 @@ func (r *Repository) SendGroupMessage(ctx context.Context, groupID, actor, clien
 	if errors.Is(err, sql.ErrNoRows) {
 		duplicate = true
 		err = tx.QueryRowContext(ctx, `SELECT id,group_id,sender_id,client_message_id,body,sequence,created_at,deleted_at IS NOT NULL FROM group_chat_messages WHERE group_id=$1 AND sender_id=$2 AND client_message_id=$3`, groupID, actor, clientMessageID).Scan(&message.ID, &message.GroupID, &message.SenderID, &message.ClientMessageID, &message.Body, &message.Sequence, &message.CreatedAt, &message.Deleted)
-		if err == nil && message.Body != body && !message.Deleted {
-			return GroupMessage{}, false, ErrIdempotencyConflict
+		if err == nil && !message.Deleted {
+			if message.Body != body {
+				return GroupMessage{}, false, ErrIdempotencyConflict
+			}
+			existingIDs, idsErr := groupMessageAttachmentIDs(ctx, tx, message.ID)
+			if idsErr != nil {
+				return GroupMessage{}, false, idsErr
+			}
+			if !sameStrings(existingIDs, attachmentIDs) {
+				return GroupMessage{}, false, ErrIdempotencyConflict
+			}
 		}
 	}
 	if err != nil {
 		return GroupMessage{}, false, err
 	}
 	if !duplicate {
+		attachments, attachErr := media.LoadAttachableTx(ctx, tx, actor, string(media.PurposeMessageAttachment), attachmentIDs)
+		if attachErr != nil {
+			if errors.Is(attachErr, media.ErrInvalidAttachment) {
+				return GroupMessage{}, false, ErrInvalid
+			}
+			return GroupMessage{}, false, attachErr
+		}
+		if err = insertGroupMessageAttachments(ctx, tx, message.ID, attachments); err != nil {
+			return GroupMessage{}, false, err
+		}
 		if err = messageNoticesTx(ctx, tx, message.ID, actor, "", groupID); err != nil {
 			return GroupMessage{}, false, err
 		}
@@ -91,6 +118,10 @@ func (r *Repository) SendGroupMessage(ctx context.Context, groupID, actor, clien
 }
 
 func (r *Repository) ListGroupMessages(ctx context.Context, groupID, actor string, beforeSequence int64, limit int) (GroupMessagePage, error) {
+	return r.SearchGroupMessages(ctx, groupID, actor, "", beforeSequence, limit)
+}
+
+func (r *Repository) SearchGroupMessages(ctx context.Context, groupID, actor, query string, beforeSequence int64, limit int) (GroupMessagePage, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return GroupMessagePage{}, err
@@ -100,8 +131,8 @@ func (r *Repository) ListGroupMessages(ctx context.Context, groupID, actor strin
 		return GroupMessagePage{}, err
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT id,group_id,sender_id,client_message_id,body,sequence,created_at,deleted_at IS NOT NULL FROM (
- SELECT id,group_id,sender_id,client_message_id,body,sequence,created_at,deleted_at FROM group_chat_messages WHERE group_id=$1 AND ($2=0 OR sequence<$2) ORDER BY sequence DESC LIMIT $3
- ) page ORDER BY sequence`, groupID, beforeSequence, limit+1)
+ SELECT id,group_id,sender_id,client_message_id,body,sequence,created_at,deleted_at FROM group_chat_messages WHERE group_id=$1 AND ($2=0 OR sequence<$2) AND ($3='' OR (deleted_at IS NULL AND position(lower($3) in lower(body))>0)) ORDER BY sequence DESC LIMIT $4
+ ) page ORDER BY sequence`, groupID, beforeSequence, query, limit+1)
 	if err != nil {
 		return GroupMessagePage{}, err
 	}
@@ -223,6 +254,11 @@ func (r *Repository) DeleteGroupMessage(ctx context.Context, groupID, actor, mes
 	changed, err := res.RowsAffected()
 	if err != nil {
 		return false, err
+	}
+	if changed == 1 {
+		if err = media.DetachGroupMessageAttachmentsTx(ctx, tx, messageID); err != nil {
+			return false, err
+		}
 	}
 	if changed == 0 {
 		var exists bool

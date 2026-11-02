@@ -22,6 +22,12 @@ type ScanRepository interface {
 	FailScan(context.Context, string, string, string, time.Duration) error
 }
 
+type ObjectCleanupRepository interface {
+	ClaimObjectCleanup(context.Context, time.Duration) (ObjectCleanupJob, error)
+	CompleteObjectCleanup(context.Context, string, string) error
+	FailObjectCleanup(context.Context, string, string, string, time.Duration) error
+}
+
 type Scanner interface {
 	Scan(context.Context, string) error
 }
@@ -63,12 +69,37 @@ func (p *Processor) ProcessNext(ctx context.Context) (worked bool, err error) {
 	}
 	job, err := p.repo.ClaimScan(ctx, p.config.LeaseDuration)
 	if errors.Is(err, ErrNoScanJobs) {
-		return false, nil
+		return p.processObjectCleanup(ctx)
 	}
 	if err != nil {
 		return false, err
 	}
 	if err := p.process(ctx, job); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func (p *Processor) processObjectCleanup(ctx context.Context) (bool, error) {
+	repo, ok := p.repo.(ObjectCleanupRepository)
+	if !ok {
+		return false, nil
+	}
+	job, err := repo.ClaimObjectCleanup(ctx, p.config.LeaseDuration)
+	if errors.Is(err, ErrNoCleanupJobs) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	err = p.store.DeleteObject(ctx, job.ObjectKey)
+	if err != nil && !errors.Is(err, ErrObjectNotFound) {
+		if failErr := repo.FailObjectCleanup(ctx, job.ID, job.LeaseToken, "storage_unavailable", p.config.RetryDelay); failErr != nil {
+			return true, failErr
+		}
+		return true, err
+	}
+	if err := repo.CompleteObjectCleanup(ctx, job.ID, job.LeaseToken); err != nil {
 		return true, err
 	}
 	return true, nil

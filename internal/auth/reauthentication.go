@@ -27,7 +27,7 @@ func (s *SessionService) ReauthenticationStatus(ctx context.Context, access stri
 	var status ReauthenticationStatus
 	var authenticated *time.Time
 	var expires time.Time
-	err = s.db.QueryRowContext(ctx, `SELECT COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at,a.password_hash IS NOT NULL,EXISTS(SELECT 1 FROM external_identities e WHERE e.account_id=a.id AND e.provider='google') FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL`, claims.SessionID, claims.Subject, s.now().UTC()).Scan(&authenticated, &expires, &status.PasswordAvailable, &status.GoogleAvailable)
+	err = s.db.QueryRowContext(ctx, `SELECT COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at,a.password_hash IS NOT NULL,EXISTS(SELECT 1 FROM external_identities e WHERE e.account_id=a.id AND e.provider='google') FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL`, claims.SessionID, claims.Subject, s.now().UTC()).Scan(&authenticated, &expires, &status.PasswordAvailable, &status.GoogleAvailable)
 	if errors.Is(err, sql.ErrNoRows) {
 		return status, ErrInvalidSession
 	}
@@ -76,7 +76,7 @@ func (s *SessionService) ReauthenticatePassword(ctx context.Context, access, pas
 	defer tx.Rollback()
 	// Match reset/login lock order; recheck the hash after expensive verification.
 	var current *string
-	if err = tx.QueryRowContext(ctx, `SELECT password_hash FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL FOR SHARE`, a.ID).Scan(&current); errors.Is(err, sql.ErrNoRows) {
+	if err = tx.QueryRowContext(ctx, `SELECT password_hash FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FOR SHARE`, a.ID).Scan(&current); errors.Is(err, sql.ErrNoRows) {
 		return ReauthenticationStatus{}, ErrInvalidSession
 	} else if err != nil {
 		return ReauthenticationStatus{}, err
@@ -125,10 +125,20 @@ func (s *SessionService) RequireFreshTx(ctx context.Context, tx *sql.Tx, access 
 	if err != nil {
 		return err
 	}
+	// Always acquire the account lock before the session lock, including callers
+	// that have not already locked their account for the sensitive mutation.
+	var accountID string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FOR SHARE`, claims.Subject).Scan(&accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrInvalidSession
+	}
+	if err != nil {
+		return err
+	}
 	var at *time.Time
 	var expires time.Time
 	now := s.now().UTC()
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL FOR SHARE OF a,s`, claims.SessionID, claims.Subject, now).Scan(&at, &expires)
+	err = tx.QueryRowContext(ctx, `SELECT COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL FOR SHARE OF s`, claims.SessionID, claims.Subject, now).Scan(&at, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrInvalidSession
 	}

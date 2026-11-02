@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -88,8 +89,49 @@ func TestDirectMessagingRoutesThroughGlobalApp(t *testing.T) {
 	if w := request("POST", path, firstToken, messageBody); w.Code != 200 {
 		t.Fatalf("retry = %d %s", w.Code, w.Body.String())
 	}
-	if w := request("GET", path, secondToken, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "A private prayer request") {
+	var sent struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(request("POST", path, firstToken, messageBody).Body.Bytes(), &sent); err != nil {
+		t.Fatal(err)
+	}
+	editPath := path + "/" + sent.Data.ID
+	if w := request("PATCH", editPath, firstToken, `{"body":"Updated private prayer request"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"editedAt"`) {
+		t.Fatalf("sender edit = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("PATCH", editPath, secondToken, `{"body":"Unauthorized edit"}`); w.Code != 404 {
+		t.Fatalf("recipient edit = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", path, secondToken, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Updated private prayer request") {
 		t.Fatalf("recipient history = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", path+"?query=PRAYER", secondToken, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Updated private prayer request") {
+		t.Fatalf("participant message search = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", editPath, firstToken, ""); w.Code != http.StatusNoContent {
+		t.Fatalf("sender delete = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("GET", path, secondToken, ""); w.Code != 200 || strings.Contains(w.Body.String(), "Updated private prayer request") || !strings.Contains(w.Body.String(), `"deleted":true`) {
+		t.Fatalf("recipient history after redaction = %d %s", w.Code, w.Body.String())
+	}
+	expiredID := "300ebbe1-01ca-4c47-a340-03cedf07359e"
+	if w := request("POST", path, firstToken, `{"clientMessageId":"`+expiredID+`","body":"Keep this record"}`); w.Code != 201 {
+		t.Fatalf("send expiration fixture = %d %s", w.Code, w.Body.String())
+	}
+	if _, err := db.Exec(`UPDATE direct_messages SET created_at=now()-interval '11 minutes' WHERE client_message_id=$1`, expiredID); err != nil {
+		t.Fatal(err)
+	}
+	var expiredMessageID string
+	if err := db.QueryRow(`SELECT id::text FROM direct_messages WHERE client_message_id=$1`, expiredID).Scan(&expiredMessageID); err != nil {
+		t.Fatal(err)
+	}
+	if w := request("PATCH", path+"/"+expiredMessageID, firstToken, `{"body":"Too late"}`); w.Code != 409 || !strings.Contains(w.Body.String(), "mutation_window_expired") {
+		t.Fatalf("expired edit = %d %s", w.Code, w.Body.String())
+	}
+	if w := request("DELETE", path+"/"+expiredMessageID, firstToken, ""); w.Code != 409 || !strings.Contains(w.Body.String(), "mutation_window_expired") {
+		t.Fatalf("expired delete = %d %s", w.Code, w.Body.String())
 	}
 	if w := request("GET", path, outsiderToken, ""); w.Code != 404 {
 		t.Fatalf("outsider history = %d %s", w.Code, w.Body.String())
@@ -126,14 +168,15 @@ func TestMessagingOpenAPIRequiresBearerForEveryRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"/api/v1/conversations":                           {"get", "post"},
-		"/api/v1/conversations/{conversationId}/messages": {"get", "post"},
-		"/api/v1/conversations/{conversationId}/read":     {"put"},
-		"/api/v1/group-conversations":                     {"get"},
-		"/api/v1/groups/{groupId}/messages":               {"get", "post"},
-		"/api/v1/groups/{groupId}/messages/{messageId}":   {"delete"},
-		"/api/v1/groups/{groupId}/read":                   {"put"},
-		"/api/v1/realtime/tickets":                        {"post"},
+		"/api/v1/conversations":                                       {"get", "post"},
+		"/api/v1/conversations/{conversationId}/messages":             {"get", "post"},
+		"/api/v1/conversations/{conversationId}/read":                 {"put"},
+		"/api/v1/conversations/{conversationId}/messages/{messageId}": {"patch", "delete"},
+		"/api/v1/group-conversations":                                 {"get"},
+		"/api/v1/groups/{groupId}/messages":                           {"get", "post"},
+		"/api/v1/groups/{groupId}/messages/{messageId}":               {"delete"},
+		"/api/v1/groups/{groupId}/read":                               {"put"},
+		"/api/v1/realtime/tickets":                                    {"post"},
 	}
 	for path, methods := range want {
 		var pathItem map[string]json.RawMessage
@@ -229,6 +272,9 @@ func TestGroupMessagingRoutesEnforceCurrentMembershipAndModerate(t *testing.T) {
 		t.Fatalf("history = %d %s", created.Code, created.Body.String())
 	}
 	messageID := response.Data[0].ID
+	if w := request("GET", groupMessages+"?query=REHEARSAL", memberToken, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "Choir rehearsal is at six") {
+		t.Fatalf("active member group search = %d %s", w.Code, w.Body.String())
+	}
 	if w := request("POST", groupMessages, outsiderToken, body); w.Code != 404 {
 		t.Fatalf("nonmember send = %d %s", w.Code, w.Body.String())
 	}

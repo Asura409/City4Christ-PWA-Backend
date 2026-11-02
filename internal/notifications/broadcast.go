@@ -90,7 +90,7 @@ func loadBroadcast(ctx context.Context, tx *sql.Tx, id string) (Broadcast, error
 	return b, err
 }
 func broadcastRecipients(ctx context.Context, tx *sql.Tx, group string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id::text FROM accounts WHERE email_verified_at IS NOT NULL AND c4c_group_content_visible(NULLIF($1,'')::uuid,id) ORDER BY id LIMIT 10001`, group)
+	rows, err := tx.QueryContext(ctx, `SELECT id::text FROM accounts WHERE email_verified_at IS NOT NULL AND deletion_requested_at IS NULL AND c4c_group_content_visible(NULLIF($1,'')::uuid,id) ORDER BY id LIMIT 10001`, group)
 	if err != nil {
 		return nil, err
 	}

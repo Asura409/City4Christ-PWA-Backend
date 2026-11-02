@@ -24,7 +24,7 @@ func readBooking(ctx context.Context, tx *sql.Tx, id string) (Booking, error) {
 }
 func verifiedMember(ctx context.Context, tx *sql.Tx, actor string) error {
 	var id string
-	err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL FOR SHARE`, actor).Scan(&id)
+	err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FOR SHARE`, actor).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrForbidden
 	}

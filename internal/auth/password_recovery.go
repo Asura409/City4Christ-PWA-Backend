@@ -74,7 +74,7 @@ func (s *PasswordRecoveryService) Request(ctx context.Context, email, returnTo s
 	if err != nil {
 		return err
 	}
-	if a.PasswordHash == nil || a.EmailVerifiedAt == nil {
+	if a.PasswordHash == nil || a.EmailVerifiedAt == nil || a.DeletionRequestedAt != nil {
 		return nil
 	}
 	// PostgreSQL timestamps have microsecond precision; bind the encrypted
@@ -116,7 +116,7 @@ func (s *PasswordRecoveryService) Reset(ctx context.Context, token, password str
 	// Reject random/expired tokens before spending Argon2id work. This read is
 	// only a preflight: redemption still rechecks under the account lock.
 	var eligible bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM password_recoveries WHERE token_digest=$1 AND consumed_at IS NULL AND expires_at>$2)`, tokenDigest(token), s.verification.now().UTC()).Scan(&eligible)
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM password_recoveries p JOIN accounts a ON a.id=p.account_id WHERE p.token_digest=$1 AND p.consumed_at IS NULL AND p.expires_at>$2 AND a.email_verified_at IS NOT NULL AND a.password_hash IS NOT NULL AND a.deletion_requested_at IS NULL)`, tokenDigest(token), s.verification.now().UTC()).Scan(&eligible)
 	if err != nil {
 		return err
 	}
@@ -145,7 +145,7 @@ func (s *PasswordRecoveryService) Reset(ctx context.Context, token, password str
 	now := s.verification.now().UTC().Truncate(time.Microsecond)
 	var id string
 	err = tx.QueryRowContext(ctx, `SELECT challenge_id FROM password_recoveries WHERE account_id=$1 AND token_digest=$2 AND consumed_at IS NULL AND expires_at>$3`, a.ID, tokenDigest(token), now).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) || a.PasswordHash == nil || a.EmailVerifiedAt == nil {
+	if errors.Is(err, sql.ErrNoRows) || a.PasswordHash == nil || a.EmailVerifiedAt == nil || a.DeletionRequestedAt != nil {
 		return ErrInvalidResetToken
 	}
 	if err != nil {

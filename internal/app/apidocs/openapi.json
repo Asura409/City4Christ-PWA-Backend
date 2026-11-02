@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "City4Christ API",
-    "version": "1.22.0",
+    "version": "1.24.0",
     "description": "Auth foundation API. Use only test data on preview deployments. Interactive requests execute against this server and can create or change accounts. Public signup is closed by default. Email and Google availability depend on deployment configuration.\n\nKeep access tokens in memory. Swagger Authorize accepts the access token only, without the Bearer prefix. Refresh cookies are HttpOnly and browser-managed; Swagger cannot manually set Cookie headers. This same-origin UI sends credentials automatically. Browser-origin checks still apply.\n\nOTP: eight digits, ten minutes, five attempts, sixty-second resend cooldown. Limits: auth IP 60/min; register/resend 5 per account/15min; login 10 per account/15min; verify 20 per account/15min.\n\nGroups: verified church members can discover church-audience groups. Only the Super Admin, Assistant Pastors, and assigned Ministry Leaders can discover the leadership-audience group. Membership and leadership permissions are enforced on every request."
   },
   "servers": [
@@ -91,6 +91,10 @@
     {
       "name": "Visitors",
       "description": "Consented private visitor intake and staff follow-up, separate from login accounts."
+    },
+    {
+      "name": "Account deletion",
+      "description": "Reviewed account disablement requests; permanent erasure remains separate."
     }
   ],
   "paths": {
@@ -521,6 +525,99 @@
           },
           "503": {
             "description": "Service unavailable"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Account deletion"
+        ],
+        "operationId": "RequestOwnAccountDeletion",
+        "summary": "Request reviewed account deletion",
+        "description": "Requires allowed Origin, verified active Bearer session, fresh primary confirmation and recent app MFA proof if enrolled. Explicit current-policy confirmation is mandatory. Five requests per account and 20 per IP per 15 minutes. Atomically disables sign-in, hides directory membership, revokes all sessions, invalidates verification/reset challenges, removes queued OTP/recovery mail and deletes push subscriptions. Keeps email reserved, shared posts/messages, bookings and audit records. No permanent purge, reactivation, rejection, completion or erasure deadline is provided. Pending/approved future pastoral appointments block submission; the last effective Super Admin cannot disable themselves. No query parameters; unknown fields rejected. Retry with revoked credentials may return 401.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "202": {
+            "description": "Accepted for review; account disabled immediately",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AccountDeletionRequest"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "Clears the Secure, HttpOnly, host-only refresh cookie. Every session including the caller is revoked; no replacement token is issued.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "last_administrator: another effective Super Admin is required; blocked_active_commitments: resolve pending/approved pastoral appointments ending in the future first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionInput"
+              },
+              "example": {
+                "confirm": true,
+                "policyVersion": "account-deletion-request-v1"
+              }
+            }
           }
         }
       }
@@ -4614,7 +4711,7 @@
         ],
         "summary": "Read direct message history",
         "operationId": "ListDirectMessages",
-        "description": "Only conversation participants can read history. Messages are returned in ascending sequence order; use nextBeforeSequence to page toward older messages.",
+        "description": "Only conversation participants can read history. Messages are returned in ascending sequence order; use nextBeforeSequence to page toward older messages. Optional query searches message bodies case-insensitively within this authorized chat.",
         "security": [
           {
             "bearerAuth": []
@@ -4649,6 +4746,16 @@
               "maximum": 100,
               "default": 50
             }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Optional case-insensitive substring search within the authorized chat. Requires 2\u2013120 characters; combines with beforeSequence and limit.",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 120
+            }
           }
         ],
         "responses": {
@@ -4669,7 +4776,7 @@
             "description": "Conversation not found or caller is not a participant"
           },
           "422": {
-            "description": "Invalid path or pagination parameter"
+            "description": "Invalid path, pagination, or search parameter"
           },
           "429": {
             "description": "Account or IP request limit exceeded"
@@ -5491,7 +5598,7 @@
           "Group Messaging"
         ],
         "summary": "Read group chat history",
-        "description": "Every request rechecks verified account and current active membership or leadership audience eligibility. Removed members lose history access immediately.",
+        "description": "Every request rechecks verified account and current active membership or leadership audience eligibility. Removed members lose history access immediately. Optional query searches message bodies case-insensitively within this authorized chat.",
         "operationId": "ListGroupMessages",
         "security": [
           {
@@ -5524,6 +5631,16 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Optional case-insensitive substring search within the authorized chat. Requires 2\u2013120 characters; combines with beforeSequence and limit.",
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 120
             }
           }
         ],
@@ -10277,6 +10394,592 @@
           }
         ]
       }
+    },
+    "/api/v1/auth/password/change": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Change the signed-in account password",
+        "operationId": "ChangePassword",
+        "description": "Requires a verified Bearer session, allowed Origin and JSON body. Five attempts per account and per client IP per 15 minutes, in addition to shared authentication IP limits. Current local-password proof is required; no local password is added to Google-only accounts. Atomically replaces the Argon2id hash, invalidates outstanding password-reset links, revokes every session including this one, and queues an encrypted password-change notice. Success clears the refresh cookie and returns no tokens. The client must clear in-memory credentials and sign in again. Unknown fields are rejected; passwords are never trimmed. Responses are no-store.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeInput"
+              },
+              "example": {
+                "currentPassword": "replace with your current private password",
+                "newPassword": "replace with a different private password"
+              }
+            }
+          }
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "409": {
+            "description": "local_password_required: Google-only accounts cannot create a local password through this endpoint.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "current_password_invalid for an incorrect current password; validation_failed with a newPassword field error for an invalid or unchanged replacement.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Password changed; every session, including the caller, is revoked. Sign in again.",
+            "headers": {
+              "Set-Cookie": {
+                "description": "Clears the browser-managed host-only __Host-c4c_refresh cookie using Secure, HttpOnly, Path=/ and the configured SameSite policy. No replacement token is issued.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "status"
+                      ],
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "password_changed"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "status": "password_changed"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/deletion-request": {
+      "get": {
+        "tags": [
+          "Account deletion"
+        ],
+        "operationId": "GetOwnDeletionRequest",
+        "summary": "Read own deletion-request policy",
+        "description": "Verified active session required. Returns server-owned notice and policy version. No query parameters. Limits: 30 per account and 120 per IP per minute. Disabled accounts cannot use their revoked sessions.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AccountDeletionStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/account-deletion-requests": {
+      "get": {
+        "tags": [
+          "Account deletion"
+        ],
+        "operationId": "ListAccountDeletionRequests",
+        "summary": "List deletion requests without contact details",
+        "description": "Requires current global accounts.deletion.review (Super Admin only), fresh primary confirmation and recent app MFA proof on every read/write. Limits: 30 per account and 120 per IP per minute. Account/role revocation is rechecked. Responses no-store; audit failure aborts disclosure or mutation. Queue includes names and workflow metadata, never email. Each disclosed row is audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AccountDeletionSummary"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "properties": {
+                        "nextCursor": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "nextCursor"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "requested",
+                "reviewing"
+              ],
+              "default": "requested"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/account-deletion-requests/{requestId}": {
+      "get": {
+        "tags": [
+          "Account deletion"
+        ],
+        "operationId": "GetAccountDeletionRequest",
+        "summary": "Read audited deletion-request detail",
+        "description": "Requires current global accounts.deletion.review (Super Admin only), fresh primary confirmation and recent app MFA proof on every read/write. Limits: 30 per account and 120 per IP per minute. Account/role revocation is rechecked. Responses no-store; audit failure aborts disclosure or mutation. Explicit detail adds the account email; no query parameters.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AccountDeletionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "tags": [
+          "Account deletion"
+        ],
+        "operationId": "ReviewAccountDeletionRequest",
+        "summary": "Mark a deletion request as reviewing",
+        "description": "Requires current global accounts.deletion.review (Super Admin only), fresh primary confirmation and recent app MFA proof on every read/write. Limits: 30 per account and 120 per IP per minute. Account/role revocation is rechecked. Responses no-store; audit failure aborts disclosure or mutation. Allowed status is reviewing only. Requires the current positive version. Rechecks sensitive authority after locking the request. Never claims permanent erasure or reactivates an account. No query parameters.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/400"
+          },
+          "401": {
+            "$ref": "#/components/responses/401"
+          },
+          "403": {
+            "$ref": "#/components/responses/403"
+          },
+          "404": {
+            "$ref": "#/components/responses/404"
+          },
+          "413": {
+            "$ref": "#/components/responses/413"
+          },
+          "415": {
+            "$ref": "#/components/responses/415"
+          },
+          "422": {
+            "$ref": "#/components/responses/422"
+          },
+          "429": {
+            "$ref": "#/components/responses/429"
+          },
+          "503": {
+            "$ref": "#/components/responses/503"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AccountDeletionRequest"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "version_conflict: reload the current request before reviewing it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "requestId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountDeletionReviewInput"
+              },
+              "example": {
+                "status": "reviewing",
+                "version": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/conversations/{conversationId}/messages/{messageId}": {
+      "patch": {
+        "tags": [
+          "Messaging"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "summary": "Edit your recent direct message",
+        "operationId": "EditOwnDirectMessage",
+        "description": "Only the sender may edit. The original creation time is retained and the server rejects edits at or after ten minutes. Edit timestamps and actor/action metadata are recorded without storing previous message text.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditDirectMessageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectMessageResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed or account is not verified"
+          },
+          "404": {
+            "description": "Message not found or caller is not the sender"
+          },
+          "409": {
+            "description": "The ten-minute edit/delete window has expired"
+          },
+          "422": {
+            "description": "Invalid message body or ID"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Messaging"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "conversationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "messageId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "summary": "Delete your recent direct message",
+        "operationId": "DeleteOwnDirectMessage",
+        "description": "Only the sender may delete within ten minutes of sending. Deletion redacts the body for both participants, removes its attachment links, and records actor/action metadata.",
+        "responses": {
+          "204": {
+            "description": "Message redacted"
+          },
+          "401": {
+            "description": "Standard API error response"
+          },
+          "403": {
+            "description": "Origin is not allowed or account is not verified"
+          },
+          "404": {
+            "description": "Message not found or caller is not the sender"
+          },
+          "409": {
+            "description": "The ten-minute edit/delete window has expired"
+          },
+          "429": {
+            "description": "Account or IP request limit exceeded"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -12145,6 +12848,16 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 4000
+          },
+          "attachmentIds": {
+            "type": "array",
+            "maxItems": 4,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Optional IDs of owned message_attachment uploads with status available."
           }
         }
       },
@@ -12199,6 +12912,27 @@
           "createdAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageAttachment"
+            },
+            "description": "Only owner-uploaded files with a completed malware scan are accepted; signed read URLs expire after 30 minutes."
+          },
+          "attachmentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "editedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Present after the sender edits the message."
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "True after sender deletion; body is empty."
           }
         }
       },
@@ -12667,6 +13401,18 @@
           },
           "deleted": {
             "type": "boolean"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageAttachment"
+            },
+            "description": "Only owner-uploaded files with a completed malware scan are accepted; signed read URLs expire after 30 minutes."
+          },
+          "attachmentCount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
           }
         }
       },
@@ -12820,7 +13566,8 @@
             "type": "string",
             "enum": [
               "post_attachment",
-              "sermon_attachment"
+              "sermon_attachment",
+              "message_attachment"
             ]
           },
           "contentType": {
@@ -12922,7 +13669,8 @@
                 "type": "string",
                 "enum": [
                   "post_attachment",
-                  "sermon_attachment"
+                  "sermon_attachment",
+                  "message_attachment"
                 ]
               },
               "status": {
@@ -12934,7 +13682,9 @@
                   "scanning",
                   "available",
                   "rejected",
-                  "scan_failed"
+                  "scan_failed",
+                  "deleting",
+                  "deleted"
                 ]
               },
               "contentType": {
@@ -14609,6 +15359,332 @@
           "version": {
             "type": "integer",
             "minimum": 1
+          }
+        }
+      },
+      "PasswordChangeInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "description": "Current local password, preserved exactly. Required even when the current session was established through linked Google login."
+          },
+          "newPassword": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "minLength": 15,
+            "maxLength": 1024,
+            "description": "Valid UTF-8, at least 15 Unicode characters and at most 1024 UTF-8 bytes. Preserved exactly; must differ from the current password."
+          }
+        }
+      },
+      "AccountDeletionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "reviewing"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "account-deletion-request-v1"
+            ]
+          },
+          "consent": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "status",
+          "version",
+          "policyVersion",
+          "consent",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AccountDeletionSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "reviewing"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "account-deletion-request-v1"
+            ]
+          },
+          "consent": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "status",
+          "version",
+          "policyVersion",
+          "consent",
+          "createdAt",
+          "updatedAt",
+          "firstName",
+          "lastName"
+        ]
+      },
+      "AccountDeletionDetail": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "accountId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "reviewing"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "account-deletion-request-v1"
+            ]
+          },
+          "consent": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "firstName": {
+            "type": "string"
+          },
+          "lastName": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "id",
+          "accountId",
+          "status",
+          "version",
+          "policyVersion",
+          "consent",
+          "createdAt",
+          "updatedAt",
+          "firstName",
+          "lastName",
+          "email"
+        ]
+      },
+      "AccountDeletionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "confirm": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "account-deletion-request-v1"
+            ]
+          }
+        },
+        "required": [
+          "confirm",
+          "policyVersion"
+        ]
+      },
+      "AccountDeletionReviewInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "reviewing"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ]
+      },
+      "AccountDeletionStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "requested": {
+            "type": "boolean"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AccountDeletionRequest"
+          },
+          "policyVersion": {
+            "type": "string",
+            "enum": [
+              "account-deletion-request-v1"
+            ]
+          },
+          "notice": {
+            "type": "string",
+            "description": "Server-owned consent notice. Immediate account disablement and administrator review; no permanent purge or erasure deadline."
+          }
+        },
+        "required": [
+          "requested",
+          "policyVersion",
+          "notice"
+        ]
+      },
+      "MessageAttachment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "contentType",
+          "size",
+          "url",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Private signed download URL, valid for 30 minutes."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EditDirectMessageInput": {
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000
           }
         }
       }
