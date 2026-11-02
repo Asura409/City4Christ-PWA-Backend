@@ -127,7 +127,8 @@ func TestDirectoryContractContainsOnlyApprovedFields(t *testing.T) {
 		t.Fatal("directory member DTO missing")
 	}
 	fields := member["properties"].(map[string]any)
-	if len(fields) != 3 || fields["id"] == nil || fields["firstName"] == nil || fields["lastName"] == nil || member["additionalProperties"] != false {
+	avatar, ok := fields["avatar"].(map[string]any)
+	if len(fields) != 4 || fields["id"] == nil || fields["firstName"] == nil || fields["lastName"] == nil || avatar["$ref"] != "#/components/schemas/MediaAttachment" || member["additionalProperties"] != false {
 		t.Fatal("directory schema exposes unapproved fields")
 	}
 }
