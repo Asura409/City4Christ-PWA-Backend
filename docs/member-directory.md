@@ -41,6 +41,20 @@ Migration 00011 adds a partial index on IDs of verified, directory-visible accou
 
 This slice provides directory search/listing only. Ministries, group memberships, direct messaging and public profile pages remain later domains; listing a member does not grant access to any of their private data.
 
+## Staff member lookup
+
+`GET /api/v1/admin/members?query=...` is a separate, read-only operational lookup
+for Super Admin, Assistant Pastor, and Staff. It searches verified, active
+accounts by literal case-insensitive substring in name or email and returns
+`id`, `firstName`, `lastName`, `email`, and `joinedAt`. Results are paginated by
+opaque UUID cursor, limited to 50 rows per page, and excluded for unverified or
+deletion-requested accounts. The endpoint has account and IP rate limits and
+uses `Cache-Control: no-store`. It does not expose password state, MFA state,
+role assignments, sessions, private profile preferences, phone/address fields,
+or member detail records. The roster is read-only; detailed member records,
+field-level authorization, and sensitive-read/export auditing remain future
+work. See `GET /openapi.json` for the response contract.
+
 ## TDD evidence
 
 Repository/service tests first failed on absent directory symbols. The global-app route test failed with 404 before wiring. An additional failing test caught empty error.fields for invalid parameters, and contract tests failed on the missing route/DTO. Tests run against disposable PostgreSQL and cover literal/name-only search, exclusion of hidden/unverified accounts, stable pagination, malformed/cross-search cursors, privacy on cursor replay, account and shared-IP limits, revoked sessions and the restricted response fields.

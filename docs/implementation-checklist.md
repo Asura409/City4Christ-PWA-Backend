@@ -253,6 +253,10 @@ explicit Welcome Team task delegation remain deferred. See [visitor welcome](vis
   lifecycle and consent records. Preserve existing accounts and directory opt-outs.
 - [ ] **M2.3:** Build paginated operational member search/detail with field-level
   authorization and sensitive-read/export audit. No public phone/address lookup.
+  Initial search slice: `GET /api/v1/admin/members` is now restricted to Super
+  Admin, Assistant Pastor, and Staff; it searches verified active accounts and
+  returns only name, email, ID, and join date. Detail views, field-level access,
+  and audited sensitive reads/exports remain open, so M2.3 is not complete.
 - [ ] **M2.4:** Implement private visitor intake and QR entry, duplicate handling,
   New Visitors follow-up list and secure verification/account claiming. Existing
   emails must not be claimed or linked by an unauthenticated form submission.
