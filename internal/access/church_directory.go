@@ -72,7 +72,7 @@ func (s *Service) Candidates(ctx context.Context, actor, query, cursor string, l
 	if cursor == "" {
 		cursor = "00000000-0000-0000-0000-000000000000"
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name,a.email,EXISTS(SELECT 1 FROM mfa_factors m WHERE m.account_id=a.id AND m.confirmed_at IS NOT NULL) FROM accounts a WHERE a.email_verified_at IS NOT NULL AND a.id>$1::uuid AND (a.email ILIKE $2 ESCAPE '\' OR concat_ws(' ',a.first_name,a.last_name) ILIKE $2 ESCAPE '\') ORDER BY a.id LIMIT $3`, cursor, pattern, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name,a.email,EXISTS(SELECT 1 FROM mfa_factors m WHERE m.account_id=a.id AND m.confirmed_at IS NOT NULL) FROM accounts a WHERE a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL AND a.id>$1::uuid AND (a.email ILIKE $2 ESCAPE '\' OR concat_ws(' ',a.first_name,a.last_name) ILIKE $2 ESCAPE '\') ORDER BY a.id LIMIT $3`, cursor, pattern, limit+1)
 	if err != nil {
 		return empty, err
 	}

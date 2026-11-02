@@ -16,13 +16,14 @@ var (
 )
 
 type Account struct {
-	ID              string
-	Email           string
-	FirstName       string
-	LastName        string
-	PasswordHash    *string
-	EmailVerifiedAt *time.Time
-	CreatedAt       time.Time
+	ID                  string
+	Email               string
+	FirstName           string
+	LastName            string
+	PasswordHash        *string
+	EmailVerifiedAt     *time.Time
+	CreatedAt           time.Time
+	DeletionRequestedAt *time.Time
 }
 
 type NewAccount struct {
@@ -36,11 +37,11 @@ type AccountRepository struct{ db *sql.DB }
 
 func NewAccountRepository(db *sql.DB) *AccountRepository { return &AccountRepository{db: db} }
 
-const accountColumns = "id, email, first_name, last_name, password_hash, email_verified_at, created_at"
+const accountColumns = "id, email, first_name, last_name, password_hash, email_verified_at, created_at, deletion_requested_at"
 
 func scanAccount(row *sql.Row) (Account, error) {
 	var a Account
-	err := row.Scan(&a.ID, &a.Email, &a.FirstName, &a.LastName, &a.PasswordHash, &a.EmailVerifiedAt, &a.CreatedAt)
+	err := row.Scan(&a.ID, &a.Email, &a.FirstName, &a.LastName, &a.PasswordHash, &a.EmailVerifiedAt, &a.CreatedAt, &a.DeletionRequestedAt)
 	return a, err
 }
 

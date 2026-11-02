@@ -16,7 +16,7 @@ func (r *Repository) Assignments(ctx context.Context, accountID string) ([]Assig
 	if !validID(accountID) {
 		return nil, ErrForbidden
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT r.role,r.scope FROM accounts a LEFT JOIN account_roles r ON r.account_id=a.id WHERE a.id=$1 AND a.email_verified_at IS NOT NULL ORDER BY r.role,r.scope`, accountID)
+	rows, err := r.db.QueryContext(ctx, `SELECT r.role,r.scope FROM accounts a LEFT JOIN account_roles r ON r.account_id=a.id WHERE a.id=$1 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL ORDER BY r.role,r.scope`, accountID)
 	if err != nil {
 		return nil, err
 	}

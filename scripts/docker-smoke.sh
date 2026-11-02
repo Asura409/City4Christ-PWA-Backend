@@ -56,6 +56,10 @@ test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Content-Type: applicati
 curl --fail --silent "$endpoint/docs/swagger-ui-bundle.js" >/dev/null
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/auth/register")" = 403
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/admin/sermons")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/auth/password/change")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/me/deletion-request")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' -X DELETE -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{}' "$endpoint/api/v1/me")" = 401
+test "$(curl --silent -o /dev/null -w '%{http_code}' "$endpoint/api/v1/admin/account-deletion-requests")" = 401
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{"email":"unknown@example.invalid","returnTo":"https://smoke.example/auth.html"}' "$endpoint/api/v1/auth/password/forgot")" = 202
 test "$(curl --silent -o /dev/null -w '%{http_code}' -H 'Origin: https://smoke.example' -H 'Content-Type: application/json' -d '{"token":"invalid","password":"a sufficiently long password"}' "$endpoint/api/v1/auth/password/reset")" = 400
 test "$(docker inspect -f '{{.Config.User}}' "$api")" = 65532:65532

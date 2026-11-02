@@ -1,7 +1,11 @@
 // Package messaging implements participant-only, durable one-to-one conversations.
 package messaging
 
-import "time"
+import (
+	"time"
+
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
+)
 
 type Conversation struct {
 	ID                  string    `json:"id"`
@@ -16,13 +20,17 @@ type Conversation struct {
 }
 
 type Message struct {
-	ID              string    `json:"id"`
-	ConversationID  string    `json:"conversationId"`
-	SenderID        string    `json:"senderId"`
-	ClientMessageID string    `json:"clientMessageId"`
-	Body            string    `json:"body"`
-	Sequence        int64     `json:"sequence"`
-	CreatedAt       time.Time `json:"createdAt"`
+	ID              string             `json:"id"`
+	ConversationID  string             `json:"conversationId"`
+	SenderID        string             `json:"senderId"`
+	ClientMessageID string             `json:"clientMessageId"`
+	Body            string             `json:"body"`
+	Attachments     []media.Attachment `json:"attachments,omitempty"`
+	AttachmentCount int                `json:"attachmentCount,omitempty"`
+	Sequence        int64              `json:"sequence"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	EditedAt        *time.Time         `json:"editedAt,omitempty"`
+	Deleted         bool               `json:"deleted,omitempty"`
 }
 
 type MessagePage struct {
@@ -52,14 +60,16 @@ type GroupConversation struct {
 }
 
 type GroupMessage struct {
-	ID              string    `json:"id"`
-	GroupID         string    `json:"groupId"`
-	SenderID        string    `json:"senderId"`
-	ClientMessageID string    `json:"clientMessageId"`
-	Body            string    `json:"body"`
-	Sequence        int64     `json:"sequence"`
-	CreatedAt       time.Time `json:"createdAt"`
-	Deleted         bool      `json:"deleted"`
+	ID              string             `json:"id"`
+	GroupID         string             `json:"groupId"`
+	SenderID        string             `json:"senderId"`
+	ClientMessageID string             `json:"clientMessageId"`
+	Body            string             `json:"body"`
+	Attachments     []media.Attachment `json:"attachments,omitempty"`
+	AttachmentCount int                `json:"attachmentCount,omitempty"`
+	Sequence        int64              `json:"sequence"`
+	CreatedAt       time.Time          `json:"createdAt"`
+	Deleted         bool               `json:"deleted"`
 }
 
 type GroupMessagePage struct {

@@ -44,7 +44,7 @@ func CheckTx(ctx context.Context, tx *sql.Tx, actor, permission, scope string) e
 		return ErrForbidden
 	}
 	var role string
-	err := tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope=$2 AND r.role=ANY($3::text[]) AND a.email_verified_at IS NOT NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, actor, scope, roles).Scan(&role)
+	err := tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope=$2 AND r.role=ANY($3::text[]) AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, actor, scope, roles).Scan(&role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrForbidden
 	}
@@ -107,13 +107,13 @@ func (s *Service) change(ctx context.Context, actor, target string, in Change, g
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('access-target/' || $1, 0))`, target); err != nil {
 		return false, err
 	}
-	var verified bool
-	if err = tx.QueryRowContext(ctx, `SELECT email_verified_at IS NOT NULL FROM accounts WHERE id=$1 FOR SHARE`, target).Scan(&verified); errors.Is(err, sql.ErrNoRows) {
+	var verified, active bool
+	if err = tx.QueryRowContext(ctx, `SELECT email_verified_at IS NOT NULL,deletion_requested_at IS NULL FROM accounts WHERE id=$1 FOR SHARE`, target).Scan(&verified, &active); errors.Is(err, sql.ErrNoRows) {
 		return false, ErrInvalid
 	} else if err != nil {
 		return false, err
 	}
-	if grant && !verified {
+	if grant && (!verified || !active) {
 		return false, ErrInvalid
 	}
 	if guard != nil {

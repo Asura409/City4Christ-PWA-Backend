@@ -12,16 +12,19 @@ import (
 )
 
 const (
-	PurposePostAttachment   UploadPurpose = "post_attachment"
-	PurposeSermonAttachment UploadPurpose = "sermon_attachment"
-	UploadPending                         = "pending_upload"
-	UploadScanQueued                      = "scan_queued"
-	UploadScanning                        = "scanning"
-	UploadAvailable                       = "available"
-	UploadRejected                        = "rejected"
-	UploadScanFailed                      = "scan_failed"
-	UploadExpired                         = "expired"
-	maxScanAttempts                       = 5
+	PurposePostAttachment    UploadPurpose = "post_attachment"
+	PurposeSermonAttachment  UploadPurpose = "sermon_attachment"
+	PurposeMessageAttachment UploadPurpose = "message_attachment"
+	UploadPending                          = "pending_upload"
+	UploadScanQueued                       = "scan_queued"
+	UploadScanning                         = "scanning"
+	UploadAvailable                        = "available"
+	UploadRejected                         = "rejected"
+	UploadScanFailed                       = "scan_failed"
+	UploadExpired                          = "expired"
+	UploadDeleting                         = "deleting"
+	UploadDeleted                          = "deleted"
+	maxScanAttempts                        = 5
 )
 
 var (
@@ -31,6 +34,8 @@ var (
 	ErrUploadExpired      = errors.New("media upload reservation expired")
 	ErrNoScanJobs         = errors.New("no media scan jobs available")
 	ErrScanLeaseLost      = errors.New("media scan lease lost")
+	ErrNoCleanupJobs      = errors.New("no media cleanup jobs available")
+	ErrCleanupLeaseLost   = errors.New("media cleanup lease lost")
 	ErrInvalidScanResult  = errors.New("invalid media scan result")
 )
 
@@ -72,6 +77,14 @@ type ScanJob struct {
 	Attempts       int
 	LeaseToken     string
 	LeaseExpiresAt time.Time
+}
+
+type ObjectCleanupJob struct {
+	ID         string
+	UploadID   string
+	ObjectKey  string
+	LeaseToken string
+	Attempts   int
 }
 
 type ScanResult struct {
@@ -117,9 +130,11 @@ func (r *Repository) CreateUpload(ctx context.Context, input CreateUploadInput) 
 		keyPrefix = "posts/"
 	case PurposeSermonAttachment:
 		keyPrefix = "sermons/"
+	case PurposeMessageAttachment:
+		keyPrefix = "messages/"
 	}
 	if err != nil || !validUploadContentType(input.DeclaredContentType) ||
-		(input.Purpose != PurposePostAttachment && input.Purpose != PurposeSermonAttachment) ||
+		(input.Purpose != PurposePostAttachment && input.Purpose != PurposeSermonAttachment && input.Purpose != PurposeMessageAttachment) ||
 		!validObjectKey(input.ObjectKey) || !strings.HasPrefix(input.ObjectKey, keyPrefix) ||
 		input.DeclaredSize <= 0 || uuid.Validate(input.OwnerID) != nil || input.ExpiresAt.IsZero() {
 		return Upload{}, ErrInvalidMediaUpload

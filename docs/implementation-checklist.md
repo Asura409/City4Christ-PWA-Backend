@@ -9,6 +9,21 @@ already exist. Checked baseline items are implemented and have prior local/CI
 evidence; production acceptance is tracked separately. A milestone closes only
 when its exit gate has evidence. No dates or provider spend are assumed.
 
+## Reconciled status — 1 November 2026
+
+Use the [implementation status audit](implementation-status-2026-11-01.md) for the
+current split between implemented code, deployment evidence, pending acceptance,
+missing behavior and explicit deferrals. The milestone IDs below remain stable.
+Older dated evidence records are historical; an unchecked combined item does not
+mean that every behavior in it is missing. Code deployment is not provider/device
+acceptance. No new product domain was added by this reconciliation.
+
+Latest released source: backend `bc4150b` (PR #38), frontend `fbcf127` (PR #27).
+Both main CI runs passed. Read-only live checks on 1 November observed API 1.22.0,
+readiness 200, visitor config 200 with intake disabled and 90-day retention, and
+anonymous staff visitor access 401. Mobile/desktop welcome-page checks passed
+during the release. These do not establish authenticated acceptance of every domain.
+
 ## Current baseline
 
 - [x] **B1:** Email/password registration/login, verification OTP, Argon2id, rate
@@ -18,9 +33,11 @@ when its exit gate has evidence. No dates or provider spend are assumed.
 - [x] **B3:** Own-name/profile edits, directory opt-in and authenticated opt-in name
   search. This is not full member/family/visitor administration.
 - [x] **B4:** Public sermon catalog/detail and staff draft/edit/publish/unpublish/
-  schedule with version checks and audit. Progress, private notes and live remain.
+  schedule with version checks and audit. Series, own playback progress and private
+  notes are also implemented; managed live-stream metadata remains.
 - [x] **B5:** Limited technical-role delegation, scoped authorization groundwork
-  and audit. Protected church-role lifecycle is implemented locally; live bootstrap/release remains pending.
+  and audit. Protected church-role lifecycle is implemented and merged; this audit does not
+  establish the live bootstrap/device acceptance status.
 - [x] **B6:** Go/PostgreSQL, forward migrations, Docker, required GitHub CI,
   Render staging and a Vercel frontend with `API_URL`.
 - [x] **B7:** Modular connected frontend pages and desktop/mobile Playwright checks,
@@ -146,12 +163,13 @@ the detailed implementation state.
 | M9 | Pastor directory, availability and confidential bookings | M1–M3 | Original PRD, S01–S05 |
 | M10 | Durable messaging, group chat and realtime | M3–M5 | Original PRD, S02 |
 | M11 | Remaining Word/live, home/search and install experience | M3, M5–M6 | Original PRD |
-| M12 | Giving sandbox, ledger, receipts and finance dashboards | M1–M3 | W07, S01–S05 |
+| M12 | Hosted Give A Little handoff; no PWA payment ledger | Existing member UI | Owner scope revision to W07 |
 | M13 | Security, resilience and production release | Completed release scope | Entire PRD and addendum |
 
 The table preserves the original milestone IDs and dependencies for traceability.
-Use the owner-directed priority update above for current sequencing. Giving keeps
-its sandbox/live gate and must not delay unrelated beta feedback. A reduced MVP
+Use the owner-directed priority update above for current sequencing. The hosted giving scope
+supersedes the original payment-backend milestone; provider handoff acceptance
+must not delay unrelated beta feedback. A reduced MVP
 must explicitly record deferred features rather than marking them complete.
 
 ## M0 — Stabilize the foundation
@@ -216,7 +234,7 @@ roles, and no real account gains privileged access without the approved procedur
 
 ## M2 — Member, family, visitor and recovery workflows
 
-First visitor slice (local, 31 October 2026): owner-approved 90-day retention,
+First visitor slice (released 1 November 2026, PR #38/frontend PR #27): owner-approved 90-day retention,
 explicit consent, encrypted contact intake, private audited staff follow-up,
 idempotent retries, withdrawal and bounded expiry scrubbing are implemented.
 The welcome URL accepts ordinary/QR entry. Intake remains disabled until a
@@ -238,7 +256,11 @@ explicit Welcome Team task delegation remain deferred. See [visitor welcome](vis
   links, generic responses, rate limits, session revocation and frontend forms.
   The owner confirmed live receipt/reset; see B9 and
   [password recovery](password-recovery.md). Separately implement authorized
-  change-email/change-password flows and audited assisted recovery.
+  change-email and audited assisted recovery. Signed-in change-password is now
+  implemented locally (not deployed); see [password change](password-change.md). Track the
+  original PRD permanent-deletion requirement separately. Reviewed requests with
+  immediate disablement and Super Admin review are now implemented locally; see
+  [account deletion](account-deletion.md). Permanent erasure remains undecided.
 - [ ] **M2.6:** Implement authorized own-family editing and welcome-team follow-up
   UI. Defer avatar upload until the media pipeline is available in M5.
 - [ ] **M2.7:** Test cross-member/family access denial, consent/privacy serialization,
@@ -248,6 +270,10 @@ explicit Welcome Team task delegation remain deferred. See [visitor welcome](vis
 bypass or private-field leaks. Welcome delivery is completed through M3.
 
 ## M3 — Notifications, delivery and emergency broadcasts
+
+Current implementation update: M3.3, M3.4 and the preferences/read-all/retry UI
+portion of M3.6 exist in released source. Remaining provider/device and retention
+gates are detailed in the [status audit](implementation-status-2026-11-01.md).
 
 - [x] **M3.1 (foundation):** Add transactional, account-scoped inbox records with
   idempotent domain writes. Domain notification producers are being connected as
@@ -272,14 +298,14 @@ false successful delivery.
 
 - [x] **M4.1 (foundation):** Add church/leadership audience and join policies,
   verified-member records, group-scoped access scopes, and audit events. Group
-  archive and leader appointment lifecycle remain open.
+  archive/restore is implemented (M4.4); leader appointments use the role lifecycle.
 - [x] **M4.2 (foundation):** Add authenticated visible-group listing, join/request,
   leave, and pending-request review. Church groups are visible to verified
   members; the leadership-audience group is hidden from ineligible accounts.
   Leader review checks the exact group scope.
 - [x] **M4.3 (backend decision):** Approve/decline transitions and audit writes are
   transactional and repeat-safe; PostgreSQL tests cover racing approve/decline
-  calls. M3 recipient notifications remain open.
+  calls. Recipient inbox notices are implemented; real push delivery is a separate rollout gate.
 - [x] **M4.4:** Implement React group administration and church-wide group
   create/archive/restore for Staff, Assistant Pastors, and Super Admins. Creation
   and reasoned lifecycle transitions are audited transactionally; leadership
@@ -295,7 +321,7 @@ determines subsequent group-specific content access server-side.
 The first backend foundation is implemented on `feat/group-membership-foundation`.
 The React group directory, group details, My Groups, pending requests, roster,
 and staff group oversight are implemented locally. M4.5 still requires the
-full cross-group read/write boundary audit; membership notifications remain open.
+full cross-group read/write boundary acceptance; membership inbox notices are implemented.
 
 ## M5 — Community, uploads and moderation
 
@@ -327,8 +353,8 @@ full cross-group read/write boundary audit; membership notifications remain open
   dismiss, transactional audit, content scrubbing and media detachment are connected
   in backend code. React reporting and staff review controls are implemented locally.
   PostgreSQL-backed posts tests and global-app route tests pass; desktop/mobile
-  Playwright scenarios pass. Group-scoped moderation is not yet supported because
-  group posts are not implemented. Report snapshots/audit have no automatic purge;
+  Playwright scenarios pass. Group posts and exact-group moderation are now implemented; see
+  [group content](group-content.md) and the 31 October evidence below. Report snapshots/audit have no automatic purge;
   agree a retention policy before production rollout.
 - [ ] **M5.4:** Add secure profile avatars using the completed media pipeline;
   garbage-collect unattached/rejected objects under an explicit cleanup policy.
@@ -439,6 +465,11 @@ read private purposes or notes.
 
 ## M10 — Messaging and realtime
 
+The checked items describe the implemented REST plus single-instance WSS subset,
+not every original PRD proposal. End-to-end encryption and cross-instance fanout remain future;
+REST writes supersede the original proposed WS-send mechanism. See the
+[status audit](implementation-status-2026-11-01.md).
+
 - [x] **M10.1:** Direct messages are participant-only; any verified member may start
   a one-to-one conversation. No staff backdoor. Group chat needs its own policy.
 - [x] **M10.2:** Participant-only durable history, directory search, idempotent sends,
@@ -460,10 +491,41 @@ read private purposes or notes.
   WebSocket integration tests verify group delivery only to current members and
   socket closure after logout or session expiry. Multi-instance fanout is deferred
   while the API remains single-server.
+- [x] **M10.7:** Direct and group typing indicators use participant-scoped,
+  non-persistent WebSocket frames. The server rate-limits each socket, emits no
+  message content, and the client clears stale indicators after disconnects.
+- [x] **M10.8:** Online status is in-memory and available only to a member who
+  subscribes to an existing direct conversation or currently accessible group.
+  The server sends an initial snapshot and first/last socket transitions; current
+  membership is rechecked before fanout.
+- [x] **M10.9:** Direct and group messages accept up to four privately stored media
+  attachments through the existing owner-scoped R2 upload and malware-scan flow.
+  Only available clean uploads can be attached; message reads provide signed
+  30-minute URLs, and group moderation detaches removed messages from their files.
+  PostgreSQL service and global-app tests plus desktop/mobile browser tests cover
+  attachment send and rendering. Removing the last direct/group message reference
+  queues the clean private R2 object for durable worker cleanup; general cleanup
+  of abandoned uploads and unrelated unattached objects remains open.
+- [x] **M10.10:** Direct and group chat search is case-insensitive and bounded,
+  paginated by the normal sequence cursor, and always rechecks participant or
+  current group membership. Search skips moderator-redacted group messages and
+  is available in both mobile and desktop chat screens.
+- [x] **M10.11:** A sender may edit or redact their direct message only during
+  the first ten minutes. The database records actor/action/time without retaining
+  old message text; edits show an edited timestamp and deletion leaves a shared
+  redaction marker. Backend and desktop/mobile tests cover ownership and the exact
+  time boundary.
+- [x] **M10.12:** Direct-message deletion and group moderation remove attachment
+  associations. When no message references a clean file, a durable leased job
+  deletes the private R2 object and marks its upload deleted; shared files remain
+  until their last message is removed. Real-PostgreSQL tests cover shared-file
+  retention and worker cleanup.
 
 **Exit:** Direct and group REST messaging plus single-instance server realtime
-delivery are implemented and covered by frontend browser and backend integration
-checks. Shared fanout is deferred unless the API runs more than one instance.
+delivery, ephemeral typing, chat-scoped online presence, scanned media attachments,
+and participant-scoped message search are implemented and covered by frontend
+browser and backend integration checks. End-to-end encryption and shared fanout
+remain deferred.
 
 ## M11 — Complete Word/live and the home/install experience
 
@@ -494,7 +556,11 @@ staging acceptance stays with the testing team.
 **Exit:** no hardcoded personal identity or fake functionality remains in released
 screens; private content is absent from browser caches and unrelated search results.
 
-## M12 — Giving and finance, sandbox first
+## M12 — Hosted giving (revised owner scope)
+
+M12.1–M12.3 are implemented in the giving/return screens and checkout helper.
+The unchecked historical items below retain handoff/acceptance checks; they do
+not authorize an internal payment backend. M12.4 is conditional future scope.
 
 - [ ] **M12.1:** Add a Give button/link to the supplied hosted campaign URL and make
   it clear that checkout and transaction history are handled by Give A Little.
@@ -665,3 +731,52 @@ verification images and four exact old API compilation-cache records were remove
 running services and every data volume were preserved. The unchanged image then
 built successfully, and the final disposable-PostgreSQL startup/migration smoke
 passed, including repeat migration preservation and disabled visitor intake.
+
+### Signed-in password change — local evidence (1 November 2026)
+
+The first account-management gap now has a connected Profile form and
+`POST /api/v1/auth/password/change`. Current-password proof, strict password input,
+account/IP budgets, all-session revocation, reset-link invalidation and an encrypted
+changed-password email notice are implemented. Google-only accounts gain no local
+password. No staging password, account, provider setting or deployment was changed.
+
+TDD failures were observed for missing service symbols, missing global route,
+missing form/client method and OpenAPI operation. A later real global-app test
+exposed malformed Unicode replacement by the standard JSON decoder; a focused
+password-input validator now rejects it, with valid Unicode/pairing coverage.
+A browser test also exposed a redirect race that lost the success notice; it now
+survives in session-provider memory without persistent storage.
+
+Six auth service/repository tests passed against disposable PostgreSQL (169.364s).
+Three focused concurrency/revocation/reset race cases passed (188.462s). The original
+broad auth and HTTP race runs timed out in Argon2 work on this ARM VPS; neither is
+counted as a pass. Hash parameters were not weakened. Final HTTP/global-app/Unicode
+checks passed (137.302s), and existing recovery/email/session regressions passed
+(114.567s). Full backend-suite coverage is not claimed for this local slice.
+
+Frontend unit tests passed 47/47. Final focused password/Google desktop/mobile
+browser checks passed 8/8; the two actual API desktop/mobile password-change flows
+passed (98.538s) against the global Go app and a disposable PostgreSQL database.
+The production frontend build, OpenAPI 1.23 validation (eight existing warnings),
+Swagger configuration, formatting, whitespace and relative documentation links
+passed. The final Docker image built and its disposable PostgreSQL startup/migration/
+route/worker smoke passed. Vet is recorded separately in the local verification log.
+No real email was sent; live receipt/acceptance requires an authorized later release.
+
+### Reviewed account deletion — local implementation (2 November 2026)
+
+Owner selected reviewed requests with immediate sign-in disablement, all-session
+revocation and directory hiding. Migration 47 adds a pending flag, unique request
+and metadata audit. Fresh primary proof and enrolled MFA protect own submission;
+all Super Admin queue/detail/review operations require fresh primary and app MFA.
+Last-effective-administrator and active-pastoral-commitment checks prevent unsafe
+disablement. Review states are requested/reviewing; permanent purge, reactivation
+and completion claims remain outside this slice. Email change is deferred by the
+owner. Shared posts/messages/audit and the account email remain for later review.
+
+TDD exercised missing domain/routes/UI, pending-account auth/Google/OTP/recovery
+worker bypasses, push and pastoral eligibility, directory re-exposure, review proof
+expiry after row locking, pagination limits and delayed frontend profile saves.
+Verification evidence and limits are recorded in the
+[local status audit](implementation-status-2026-11-01.md#verified-local-evidence-for-reviewed-requests).
+No staging account, provider, role or data was changed; no real email was sent.

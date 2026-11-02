@@ -38,10 +38,10 @@ func scan(row *sql.Row) (Profile, error) {
 	return p, err
 }
 func (r *Repository) Get(ctx context.Context, actor string) (Profile, error) {
-	return scan(r.db.QueryRowContext(ctx, "SELECT "+columns+" FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL", actor))
+	return scan(r.db.QueryRowContext(ctx, "SELECT "+columns+" FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL", actor))
 }
 
 // Atomic partial updates preserve concurrent edits to fields omitted by this request.
 func (r *Repository) Update(ctx context.Context, actor string, in Update) (Profile, error) {
-	return scan(r.db.QueryRowContext(ctx, `UPDATE accounts SET first_name=COALESCE($2,first_name),last_name=COALESCE($3,last_name),directory_visible=COALESCE($4,directory_visible) WHERE id=$1 AND email_verified_at IS NOT NULL RETURNING `+columns, actor, in.FirstName, in.LastName, in.DirectoryVisible))
+	return scan(r.db.QueryRowContext(ctx, `UPDATE accounts SET first_name=COALESCE($2,first_name),last_name=COALESCE($3,last_name),directory_visible=COALESCE($4,directory_visible) WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL RETURNING `+columns, actor, in.FirstName, in.LastName, in.DirectoryVisible))
 }

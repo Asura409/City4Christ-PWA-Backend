@@ -158,6 +158,8 @@ func mediaPolicy(purpose UploadPurpose, rawContentType string) (contentType, ext
 		folder = "posts"
 	case PurposeSermonAttachment:
 		folder = "sermons"
+	case PurposeMessageAttachment:
+		folder = "messages"
 	default:
 		return "", "", 0, "", false
 	}

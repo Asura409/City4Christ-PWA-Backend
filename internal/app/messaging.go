@@ -15,8 +15,12 @@ type createConversationRequest struct {
 	RecipientID string `json:"recipientId"`
 }
 type sendMessageRequest struct {
-	ClientMessageID string `json:"clientMessageId"`
-	Body            string `json:"body"`
+	ClientMessageID string   `json:"clientMessageId"`
+	Body            string   `json:"body"`
+	AttachmentIDs   []string `json:"attachmentIds,omitempty"`
+}
+type editMessageRequest struct {
+	Body string `json:"body"`
 }
 type markReadRequest struct {
 	ThroughMessageID string `json:"throughMessageId"`
@@ -26,13 +30,15 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 	fail := func(w http.ResponseWriter, err error) {
 		switch {
 		case errors.Is(err, messaging.ErrInvalid):
-			writeError(w, 422, "validation_failed", "Check the conversation, message, or pagination fields.", nil)
+			writeError(w, 422, "validation_failed", "Check the conversation, message, pagination, or search fields.", nil)
 		case errors.Is(err, messaging.ErrForbidden):
 			writeError(w, 403, "forbidden", "A verified member account is required.", nil)
 		case errors.Is(err, messaging.ErrNotFound):
 			writeError(w, 404, "not_found", "Conversation not found.", nil)
 		case errors.Is(err, messaging.ErrIdempotencyConflict):
-			writeError(w, 409, "idempotency_conflict", "That client message ID was already used for different content.", nil)
+			writeError(w, 409, "idempotency_conflict", "That client message ID was already used for different content or attachments.", nil)
+		case errors.Is(err, messaging.ErrMutationWindowExpired):
+			writeError(w, 409, "mutation_window_expired", "Messages can only be edited or deleted by their sender for 10 minutes after sending.", nil)
 		default:
 			writeError(w, 503, "unavailable", "Service unavailable.", nil)
 		}
@@ -117,7 +123,7 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 			return
 		}
 		for key, values := range q {
-			if (key != "beforeSequence" && key != "limit") || len(values) != 1 {
+			if (key != "beforeSequence" && key != "limit" && key != "query") || len(values) != 1 {
 				fail(w, messaging.ErrInvalid)
 				return
 			}
@@ -138,7 +144,12 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 				return
 			}
 		}
-		page, err := service.ListMessages(r.Context(), actor, r.PathValue("conversationId"), before, limit)
+		var page messaging.MessagePage
+		if q.Has("query") {
+			page, err = service.SearchMessages(r.Context(), actor, r.PathValue("conversationId"), q.Get("query"), before, limit)
+		} else {
+			page, err = service.ListMessages(r.Context(), actor, r.PathValue("conversationId"), before, limit)
+		}
 		if err != nil {
 			fail(w, err)
 			return
@@ -158,7 +169,7 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 		if !ok {
 			return
 		}
-		message, duplicate, err := service.SendMessage(r.Context(), actor, r.PathValue("conversationId"), in.ClientMessageID, in.Body)
+		message, duplicate, err := service.SendMessageWithAttachments(r.Context(), actor, r.PathValue("conversationId"), in.ClientMessageID, in.Body, in.AttachmentIDs)
 		if err != nil {
 			fail(w, err)
 			return
@@ -171,6 +182,46 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 			status = http.StatusOK
 		}
 		writeJSON(w, status, map[string]any{"data": message})
+	})
+	mux.HandleFunc("PATCH /api/v1/conversations/{conversationId}/messages/{messageId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[editMessageRequest](w, r)
+		if !ok {
+			return
+		}
+		message, err := service.EditOwnMessage(r.Context(), actor, r.PathValue("conversationId"), r.PathValue("messageId"), in.Body)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		publishDirectMessageMutation(r.Context(), service, hub, "message.updated", message.ConversationID, message.ID, message.Sequence)
+		writeJSON(w, http.StatusOK, map[string]any{"data": message})
+	})
+	mux.HandleFunc("DELETE /api/v1/conversations/{conversationId}/messages/{messageId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			fail(w, messaging.ErrInvalid)
+			return
+		}
+		changed, err := service.DeleteOwnMessage(r.Context(), actor, r.PathValue("conversationId"), r.PathValue("messageId"))
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		if changed {
+			publishDirectMessageMutation(r.Context(), service, hub, "message.deleted", r.PathValue("conversationId"), r.PathValue("messageId"), 0)
+		}
+		w.WriteHeader(http.StatusNoContent)
 	})
 	mux.HandleFunc("PUT /api/v1/conversations/{conversationId}/read", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
@@ -219,7 +270,7 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 			return
 		}
 		for key, values := range q {
-			if (key != "beforeSequence" && key != "limit") || len(values) != 1 {
+			if (key != "beforeSequence" && key != "limit" && key != "query") || len(values) != 1 {
 				fail(w, messaging.ErrInvalid)
 				return
 			}
@@ -240,7 +291,12 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 				return
 			}
 		}
-		page, err := service.ListGroupMessages(r.Context(), actor, r.PathValue("groupId"), before, limit)
+		var page messaging.GroupMessagePage
+		if q.Has("query") {
+			page, err = service.SearchGroupMessages(r.Context(), actor, r.PathValue("groupId"), q.Get("query"), before, limit)
+		} else {
+			page, err = service.ListGroupMessages(r.Context(), actor, r.PathValue("groupId"), before, limit)
+		}
 		if err != nil {
 			fail(w, err)
 			return
@@ -260,7 +316,7 @@ func directMessagingRoutes(mux *http.ServeMux, service *messaging.Service, sessi
 		if !ok {
 			return
 		}
-		message, duplicate, err := service.SendGroupMessage(r.Context(), actor, r.PathValue("groupId"), in.ClientMessageID, in.Body)
+		message, duplicate, err := service.SendGroupMessageWithAttachments(r.Context(), actor, r.PathValue("groupId"), in.ClientMessageID, in.Body, in.AttachmentIDs)
 		if err != nil {
 			fail(w, err)
 			return

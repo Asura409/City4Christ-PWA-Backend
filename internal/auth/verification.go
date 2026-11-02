@@ -92,7 +92,7 @@ func (s *VerificationService) Verify(ctx context.Context, email, code string) er
 	if err != nil {
 		return err
 	}
-	if account.EmailVerifiedAt != nil {
+	if account.EmailVerifiedAt != nil || account.DeletionRequestedAt != nil {
 		return ErrInvalidOTP
 	}
 	c, err := loadChallenge(ctx, tx, account.ID)
@@ -140,7 +140,7 @@ func (s *VerificationService) Resend(ctx context.Context, email string) error {
 	if err != nil {
 		return err
 	}
-	if account.EmailVerifiedAt != nil {
+	if account.EmailVerifiedAt != nil || account.DeletionRequestedAt != nil {
 		return nil
 	}
 	c, err := loadChallenge(ctx, tx, account.ID)

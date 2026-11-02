@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -69,14 +70,16 @@ func (r *Repository) ListConversations(ctx context.Context, actor string) ([]Con
 		return nil, ErrForbidden
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT c.id,other.id,other.first_name,other.last_name,c.created_at,me.last_read_sequence,peer.last_read_sequence,
- COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at
+ COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.edited_at,last.deleted_at IS NOT NULL,COALESCE(last.attachment_count,0)
  FROM direct_conversations c
  JOIN direct_conversation_members me ON me.conversation_id=c.id AND me.account_id=$1
  JOIN accounts self ON self.id=me.account_id AND self.email_verified_at IS NOT NULL
  JOIN direct_conversation_members peer ON peer.conversation_id=c.id AND peer.account_id<>$1
  JOIN accounts other ON other.id=peer.account_id AND other.email_verified_at IS NOT NULL
  LEFT JOIN LATERAL (SELECT count(*)::int AS count FROM direct_messages m WHERE m.conversation_id=c.id AND m.sender_id<>$1 AND m.sequence>me.last_read_sequence) unread ON true
- LEFT JOIN LATERAL (SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY sequence DESC LIMIT 1) last ON true
+ LEFT JOIN LATERAL (SELECT m.id,m.conversation_id,m.sender_id,m.client_message_id,m.body,m.sequence,m.created_at,m.edited_at,m.deleted_at,
+  (SELECT count(*)::int FROM direct_message_media_attachments a WHERE a.message_id=m.id) attachment_count
+  FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY m.sequence DESC LIMIT 1) last ON true
  ORDER BY COALESCE(last.sequence,0) DESC,c.created_at DESC,c.id`, actor)
 	if err != nil {
 		return nil, err
@@ -88,11 +91,19 @@ func (r *Repository) ListConversations(ctx context.Context, actor string) ([]Con
 		var lastID, lastConversationID, lastSenderID, lastClientID, lastBody sql.NullString
 		var lastSequence sql.NullInt64
 		var lastAt sql.NullTime
-		if err = rows.Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt); err != nil {
+		var lastEditedAt sql.NullTime
+		var lastDeleted bool
+		var lastAttachmentCount int
+		if err = rows.Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastEditedAt, &lastDeleted, &lastAttachmentCount); err != nil {
 			return nil, err
 		}
 		if lastID.Valid {
-			c.LastMessage = &Message{ID: lastID.String, ConversationID: lastConversationID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: lastBody.String, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time}
+			last := &Message{ID: lastID.String, ConversationID: lastConversationID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: lastBody.String, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time, AttachmentCount: lastAttachmentCount, Deleted: lastDeleted}
+			if lastEditedAt.Valid {
+				editedAt := lastEditedAt.Time.UTC()
+				last.EditedAt = &editedAt
+			}
+			c.LastMessage = last
 		}
 		items = append(items, c)
 	}
@@ -100,6 +111,10 @@ func (r *Repository) ListConversations(ctx context.Context, actor string) ([]Con
 }
 
 func (r *Repository) SendMessage(ctx context.Context, conversationID, actor, clientMessageID, body string, now time.Time) (Message, bool, error) {
+	return r.SendMessageWithAttachments(ctx, conversationID, actor, clientMessageID, body, nil, now)
+}
+
+func (r *Repository) SendMessageWithAttachments(ctx context.Context, conversationID, actor, clientMessageID, body string, attachmentIDs []string, now time.Time) (Message, bool, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return Message{}, false, err
@@ -128,11 +143,30 @@ func (r *Repository) SendMessage(ctx context.Context, conversationID, actor, cli
 		if err == nil && message.Body != body {
 			return Message{}, false, ErrIdempotencyConflict
 		}
+		if err == nil {
+			existingIDs, idsErr := directMessageAttachmentIDs(ctx, tx, message.ID)
+			if idsErr != nil {
+				return Message{}, false, idsErr
+			}
+			if !sameStrings(existingIDs, attachmentIDs) {
+				return Message{}, false, ErrIdempotencyConflict
+			}
+		}
 	}
 	if err != nil {
 		return Message{}, false, err
 	}
 	if !duplicate {
+		attachments, attachErr := media.LoadAttachableTx(ctx, tx, actor, string(media.PurposeMessageAttachment), attachmentIDs)
+		if attachErr != nil {
+			if errors.Is(attachErr, media.ErrInvalidAttachment) {
+				return Message{}, false, ErrInvalid
+			}
+			return Message{}, false, attachErr
+		}
+		if err = insertDirectMessageAttachments(ctx, tx, message.ID, attachments); err != nil {
+			return Message{}, false, err
+		}
 		if err = messageNoticesTx(ctx, tx, message.ID, actor, conversationID, ""); err != nil {
 			return Message{}, false, err
 		}
@@ -144,6 +178,10 @@ func (r *Repository) SendMessage(ctx context.Context, conversationID, actor, cli
 }
 
 func (r *Repository) ListMessages(ctx context.Context, conversationID, actor string, beforeSequence int64, limit int) (MessagePage, error) {
+	return r.SearchMessages(ctx, conversationID, actor, "", beforeSequence, limit)
+}
+
+func (r *Repository) SearchMessages(ctx context.Context, conversationID, actor, query string, beforeSequence int64, limit int) (MessagePage, error) {
 	var allowed bool
 	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM direct_conversation_members m JOIN accounts a ON a.id=m.account_id AND a.email_verified_at IS NOT NULL WHERE m.conversation_id=$1 AND m.account_id=$2)`, conversationID, actor).Scan(&allowed); err != nil {
 		return MessagePage{}, err
@@ -151,9 +189,9 @@ func (r *Repository) ListMessages(ctx context.Context, conversationID, actor str
 	if !allowed {
 		return MessagePage{}, ErrNotFound
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at FROM (
- SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at FROM direct_messages WHERE conversation_id=$1 AND ($2=0 OR sequence<$2) ORDER BY sequence DESC LIMIT $3
- ) page ORDER BY sequence`, conversationID, beforeSequence, limit+1)
+	rows, err := r.db.QueryContext(ctx, `SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at,edited_at,deleted_at IS NOT NULL FROM (
+ SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at,edited_at,deleted_at FROM direct_messages WHERE conversation_id=$1 AND ($2=0 OR sequence<$2) AND ($3='' OR (deleted_at IS NULL AND position(lower($3) in lower(body))>0)) ORDER BY sequence DESC LIMIT $4
+ ) page ORDER BY sequence`, conversationID, beforeSequence, query, limit+1)
 	if err != nil {
 		return MessagePage{}, err
 	}
@@ -161,8 +199,13 @@ func (r *Repository) ListMessages(ctx context.Context, conversationID, actor str
 	items := []Message{}
 	for rows.Next() {
 		var m Message
-		if err = rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.ClientMessageID, &m.Body, &m.Sequence, &m.CreatedAt); err != nil {
+		var editedAt sql.NullTime
+		if err = rows.Scan(&m.ID, &m.ConversationID, &m.SenderID, &m.ClientMessageID, &m.Body, &m.Sequence, &m.CreatedAt, &editedAt, &m.Deleted); err != nil {
 			return MessagePage{}, err
+		}
+		if editedAt.Valid {
+			value := editedAt.Time.UTC()
+			m.EditedAt = &value
 		}
 		items = append(items, m)
 	}
@@ -231,15 +274,17 @@ func conversationFor(ctx context.Context, tx *sql.Tx, id, actor string) (Convers
 	var lastID, lastConversationID, lastSenderID, lastClientID, lastBody sql.NullString
 	var lastSequence sql.NullInt64
 	var lastAt sql.NullTime
+	var lastEditedAt sql.NullTime
+	var lastDeleted bool
 	err := tx.QueryRowContext(ctx, `SELECT c.id,other.id,other.first_name,other.last_name,c.created_at,me.last_read_sequence,peer.last_read_sequence,
- COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at
+	COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.edited_at,last.deleted_at IS NOT NULL
  FROM direct_conversations c
  JOIN direct_conversation_members me ON me.conversation_id=c.id AND me.account_id=$2
  JOIN direct_conversation_members peer ON peer.conversation_id=c.id AND peer.account_id<>$2
  JOIN accounts other ON other.id=peer.account_id AND other.email_verified_at IS NOT NULL
  LEFT JOIN LATERAL (SELECT count(*)::int AS count FROM direct_messages m WHERE m.conversation_id=c.id AND m.sender_id<>$2 AND m.sequence>me.last_read_sequence) unread ON true
- LEFT JOIN LATERAL (SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY sequence DESC LIMIT 1) last ON true
- WHERE c.id=$1`, id, actor).Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt)
+	LEFT JOIN LATERAL (SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at,edited_at,deleted_at FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY sequence DESC LIMIT 1) last ON true
+	WHERE c.id=$1`, id, actor).Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastEditedAt, &lastDeleted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Conversation{}, ErrNotFound
 	}
@@ -247,7 +292,12 @@ func conversationFor(ctx context.Context, tx *sql.Tx, id, actor string) (Convers
 		return Conversation{}, err
 	}
 	if lastID.Valid {
-		c.LastMessage = &Message{ID: lastID.String, ConversationID: lastConversationID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: lastBody.String, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time}
+		last := &Message{ID: lastID.String, ConversationID: lastConversationID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: lastBody.String, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time, Deleted: lastDeleted}
+		if lastEditedAt.Valid {
+			editedAt := lastEditedAt.Time.UTC()
+			last.EditedAt = &editedAt
+		}
+		c.LastMessage = last
 	}
 	return c, nil
 }

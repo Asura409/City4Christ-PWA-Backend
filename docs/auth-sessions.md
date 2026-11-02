@@ -10,6 +10,7 @@ All routes use `/api/v1`. JSON successes use `data`; errors use `error` with a r
 | POST | `/auth/login` | email, password |
 | POST | `/auth/refresh` | Refresh cookie; no token in JSON |
 | POST | `/auth/logout` | Refresh cookie |
+| POST | `/auth/password/change` | Authorization header; currentPassword, newPassword |
 | GET | `/me` | Authorization header |
 | GET | `/auth/google/start` | Returns provider URL and browser-binding cookie |
 | POST | `/auth/google/link` | Authorization header; recent login required |
@@ -32,3 +33,11 @@ Rate limits use atomic PostgreSQL counters: auth IP 60/minute; registration and 
 Migrate with `/app/api migrate` before starting the updated API, or use `/app/api migrate-and-serve` for the free Blueprint. Migrations only move forward and do not reset or seed staging. Tests create their own disposable PostgreSQL databases. The protected OTP inbox is available only through `cmd/auth-preview`, never the production API.
 
 Email-based password recovery is described in [password recovery](password-recovery.md). It uses public forgot/reset endpoints, verified local-password accounts, single-use links and complete session revocation. Google-only accounts keep using Google.
+
+Signed-in [password change](password-change.md) requires the current local password
+and a verified Bearer session. It allows five attempts per account and IP per 15
+minutes, in addition to the shared auth IP limit. Success revokes every session,
+invalidates outstanding reset links, clears the refresh cookie and queues an
+encrypted password-change notice. Clear in-memory credentials and sign in again;
+the operation does not issue a replacement session or add a password to a
+Google-only account.

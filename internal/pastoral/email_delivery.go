@@ -95,7 +95,7 @@ func (w *EmailWorker) DeliverNext(ctx context.Context, sender AppointmentEmailSe
 	// Never deliver a private provider update after pastoral authority is revoked.
 	if recipient == pastor || event == "requested" || event == "approved" || reminder {
 		var role string
-		err = tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator') AND a.email_verified_at IS NOT NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, pastor).Scan(&role)
+		err = tx.QueryRowContext(ctx, `SELECT r.role FROM account_roles r JOIN accounts a ON a.id=r.account_id WHERE r.account_id=$1 AND r.scope='' AND r.role IN ('assistant_pastor','super_administrator') AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL ORDER BY r.role LIMIT 1 FOR SHARE OF r,a`, pastor).Scan(&role)
 		if errors.Is(err, sql.ErrNoRows) {
 			return discard()
 		}
@@ -104,7 +104,7 @@ func (w *EmailWorker) DeliverNext(ctx context.Context, sender AppointmentEmailSe
 		}
 	}
 	var email string
-	err = tx.QueryRowContext(ctx, `SELECT email FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL FOR SHARE`, recipient).Scan(&email)
+	err = tx.QueryRowContext(ctx, `SELECT email FROM accounts WHERE id=$1 AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL FOR SHARE`, recipient).Scan(&email)
 	if errors.Is(err, sql.ErrNoRows) {
 		return discard()
 	}

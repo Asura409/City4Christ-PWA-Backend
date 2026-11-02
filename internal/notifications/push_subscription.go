@@ -60,7 +60,7 @@ func (s *Service) Subscribe(ctx context.Context, actor, session string, in PushS
 		return "", err
 	}
 	var active bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND s.account_id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL)`, session, actor, s.now()).Scan(&active); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND s.account_id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL)`, session, actor, s.now()).Scan(&active); err != nil {
 		return "", err
 	}
 	if !active {

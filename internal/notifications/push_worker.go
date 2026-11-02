@@ -56,7 +56,7 @@ func (w *PushWorker) one(ctx context.Context) (bool, error) {
 	}
 	var sub PushSubscription
 	var eligible bool
-	err = w.db.QueryRowContext(ctx, `SELECT s.endpoint,s.p256dh,s.auth_secret,(COALESCE(p.push_enabled,false) AND `+pushCategorySQL+` AND a.email_verified_at IS NOT NULL AND a.id=n.account_id AND sess.revoked_at IS NULL AND sess.expires_at>$2 AND n.read_at IS NULL AND c4c_group_content_visible(n.group_id,n.account_id) AND j.created_at>$2-interval '24 hours') FROM notification_push_jobs j JOIN notifications n ON n.id=j.notification_id JOIN notification_push_subscriptions s ON s.id=j.subscription_id JOIN accounts a ON a.id=s.account_id JOIN auth_sessions sess ON sess.id=s.session_id LEFT JOIN notification_preferences p ON p.account_id=a.id WHERE j.id=$1`, id, now).Scan(&sub.Endpoint, &sub.Keys.P256dh, &sub.Keys.Auth, &eligible)
+	err = w.db.QueryRowContext(ctx, `SELECT s.endpoint,s.p256dh,s.auth_secret,(COALESCE(p.push_enabled,false) AND `+pushCategorySQL+` AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL AND a.id=n.account_id AND sess.revoked_at IS NULL AND sess.expires_at>$2 AND n.read_at IS NULL AND c4c_group_content_visible(n.group_id,n.account_id) AND j.created_at>$2-interval '24 hours') FROM notification_push_jobs j JOIN notifications n ON n.id=j.notification_id JOIN notification_push_subscriptions s ON s.id=j.subscription_id JOIN accounts a ON a.id=s.account_id JOIN auth_sessions sess ON sess.id=s.session_id LEFT JOIN notification_preferences p ON p.account_id=a.id WHERE j.id=$1`, id, now).Scan(&sub.Endpoint, &sub.Keys.P256dh, &sub.Keys.Auth, &eligible)
 	if errors.Is(err, sql.ErrNoRows) {
 		return true, nil
 	}

@@ -19,7 +19,7 @@ func (s *PasswordRecoveryService) DeliverNext(ctx context.Context, sender Recove
 	defer tx.Rollback()
 	now := s.verification.now().UTC()
 	var accountID string
-	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a JOIN password_recovery_outbox o ON o.account_id=a.id WHERE o.expires_at<=$1 OR (o.failed_at IS NULL AND o.next_attempt_at<=$1) ORDER BY o.created_at,o.id LIMIT 1 FOR UPDATE OF a SKIP LOCKED`, now).Scan(&accountID)
+	err = tx.QueryRowContext(ctx, `SELECT a.id FROM accounts a JOIN password_recovery_outbox o ON o.account_id=a.id WHERE a.deletion_requested_at IS NOT NULL OR o.expires_at<=$1 OR (o.failed_at IS NULL AND o.next_attempt_at<=$1) ORDER BY o.created_at,o.id LIMIT 1 FOR UPDATE OF a SKIP LOCKED`, now).Scan(&accountID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -30,7 +30,7 @@ func (s *PasswordRecoveryService) DeliverNext(ctx context.Context, sender Recove
 	var sealed []byte
 	var expiry time.Time
 	var attempts int
-	err = tx.QueryRowContext(ctx, `SELECT id,kind,sealed_payload,expires_at,delivery_attempts FROM password_recovery_outbox WHERE account_id=$1 AND (expires_at<=$2 OR (failed_at IS NULL AND next_attempt_at<=$2)) ORDER BY created_at,id LIMIT 1`, accountID, now).Scan(&id, &kind, &sealed, &expiry, &attempts)
+	err = tx.QueryRowContext(ctx, `SELECT id,kind,sealed_payload,expires_at,delivery_attempts FROM password_recovery_outbox WHERE account_id=$1 AND (EXISTS(SELECT 1 FROM accounts a WHERE a.id=$1 AND a.deletion_requested_at IS NOT NULL) OR expires_at<=$2 OR (failed_at IS NULL AND next_attempt_at<=$2)) ORDER BY created_at,id LIMIT 1`, accountID, now).Scan(&id, &kind, &sealed, &expiry, &attempts)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
@@ -49,6 +49,9 @@ func (s *PasswordRecoveryService) DeliverNext(ctx context.Context, sender Recove
 	a, err := scanAccount(tx.QueryRowContext(ctx, "SELECT "+accountColumns+" FROM accounts WHERE id=$1", accountID))
 	if err != nil {
 		return true, err
+	}
+	if a.DeletionRequestedAt != nil {
+		return discard()
 	}
 	m, openErr := s.OpenEmail(accountID, id, sealed)
 	var failure error

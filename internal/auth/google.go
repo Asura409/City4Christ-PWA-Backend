@@ -161,11 +161,13 @@ func (s *GoogleService) resolve(ctx context.Context, identity GoogleIdentity, li
 		var primaryAt *time.Time
 		var sessionExpiry time.Time
 		var lockedID string
-		if err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 FOR SHARE`, *linkAccount).Scan(&lockedID); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 AND deletion_requested_at IS NULL FOR SHARE`, *linkAccount).Scan(&lockedID); errors.Is(err, sql.ErrNoRows) {
+			return "", ErrInvalidSession
+		} else if err != nil {
 			return "", err
 		}
 		// Lock the authorizing session so logout/replay cannot race the link decision.
-		err := tx.QueryRowContext(ctx, `SELECT a.email,COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND COALESCE(s.reauthenticated_at,s.authenticated_at)>$4 AND COALESCE(s.reauthenticated_at,s.authenticated_at)<=$3 AND a.email_verified_at IS NOT NULL FOR UPDATE OF s`, *linkSession, *linkAccount, now, now.Add(-5*time.Minute)).Scan(&email, &primaryAt, &sessionExpiry)
+		err := tx.QueryRowContext(ctx, `SELECT a.email,COALESCE(s.reauthenticated_at,s.authenticated_at),s.expires_at FROM auth_sessions s JOIN accounts a ON a.id=s.account_id WHERE s.id=$1 AND a.id=$2 AND s.revoked_at IS NULL AND s.expires_at>$3 AND COALESCE(s.reauthenticated_at,s.authenticated_at)>$4 AND COALESCE(s.reauthenticated_at,s.authenticated_at)<=$3 AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL FOR UPDATE OF s`, *linkSession, *linkAccount, now, now.Add(-5*time.Minute)).Scan(&email, &primaryAt, &sessionExpiry)
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrInvalidSession
 		}
