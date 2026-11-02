@@ -12,9 +12,10 @@ import (
 )
 
 var (
-	ErrForbidden      = errors.New("permission denied")
-	ErrInvalid        = errors.New("invalid role assignment")
-	ErrMemberNotFound = errors.New("member not found")
+	ErrForbidden       = errors.New("permission denied")
+	ErrInvalid         = errors.New("invalid role assignment")
+	ErrMemberNotFound  = errors.New("member not found")
+	ErrVersionConflict = errors.New("member record version conflict")
 )
 
 type Change struct {

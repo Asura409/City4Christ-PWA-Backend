@@ -13,6 +13,7 @@ type MemberAccessEvent struct {
 	ActorID         string    `json:"actorId"`
 	Action          string    `json:"action"`
 	SensitiveFields []string  `json:"sensitiveFields"`
+	Reason          string    `json:"reason,omitempty"`
 	OccurredAt      time.Time `json:"occurredAt"`
 }
 
@@ -55,13 +56,13 @@ func (s *Service) MemberAccessAudit(ctx context.Context, actor, memberID, cursor
 	if err != nil {
 		return page, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT id::text,actor_id::text,action,sensitive_fields,occurred_at FROM member_record_audit_events WHERE member_id=$1 AND action IN ('search_result','detail_view') AND ($2=0 OR id<$2) ORDER BY id DESC LIMIT $3`, memberID, before, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT id::text,actor_id::text,action,sensitive_fields,COALESCE(reason,''),occurred_at FROM member_record_audit_events WHERE member_id=$1 AND action IN ('search_result','detail_view','name_update') AND ($2=0 OR id<$2) ORDER BY id DESC LIMIT $3`, memberID, before, limit+1)
 	if err != nil {
 		return page, err
 	}
 	for rows.Next() {
 		var item MemberAccessEvent
-		if err = rows.Scan(&item.ID, &item.ActorID, &item.Action, &item.SensitiveFields, &item.OccurredAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.ActorID, &item.Action, &item.SensitiveFields, &item.Reason, &item.OccurredAt); err != nil {
 			rows.Close()
 			return page, err
 		}

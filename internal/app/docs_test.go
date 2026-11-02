@@ -169,7 +169,7 @@ func TestAdminMemberSearchOpenAPIContract(t *testing.T) {
 	schemas := spec["components"].(map[string]any)["schemas"].(map[string]any)
 	member := schemas["AdminMember"].(map[string]any)
 	fields := member["properties"].(map[string]any)
-	if len(fields) != 5 || fields["email"] == nil || fields["joinedAt"] == nil || fields["password"] != nil || fields["mfaEnabled"] != nil || fields["roles"] != nil {
+	if len(fields) != 6 || fields["email"] == nil || fields["joinedAt"] == nil || fields["version"] == nil || fields["password"] != nil || fields["mfaEnabled"] != nil || fields["roles"] != nil {
 		t.Fatal("admin member schema exposes unapproved account fields")
 	}
 	detail, ok := paths["/api/v1/admin/members/{accountId}"].(map[string]any)
@@ -179,6 +179,10 @@ func TestAdminMemberSearchOpenAPIContract(t *testing.T) {
 	get, ok := detail["get"].(map[string]any)
 	if !ok || len(get["security"].([]any)) != 1 || get["responses"].(map[string]any)["404"] == nil {
 		t.Fatal("member detail must require authentication and document missing members")
+	}
+	patch, ok := detail["patch"].(map[string]any)
+	if !ok || len(patch["security"].([]any)) != 1 || patch["responses"].(map[string]any)["409"] == nil {
+		t.Fatal("member name correction must require authentication and document stale versions")
 	}
 	audit, ok := paths["/api/v1/admin/members/{accountId}/access-audit"].(map[string]any)
 	if !ok {

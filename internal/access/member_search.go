@@ -16,6 +16,7 @@ type MemberRecord struct {
 	LastName  string    `json:"lastName"`
 	Email     string    `json:"email"`
 	JoinedAt  time.Time `json:"joinedAt"`
+	Version   int       `json:"version,omitempty"`
 }
 
 type MemberPage struct {

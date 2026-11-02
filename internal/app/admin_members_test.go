@@ -141,3 +141,68 @@ func TestSuperAdminCanReviewMemberRecordAccessAudit(t *testing.T) {
 		t.Fatalf("audit inspection not recorded: count=%d err=%v", views, err)
 	}
 }
+
+func TestStaffCanCorrectOnlyMemberNamesWithReasonAndVersion(t *testing.T) {
+	f := newChurchHTTPFixture(t)
+	staffID, staff := f.account(t, "staff", false)
+	_, member := f.account(t, "", false)
+	target, targetToken := f.account(t, "", false)
+	path := "/api/v1/admin/members/" + target
+	body := `{"firstName":"Grace","reason":"Member requested a name correction","expectedVersion":1}`
+	if w := f.request("PATCH", path, "", body); w.Code != 401 {
+		t.Fatalf("anonymous correction: %d %s", w.Code, w.Body.String())
+	}
+	if w := f.request("PATCH", path, member, body); w.Code != 403 {
+		t.Fatalf("member correction: %d %s", w.Code, w.Body.String())
+	}
+	w := f.request("PATCH", path, staff, body)
+	if w.Code != 200 {
+		t.Fatalf("staff correction: %d %s", w.Code, w.Body.String())
+	}
+	var response struct {
+		Data map[string]any `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.Data["firstName"] != "Grace" || response.Data["version"] != float64(2) {
+		t.Fatalf("corrected member response %s: %v", w.Body.String(), err)
+	}
+	for _, invalid := range []struct {
+		body   string
+		status int
+	}{
+		{`{"firstName":"","reason":"Member request","expectedVersion":2}`, 422},
+		{`{"email":"takeover@example.invalid","reason":"Member request","expectedVersion":2}`, 400},
+		{`{"lastName":"Updated","reason":"","expectedVersion":2}`, 422},
+	} {
+		if response := f.request("PATCH", path, staff, invalid.body); response.Code != invalid.status {
+			t.Fatalf("accepted invalid member correction %s: %d %s", invalid.body, response.Code, response.Body.String())
+		}
+	}
+	if stale := f.request("PATCH", path, staff, `{"lastName":"Updated","reason":"Stale request","expectedVersion":1}`); stale.Code != 409 {
+		t.Fatalf("stale correction: %d %s", stale.Code, stale.Body.String())
+	}
+	if _, err := f.db.Exec(`ALTER TABLE member_record_audit_events ADD CONSTRAINT test_reject_name_update CHECK(action<>'name_update') NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+	if rejected := f.request("PATCH", path, staff, `{"lastName":"Should Roll Back","reason":"Audit failure test","expectedVersion":2}`); rejected.Code != 503 {
+		t.Fatalf("correction without audit should fail closed: %d %s", rejected.Code, rejected.Body.String())
+	}
+	var lastName string
+	var version int
+	if err := f.db.QueryRow(`SELECT last_name,profile_version FROM accounts WHERE id=$1`, target).Scan(&lastName, &version); err != nil || lastName != "Tester" || version != 2 {
+		t.Fatalf("unaudited correction was not rolled back: name=%q version=%d err=%v", lastName, version, err)
+	}
+	if _, err := f.db.Exec(`ALTER TABLE member_record_audit_events DROP CONSTRAINT test_reject_name_update`); err != nil {
+		t.Fatal(err)
+	}
+	if own := f.request("PATCH", "/api/v1/me", targetToken, `{"lastName":"Member Updated"}`); own.Code != 200 {
+		t.Fatalf("member own-profile update: %d %s", own.Code, own.Body.String())
+	}
+	if stale := f.request("PATCH", path, staff, `{"lastName":"Older Staff Value","reason":"Another request","expectedVersion":2}`); stale.Code != 409 {
+		t.Fatalf("staff update did not notice member profile edit: %d %s", stale.Code, stale.Body.String())
+	}
+	var audits int
+	var action, fields, reason string
+	if err := f.db.QueryRow(`SELECT count(*),max(action),max(array_to_string(sensitive_fields,',')),max(reason) FROM member_record_audit_events WHERE actor_id=$1 AND member_id=$2`, staffID, target).Scan(&audits, &action, &fields, &reason); err != nil || audits != 1 || action != "name_update" || fields != "firstName" || reason != "Member requested a name correction" {
+		t.Fatalf("member correction audit count=%d action=%q fields=%q reason=%q err=%v", audits, action, fields, reason, err)
+	}
+}
