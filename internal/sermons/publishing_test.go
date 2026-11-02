@@ -54,6 +54,73 @@ func TestSermonsAttachOnlyOwnedCleanUploadsAndExposeURLsOnlyWhenPublished(t *tes
 	}
 }
 
+func TestEditorialListIncludesDraftsAndScheduledSermonsWithStablePagination(t *testing.T) {
+	db, now := fixture(t)
+	ctx := context.Background()
+	actor := editor(t, db, "content_editor")
+	service := NewService(NewRepository(db), func() time.Time { return now })
+	ids := make([]string, 0, 5)
+	publicAt := now.Add(-time.Hour)
+	futureAt := now.Add(time.Hour)
+	for i, item := range []struct {
+		title string
+		at    *time.Time
+	}{{"Draft one", nil}, {"Published one", &publicAt}, {"Scheduled one", &futureAt}, {"Draft two", nil}, {"Published two", &publicAt}} {
+		id := insert(t, db, item.title, "Pastor", "Series", "Faith", item.at)
+		created := now.Add(-time.Duration(i) * time.Minute)
+		if _, err := db.Exec(`UPDATE sermons SET created_at=$2 WHERE id=$1`, id, created); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	var got []EditorialSermon
+	opts := EditorialOptions{Limit: 2}
+	for pageNumber := 0; pageNumber < 4; pageNumber++ {
+		page, err := service.ListEditorial(ctx, actor, opts)
+		if err != nil {
+			t.Fatalf("editorial page %d: %v", pageNumber, err)
+		}
+		got = append(got, page.Items...)
+		if pageNumber < 2 && page.NextCursor == "" {
+			t.Fatal("expected a continuation cursor")
+		}
+		if pageNumber == 2 && page.NextCursor != "" {
+			t.Fatal("unexpected cursor after final record")
+		}
+		if page.NextCursor == "" {
+			break
+		}
+		opts.Cursor = page.NextCursor
+	}
+	if len(got) != len(ids) {
+		t.Fatalf("got %d editorial sermons; want %d: %+v", len(got), len(ids), got)
+	}
+	seen := map[string]string{}
+	for _, item := range got {
+		seen[item.ID] = item.Status
+	}
+	wantStatuses := map[string]string{ids[0]: "draft", ids[1]: "published", ids[2]: "scheduled", ids[3]: "draft", ids[4]: "published"}
+	for id, want := range wantStatuses {
+		if seen[id] != want {
+			t.Errorf("sermon %s status=%q want %q", id, seen[id], want)
+		}
+	}
+	filtered, err := service.ListEditorial(ctx, actor, EditorialOptions{Limit: 10, Status: "scheduled", Query: "scheduled"})
+	if err != nil || len(filtered.Items) != 1 || filtered.Items[0].ID != ids[2] {
+		t.Fatalf("filtered scheduled list: %+v, %v", filtered, err)
+	}
+	if _, err := service.ListEditorial(ctx, actor, EditorialOptions{Limit: 10, Status: "unknown"}); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("invalid editorial status error=%v", err)
+	}
+	if _, err := service.ListEditorial(ctx, actor, EditorialOptions{Limit: 10, Cursor: "not-a-cursor"}); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("invalid editorial cursor error=%v", err)
+	}
+	member := editor(t, db, "")
+	if _, err := service.ListEditorial(ctx, member, EditorialOptions{Limit: 10}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("non-editor list error=%v", err)
+	}
+}
+
 func insertSermonUpload(t *testing.T, db *sql.DB, owner, status string) string {
 	t.Helper()
 	var id string

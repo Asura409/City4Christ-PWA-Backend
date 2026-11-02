@@ -11,6 +11,11 @@ import (
 
 const editorialColumns = "id,title,summary,speaker,series,topic,preached_at,published_at,video_url,image_url,version"
 
+type editorialListItem struct {
+	sermon    EditorialSermon
+	createdAt time.Time
+}
+
 func scanEditorial(row scanner, now time.Time) (EditorialSermon, error) {
 	var s EditorialSermon
 	err := row.Scan(&s.ID, &s.Title, &s.Summary, &s.Speaker, &s.Series, &s.Topic, &s.PreachedAt, &s.PublishedAt, &s.VideoURL, &s.ImageURL, &s.Version)
@@ -87,6 +92,67 @@ func (r *Repository) getEditorial(ctx context.Context, actorID, id string, now t
 	}
 	return result, err
 }
+
+func (r *Repository) listEditorial(ctx context.Context, actorID string, o EditorialOptions, after *editorialCursor, now time.Time) ([]editorialListItem, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err = checkEditor(ctx, tx, actorID); err != nil {
+		return nil, err
+	}
+	var cursorAt *time.Time
+	var cursorID *string
+	if after != nil {
+		at := after.CreatedAt.UTC()
+		cursorAt = &at
+		cursorID = &after.ID
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT "+editorialColumns+`,created_at FROM sermons
+ WHERE ($1='' OR CASE WHEN published_at IS NULL THEN 'draft' WHEN published_at>$2 THEN 'scheduled' ELSE 'published' END=$1)
+ AND ($3='' OR strpos(lower(title||' '||summary||' '||speaker||' '||series||' '||topic),lower($3))>0)
+ AND ($4::timestamptz IS NULL OR (created_at,id)<($4::timestamptz,$5::uuid))
+ ORDER BY created_at DESC,id DESC LIMIT $6`, o.Status, now, o.Query, cursorAt, cursorID, o.Limit+1)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]editorialListItem, 0)
+	for rows.Next() {
+		var item editorialListItem
+		s := &item.sermon
+		if err := rows.Scan(&s.ID, &s.Title, &s.Summary, &s.Speaker, &s.Series, &s.Topic, &s.PreachedAt, &s.PublishedAt, &s.VideoURL, &s.ImageURL, &s.Version, &item.createdAt); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		s.PreachedAt = s.PreachedAt.UTC()
+		if s.PublishedAt != nil {
+			published := s.PublishedAt.UTC()
+			s.PublishedAt = &published
+		}
+		s.Status = editorialStatus(s.PublishedAt, now)
+		item.createdAt = item.createdAt.UTC()
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i].sermon.AttachmentIDs, err = sermonAttachmentIDs(ctx, tx, items[i].sermon.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *Repository) update(ctx context.Context, actorID, id string, patch UpdateInput, now time.Time) (EditorialSermon, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {

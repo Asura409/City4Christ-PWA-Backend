@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -223,5 +224,83 @@ func TestSermonPublishingThroughGlobalApp(t *testing.T) {
 	}
 	if w = request("GET", "/api/v1/admin/sermons/"+id, editor.AccessToken, "", origin); w.Code != 401 {
 		t.Fatal("revoked session accepted")
+	}
+}
+
+func TestSermonEditorialListThroughGlobalApp(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)
+	key := []byte(strings.Repeat("l", 32))
+	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: key, Now: func() time.Time { return now }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	account := func(role string) auth.SessionTokens {
+		t.Helper()
+		var id string
+		if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES(gen_random_uuid()::text||'@example.invalid','Test','Editor',$1) RETURNING id`, now).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		if role != "" {
+			if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,$2)`, id, role); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tokens, err := sessions.Start(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tokens
+	}
+	editor := account("content_editor")
+	member := account("")
+	for i, published := range []*time.Time{nil, func() *time.Time { at := now.Add(-time.Hour); return &at }(), func() *time.Time { at := now.Add(time.Hour); return &at }()} {
+		if _, err := db.Exec(`INSERT INTO sermons(title,speaker,preached_at,published_at,created_at) VALUES($1,'Pastor', $2,$3,$4)`, []string{"Editorial draft", "Editorial published", "Editorial scheduled"}[i], now, published, now.Add(-time.Duration(i)*time.Minute)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handler := New(db, Config{VerificationKey: key, AppOrigin: "https://api.example", Now: func() time.Time { return now }})
+	request := func(token, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		r := httptest.NewRequest("GET", path, nil)
+		if token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		return w
+	}
+	if response := request("", "/api/v1/admin/sermons"); response.Code != 401 {
+		t.Fatalf("anonymous list: %d %s", response.Code, response.Body.String())
+	}
+	if response := request(member.AccessToken, "/api/v1/admin/sermons"); response.Code != 403 {
+		t.Fatalf("member list: %d %s", response.Code, response.Body.String())
+	}
+	response := request(editor.AccessToken, "/api/v1/admin/sermons?limit=2")
+	if response.Code != 200 {
+		t.Fatalf("editor list: %d %s", response.Code, response.Body.String())
+	}
+	var page struct {
+		Data []sermons.EditorialSermon `json:"data"`
+		Meta struct {
+			NextCursor string `json:"nextCursor"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &page); err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Data) != 2 || page.Meta.NextCursor == "" {
+		t.Fatalf("editorial page = %+v", page)
+	}
+	response = request(editor.AccessToken, "/api/v1/admin/sermons?limit=2&cursor="+url.QueryEscape(page.Meta.NextCursor))
+	if response.Code != 200 {
+		t.Fatalf("editorial continuation: %d %s", response.Code, response.Body.String())
+	}
+	if response = request(editor.AccessToken, "/api/v1/admin/sermons?status=invalid"); response.Code != 422 {
+		t.Fatalf("invalid filter: %d %s", response.Code, response.Body.String())
 	}
 }

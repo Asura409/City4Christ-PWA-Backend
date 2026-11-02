@@ -1110,6 +1110,26 @@
       }
     },
     "/api/v1/admin/sermons": {
+      "get": {
+        "tags": ["Sermon editing"],
+        "operationId": "ListEditorialSermons",
+        "summary": "List sermons for editors",
+        "description": "Requires an active verified Bearer session with sermons.manage. Returns drafts, published sermons and future scheduled sermons. Results are newest-created first with stable cursor pagination. The cursor grants no access by itself.",
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {"name": "query", "in": "query", "schema": {"type": "string", "maxLength": 200}, "description": "Search title, summary, speaker, series and topic."},
+          {"name": "status", "in": "query", "schema": {"type": "string", "enum": ["draft", "published", "scheduled"]}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 100, "default": 20}},
+          {"name": "cursor", "in": "query", "schema": {"type": "string", "maxLength": 2048}, "description": "Opaque position from meta.nextCursor."}
+        ],
+        "responses": {
+          "200": {"description": "Editorial sermon page", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/EditorialSermonPage"}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "422": {"description": "Invalid list filter, limit or cursor"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      },
       "post": {
         "tags": [
           "Sermon editing"
@@ -11605,6 +11625,18 @@
               "type": "string",
               "format": "uuid"
             }
+          }
+        }
+      },
+      "EditorialSermonPage": {
+        "type": "object",
+        "required": ["data", "meta"],
+        "properties": {
+          "data": {"type": "array", "items": {"$ref": "#/components/schemas/EditorialSermon"}},
+          "meta": {
+            "type": "object",
+            "required": ["nextCursor"],
+            "properties": {"nextCursor": {"type": "string", "description": "Opaque position; empty when there are no more results."}}
           }
         }
       },

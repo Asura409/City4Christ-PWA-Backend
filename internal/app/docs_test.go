@@ -133,6 +133,26 @@ func TestDirectoryContractContainsOnlyApprovedFields(t *testing.T) {
 	}
 }
 
+func TestSermonEditorialListOpenAPIContract(t *testing.T) {
+	h := New(nil, Config{})
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/openapi.json", nil))
+	var spec struct {
+		Paths map[string]map[string]map[string]any `json:"paths"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &spec); err != nil {
+		t.Fatal(err)
+	}
+	operation := spec.Paths["/api/v1/admin/sermons"]["get"]
+	if operation == nil {
+		t.Fatal("editorial sermon list is missing from OpenAPI")
+	}
+	security, ok := operation["security"].([]any)
+	if !ok || len(security) != 1 {
+		t.Fatal("editorial sermon list must require Bearer authentication")
+	}
+}
+
 func TestPasswordRecoveryContract(t *testing.T) {
 	h := New(nil, Config{})
 	w := httptest.NewRecorder()

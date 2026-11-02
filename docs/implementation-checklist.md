@@ -33,8 +33,9 @@ during the release. These do not establish authenticated acceptance of every dom
 - [x] **B3:** Own-name/profile edits, directory opt-in and authenticated opt-in name
   search. This is not full member/family/visitor administration.
 - [x] **B4:** Public sermon catalog/detail and staff draft/edit/publish/unpublish/
-  schedule with version checks and audit. Series, own playback progress and private
-  notes are also implemented; managed live-stream metadata remains.
+  schedule with version checks and audit, including a filtered, paginated editorial
+  list of drafts, scheduled and published sermons. Series, own playback progress and
+  private notes are also implemented; managed live-stream metadata remains.
 - [x] **B5:** Limited technical-role delegation, scoped authorization groundwork
   and audit. Protected church-role lifecycle is implemented and merged; this audit does not
   establish the live bootstrap/device acceptance status.
