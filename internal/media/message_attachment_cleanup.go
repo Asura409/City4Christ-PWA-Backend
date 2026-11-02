@@ -21,19 +21,55 @@ func DetachGroupMessageAttachmentsTx(ctx context.Context, tx *sql.Tx, messageID 
 	return detachMessageAttachmentsTx(ctx, tx, "group_chat_message_media_attachments", messageID)
 }
 
+// QueueObjectCleanupIfUnreferencedTx queues an available private object only
+// after its final profile or message reference has been removed.
+func QueueObjectCleanupIfUnreferencedTx(ctx context.Context, tx *sql.Tx, uploadID string) error {
+	var key string
+	err := tx.QueryRowContext(ctx, `SELECT available_object_key FROM media_uploads WHERE id=$1 AND status='available' FOR UPDATE`, uploadID).Scan(&key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var references int
+	if err := tx.QueryRowContext(ctx, `SELECT
+		(SELECT count(*) FROM direct_message_media_attachments WHERE upload_id=$1)+
+		(SELECT count(*) FROM group_chat_message_media_attachments WHERE upload_id=$1)+
+		(SELECT count(*) FROM accounts WHERE avatar_upload_id=$1)`, uploadID).Scan(&references); err != nil {
+		return err
+	}
+	if references != 0 {
+		return nil
+	}
+	result, err := tx.ExecContext(ctx, `UPDATE media_uploads SET status='deleting' WHERE id=$1 AND status='available' AND available_object_key=$2`, uploadID, key)
+	if err != nil {
+		return err
+	}
+	changed, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if changed == 0 {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO media_object_cleanup_jobs(id,upload_id,object_key) VALUES($1,$2,$3) ON CONFLICT(upload_id) DO NOTHING`, uuid.NewString(), uploadID, key)
+	return err
+}
+
 func detachMessageAttachmentsTx(ctx context.Context, tx *sql.Tx, table, messageID string) error {
 	if table != "direct_message_media_attachments" && table != "group_chat_message_media_attachments" {
 		return ErrInvalidAttachment
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT u.id::text,u.available_object_key FROM "+table+" a JOIN media_uploads u ON u.id=a.upload_id WHERE a.message_id=$1 AND u.status='available' FOR UPDATE OF u", messageID)
+	rows, err := tx.QueryContext(ctx, "SELECT u.id::text FROM "+table+" a JOIN media_uploads u ON u.id=a.upload_id WHERE a.message_id=$1 AND u.status='available' FOR UPDATE OF u", messageID)
 	if err != nil {
 		return err
 	}
-	type object struct{ id, key string }
+	type object struct{ id string }
 	objects := make([]object, 0)
 	for rows.Next() {
 		var item object
-		if err := rows.Scan(&item.id, &item.key); err != nil {
+		if err := rows.Scan(&item.id); err != nil {
 			rows.Close()
 			return err
 		}
@@ -50,27 +86,7 @@ func detachMessageAttachmentsTx(ctx context.Context, tx *sql.Tx, table, messageI
 		return err
 	}
 	for _, item := range objects {
-		var references int
-		if err := tx.QueryRowContext(ctx, `SELECT
-			(SELECT count(*) FROM direct_message_media_attachments WHERE upload_id=$1)+
-			(SELECT count(*) FROM group_chat_message_media_attachments WHERE upload_id=$1)`, item.id).Scan(&references); err != nil {
-			return err
-		}
-		if references != 0 {
-			continue
-		}
-		result, err := tx.ExecContext(ctx, `UPDATE media_uploads SET status='deleting' WHERE id=$1 AND status='available' AND available_object_key=$2`, item.id, item.key)
-		if err != nil {
-			return err
-		}
-		changed, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if changed == 0 {
-			continue
-		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO media_object_cleanup_jobs(id,upload_id,object_key) VALUES($1,$2,$3) ON CONFLICT(upload_id) DO NOTHING`, uuid.NewString(), item.id, item.key); err != nil {
+		if err := QueueObjectCleanupIfUnreferencedTx(ctx, tx, item.id); err != nil {
 			return err
 		}
 	}

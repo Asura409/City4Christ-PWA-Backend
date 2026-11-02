@@ -15,6 +15,7 @@ const (
 	PurposePostAttachment    UploadPurpose = "post_attachment"
 	PurposeSermonAttachment  UploadPurpose = "sermon_attachment"
 	PurposeMessageAttachment UploadPurpose = "message_attachment"
+	PurposeProfilePhoto      UploadPurpose = "profile_photo"
 	UploadPending                          = "pending_upload"
 	UploadScanQueued                       = "scan_queued"
 	UploadScanning                         = "scanning"
@@ -132,9 +133,11 @@ func (r *Repository) CreateUpload(ctx context.Context, input CreateUploadInput) 
 		keyPrefix = "sermons/"
 	case PurposeMessageAttachment:
 		keyPrefix = "messages/"
+	case PurposeProfilePhoto:
+		keyPrefix = "profiles/"
 	}
 	if err != nil || !validUploadContentType(input.DeclaredContentType) ||
-		(input.Purpose != PurposePostAttachment && input.Purpose != PurposeSermonAttachment && input.Purpose != PurposeMessageAttachment) ||
+		(input.Purpose != PurposePostAttachment && input.Purpose != PurposeSermonAttachment && input.Purpose != PurposeMessageAttachment && input.Purpose != PurposeProfilePhoto) ||
 		!validObjectKey(input.ObjectKey) || !strings.HasPrefix(input.ObjectKey, keyPrefix) ||
 		input.DeclaredSize <= 0 || uuid.Validate(input.OwnerID) != nil || input.ExpiresAt.IsZero() {
 		return Upload{}, ErrInvalidMediaUpload

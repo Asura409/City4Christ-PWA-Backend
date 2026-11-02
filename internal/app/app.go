@@ -78,7 +78,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	passwordRecoveryRoutes(mux, recovery, limiter, config)
 	passwordChangeRoutes(mux, auth.NewPasswordChangeService(db, sessions, recovery), sessions, limiter, config)
 	sessionRoutes(mux, sessions, limiter, config)
-	profileService := profiles.NewService(profiles.NewRepository(db))
+	profileService := profiles.NewService(profiles.NewRepository(db), downloadSigner)
 	profileRoutes(mux, profileService, sessions, limiter, config)
 	accountDeletionRoutes(mux, accountdeletion.NewService(db, config.Now), sessions, limiter, config)
 	directoryRoutes(mux, profileService, sessions, limiter, config)

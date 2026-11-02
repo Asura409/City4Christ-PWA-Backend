@@ -358,6 +358,9 @@ full cross-group read/write boundary acceptance; membership inbox notices are im
   agree a retention policy before production rollout.
 - [ ] **M5.4:** Add secure profile avatars using the completed media pipeline;
   garbage-collect unattached/rejected objects under an explicit cleanup policy.
+  Profile photo upload, scan gating, owner display/removal and directory opt-in
+  privacy are implemented with PostgreSQL and global-app tests. General cleanup
+  of abandoned uploads remains outstanding.
 - [ ] **M5.5:** Connect community/group feed/composer/report/moderation pages;
   test ownership, group boundaries, removed content/media URLs and concurrent changes.
   The React feed exposes edit/delete controls only on the member’s own post and now
