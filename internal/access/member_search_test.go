@@ -44,6 +44,11 @@ func TestAdminMemberSearchIsScopedPaginatedAndPrivate(t *testing.T) {
 	if page.Data[0].ID != first || page.Data[0].Email != "roster.member@example.invalid" {
 		t.Fatalf("result %+v", page.Data[0])
 	}
+	var searchAudit int
+	var fields string
+	if err = db.QueryRow(`SELECT count(*),coalesce(max(array_to_string(sensitive_fields,',')),'') FROM member_record_audit_events WHERE actor_id=$1 AND member_id=$2 AND action='search_result'`, actor, first).Scan(&searchAudit, &fields); err != nil || searchAudit != 1 || fields != "email" {
+		t.Fatalf("search audit count=%d fields=%q err=%v", searchAudit, fields, err)
+	}
 	firstPage, err := service.SearchMembers(ctx, actor, "Roster", "", 1)
 	if err != nil || len(firstPage.Data) != 1 || firstPage.NextCursor == "" {
 		t.Fatalf("first page %+v %v", firstPage, err)
@@ -67,6 +72,41 @@ func TestAdminMemberSearchIsScopedPaginatedAndPrivate(t *testing.T) {
 		}
 		if _, err := service.SearchMembers(ctx, id, "roster", "", 20); !errors.Is(err, ErrForbidden) {
 			t.Fatalf("role %s unauthorized: %v", role, err)
+		}
+	}
+}
+
+func TestAdminMemberDetailAuditsSensitiveEmailAndFailsClosed(t *testing.T) {
+	db, service, actor, target := fixture(t)
+	ctx := context.Background()
+	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id=$1`, actor); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role)VALUES($1,'staff')`, actor); err != nil {
+		t.Fatal(err)
+	}
+	member, err := service.MemberDetail(ctx, actor, target)
+	if err != nil || member.ID != target || member.Email == "" {
+		t.Fatalf("member detail %+v %v", member, err)
+	}
+	var action string
+	var fields string
+	if err = db.QueryRow(`SELECT action,array_to_string(sensitive_fields,',') FROM member_record_audit_events WHERE actor_id=$1 AND member_id=$2`, actor, target).Scan(&action, &fields); err != nil || action != "detail_view" || fields != "email" {
+		t.Fatalf("member audit action=%q fields=%v err=%v", action, fields, err)
+	}
+	if _, err = db.Exec(`ALTER TABLE member_record_audit_events ADD CONSTRAINT test_reject_member_detail CHECK(action<>'detail_view') NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.MemberDetail(ctx, actor, target); err == nil {
+		t.Fatal("private member detail returned without a durable audit")
+	}
+	for _, role := range []string{"content_editor", "access_administrator", "finance_officer"} {
+		unauthorized := account(t, db)
+		if _, err = db.Exec(`INSERT INTO account_roles(account_id,role)VALUES($1,$2)`, unauthorized, role); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = service.MemberDetail(ctx, unauthorized, target); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("role %s read member detail: %v", role, err)
 		}
 	}
 }

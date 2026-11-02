@@ -1118,7 +1118,7 @@
         "tags": ["Member administration"],
         "summary": "Search verified active members",
         "operationId": "SearchAdminMembers",
-        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Search by name or email using at least three characters. Returns basic identity and account join date only. Email and contact fields are private to staff for this endpoint. Results exclude unverified and deletion-requested accounts. Account and IP rate limits apply; responses use Cache-Control: no-store.",
+        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Search by name or email using at least three characters. Returns basic identity and account join date only. Each returned email is recorded as an audited search result; query text is not copied into the audit. Results exclude unverified and deletion-requested accounts. Account and IP rate limits apply; responses use Cache-Control: no-store.",
         "security": [{"bearerAuth": []}],
         "parameters": [
           {"name": "query", "in": "query", "required": true, "schema": {"type": "string", "minLength": 3, "maxLength": 100}},
@@ -1130,6 +1130,25 @@
           "401": {"$ref": "#/components/responses/401"},
           "403": {"$ref": "#/components/responses/403"},
           "422": {"$ref": "#/components/responses/422"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      }
+    },
+    "/api/v1/admin/members/{accountId}": {
+      "get": {
+        "tags": ["Member administration"],
+        "summary": "Read audited member details",
+        "operationId": "GetAdminMember",
+        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Returns basic identity and join date for a verified active member. Email is disclosed only on this explicit detail request and an audit event is written in the same transaction; audit failure prevents disclosure. Password, MFA, sessions, roles and private care/family information are excluded. Responses use Cache-Control: no-store. No query parameters.",
+        "security": [{"bearerAuth": []}],
+        "parameters": [{"name": "accountId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {
+          "200": {"description": "Audited member detail", "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["data"], "properties": {"data": {"$ref": "#/components/schemas/AdminMember"}}}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "404": {"description": "Member does not exist, is unverified, or is disabled", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "413": {"$ref": "#/components/responses/413"},
           "429": {"$ref": "#/components/responses/429"},
           "503": {"$ref": "#/components/responses/503"}
         }

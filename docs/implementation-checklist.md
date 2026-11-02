@@ -256,8 +256,11 @@ with updated consent; broader visitor operations remain open. See [visitor welco
   authorization and sensitive-read/export audit. No public phone/address lookup.
   Initial search slice: `GET /api/v1/admin/members` is now restricted to Super
   Admin, Assistant Pastor, and Staff; it searches verified active accounts and
-  returns only name, email, ID, and join date. Detail views, field-level access,
-  and audited sensitive reads/exports remain open, so M2.3 is not complete.
+  returns only name, email, ID, and join date. `GET
+  /api/v1/admin/members/{accountId}` now gives an explicit, audited detail read;
+  each search result that discloses an email is audited too, and audit failure
+  blocks the response. Family/care fields, richer field-specific authorization,
+  and exports remain open, so M2.3 is not complete.
 - [ ] **M2.4:** Implement private visitor intake and QR entry, duplicate handling,
   New Visitors follow-up list and secure verification/account claiming. Existing
   emails must not be claimed or linked by an unauthenticated form submission.

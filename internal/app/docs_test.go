@@ -172,6 +172,14 @@ func TestAdminMemberSearchOpenAPIContract(t *testing.T) {
 	if len(fields) != 5 || fields["email"] == nil || fields["joinedAt"] == nil || fields["password"] != nil || fields["mfaEnabled"] != nil || fields["roles"] != nil {
 		t.Fatal("admin member schema exposes unapproved account fields")
 	}
+	detail, ok := paths["/api/v1/admin/members/{accountId}"].(map[string]any)
+	if !ok {
+		t.Fatal("audited member detail contract missing")
+	}
+	get, ok := detail["get"].(map[string]any)
+	if !ok || len(get["security"].([]any)) != 1 || get["responses"].(map[string]any)["404"] == nil {
+		t.Fatal("member detail must require authentication and document missing members")
+	}
 }
 
 func TestVisitorAssignmentOpenAPIContract(t *testing.T) {

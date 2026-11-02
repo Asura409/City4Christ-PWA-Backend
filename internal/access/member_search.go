@@ -41,7 +41,7 @@ func (s *Service) SearchMembers(ctx context.Context, actor, query, cursor string
 	if cursor == "" {
 		cursor = "00000000-0000-0000-0000-000000000000"
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name,a.email,a.created_at FROM accounts a WHERE a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL AND a.id>$1::uuid AND (a.email ILIKE $2 ESCAPE '\' OR concat_ws(' ',a.first_name,a.last_name) ILIKE $2 ESCAPE '\') ORDER BY a.id LIMIT $3`, cursor, pattern, limit+1)
+	rows, err := tx.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name,a.email,a.created_at FROM accounts a WHERE a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL AND a.id>$1::uuid AND (a.email ILIKE $2 ESCAPE '\' OR concat_ws(' ',a.first_name,a.last_name) ILIKE $2 ESCAPE '\') ORDER BY a.id LIMIT $3 FOR SHARE OF a`, cursor, pattern, limit+1)
 	if err != nil {
 		return page, err
 	}
@@ -59,6 +59,17 @@ func (s *Service) SearchMembers(ctx context.Context, actor, query, cursor string
 	if len(page.Data) > limit {
 		page.Data = page.Data[:limit]
 		page.NextCursor = page.Data[len(page.Data)-1].ID
+	}
+	if err = rows.Close(); err != nil {
+		return MemberPage{}, err
+	}
+	for _, member := range page.Data {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO member_record_audit_events(actor_id,member_id,action,sensitive_fields)VALUES($1,$2,'search_result',ARRAY['email']::text[])`, actor, member.ID); err != nil {
+			return MemberPage{}, err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return MemberPage{}, err
 	}
 	return page, nil
 }
