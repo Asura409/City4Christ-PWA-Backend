@@ -3,6 +3,7 @@ package profiles
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 )
 
 var ErrInvalidDirectory = errors.New("invalid directory options")
@@ -24,9 +27,11 @@ func invalidDirectory(field, message string) error {
 
 // DirectoryMember intentionally excludes private account/security fields.
 type DirectoryMember struct {
-	ID        string `json:"id"`
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
+	ID        string            `json:"id"`
+	FirstName string            `json:"firstName"`
+	LastName  string            `json:"lastName"`
+	Avatar    *media.Attachment `json:"avatar,omitempty"`
+	avatar    *media.Attachment
 }
 type DirectoryOptions struct {
 	Limit         int
@@ -76,6 +81,18 @@ func (s *Service) Directory(ctx context.Context, actor string, o DirectoryOption
 	if err != nil {
 		return DirectoryPage{}, err
 	}
+	if s.signer != nil {
+		for i := range items {
+			if items[i].avatar == nil {
+				continue
+			}
+			signed, err := media.SignAttachments(ctx, s.signer, []media.Attachment{*items[i].avatar})
+			if err != nil {
+				return DirectoryPage{}, err
+			}
+			items[i].Avatar = &signed[0]
+		}
+	}
 	page := DirectoryPage{Items: items}
 	if len(items) > o.Limit {
 		page.Items = items[:o.Limit]
@@ -95,11 +112,12 @@ func (r *Repository) ListDirectory(ctx context.Context, o DirectoryOptions, afte
 	if after != nil {
 		id = &after.ID
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id,first_name,last_name FROM accounts
- WHERE directory_visible AND email_verified_at IS NOT NULL AND deletion_requested_at IS NULL
- AND ($1='' OR strpos(lower(first_name||' '||last_name),lower($1))>0)
- AND ($2::uuid IS NULL OR id>$2::uuid)
- ORDER BY id ASC LIMIT $3`, o.Query, id, o.Limit+1)
+	rows, err := r.db.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name,u.id::text,u.actual_content_type,u.actual_size,u.available_object_key FROM accounts a
+ LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'
+ WHERE a.directory_visible AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL
+ AND ($1='' OR strpos(lower(a.first_name||' '||a.last_name),lower($1))>0)
+ AND ($2::uuid IS NULL OR a.id>$2::uuid)
+ ORDER BY a.id ASC LIMIT $3`, o.Query, id, o.Limit+1)
 	if err != nil {
 		return nil, err
 	}
@@ -107,8 +125,13 @@ func (r *Repository) ListDirectory(ctx context.Context, o DirectoryOptions, afte
 	items := []DirectoryMember{}
 	for rows.Next() {
 		var member DirectoryMember
-		if err = rows.Scan(&member.ID, &member.FirstName, &member.LastName); err != nil {
+		var avatarID, contentType, objectKey sql.NullString
+		var size sql.NullInt64
+		if err = rows.Scan(&member.ID, &member.FirstName, &member.LastName, &avatarID, &contentType, &size, &objectKey); err != nil {
 			return nil, err
+		}
+		if avatarID.Valid && contentType.Valid && size.Valid && objectKey.Valid {
+			member.avatar = &media.Attachment{ID: avatarID.String, ContentType: contentType.String, Size: size.Int64, ObjectKey: objectKey.String}
 		}
 		items = append(items, member)
 	}

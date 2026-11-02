@@ -99,6 +99,34 @@ func TestMediaServiceSupportsScannedMessageAttachmentUploads(t *testing.T) {
 	}
 }
 
+func TestMediaServiceUsesRestrictedProfilePhotoPolicy(t *testing.T) {
+	db := mediaTestDB(t)
+	owner := mediaTestAccount(t, db)
+	storage := &fakeUploadStorage{request: SignedRequest{URL: "https://r2.example.invalid/upload"}}
+	service := NewService(NewRepository(db), storage, time.Now)
+	for _, contentType := range []string{"image/jpeg", "image/png", "image/webp"} {
+		result, err := service.Presign(context.Background(), owner, PresignInput{Purpose: UploadPurpose("profile_photo"), ContentType: contentType, Size: 5 << 20})
+		if err != nil {
+			t.Fatalf("profile photo %s: %v", contentType, err)
+		}
+		if result.UploadID == "" {
+			t.Fatalf("profile photo %s returned no upload ID", contentType)
+		}
+		if got, want := storage.keys[len(storage.keys)-1][:len("profiles/"+owner+"/")], "profiles/"+owner+"/"; got != want {
+			t.Fatalf("profile photo object key prefix = %q, want %q", got, want)
+		}
+	}
+	for _, input := range []PresignInput{
+		{Purpose: UploadPurpose("profile_photo"), ContentType: "image/gif", Size: 128},
+		{Purpose: UploadPurpose("profile_photo"), ContentType: "image/png", Size: (5 << 20) + 1},
+		{Purpose: UploadPurpose("profile_photo"), ContentType: "audio/mpeg", Size: 128},
+	} {
+		if _, err := service.Presign(context.Background(), owner, input); !errors.Is(err, ErrInvalidMediaUpload) {
+			t.Errorf("profile photo policy accepted %#v: %v", input, err)
+		}
+	}
+}
+
 func TestMediaServiceCompletionChecksR2MetadataAndQueuesOnce(t *testing.T) {
 	db := mediaTestDB(t)
 	ctx := context.Background()

@@ -14,6 +14,7 @@ const (
 	uploadURLTTL               = 5 * time.Minute
 	uploadReservationTTL       = 15 * time.Minute
 	maxImageSize         int64 = 20 << 20
+	maxProfilePhotoSize  int64 = 5 << 20
 	maxAudioSize         int64 = 50 << 20
 	maxVideoSize         int64 = 100 << 20
 )
@@ -160,6 +161,12 @@ func mediaPolicy(purpose UploadPurpose, rawContentType string) (contentType, ext
 		folder = "sermons"
 	case PurposeMessageAttachment:
 		folder = "messages"
+	case PurposeProfilePhoto:
+		if contentType != "image/jpeg" && contentType != "image/png" && contentType != "image/webp" {
+			return "", "", 0, "", false
+		}
+		maxSize = maxProfilePhotoSize
+		folder = "profiles"
 	default:
 		return "", "", 0, "", false
 	}

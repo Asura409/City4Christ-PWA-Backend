@@ -1,6 +1,6 @@
 # Member profiles and privacy: first slice
 
-Members can read their own account/profile and edit first name, last name and their directory visibility preference. The caller is always taken from a verified active Bearer session. There is no account-ID parameter on the edit route and no public profile/directory endpoint in this slice.
+Members can read their own account/profile, edit first name and last name, choose whether they appear in the member directory, and manage one profile photo. The caller is always taken from a verified active Bearer session. There is no account-ID parameter on profile edits.
 
 ## API
 
@@ -8,6 +8,10 @@ Members can read their own account/profile and edit first name, last name and th
 | --- | --- | --- |
 | GET | /api/v1/me | Existing own-account fields plus directoryVisible |
 | PATCH | /api/v1/me | Update only firstName, lastName and/or directoryVisible |
+| PUT | /api/v1/me/avatar | Associate an owned, clean `profile_photo` upload with the current account |
+| DELETE | /api/v1/me/avatar | Remove the current account's photo; safe to repeat |
+
+Upload photos using the existing media flow: reserve with purpose `profile_photo`, upload the JPEG, PNG or WebP file to its short-lived signed URL, complete the upload and wait for scan status `available`. Profile photos are limited to 5 MiB. Send `{"uploadId":"..."}` to the PUT route. The server checks ownership, purpose, scan status and active account; raw object keys are never accepted. The profile response contains an optional short-lived signed `avatar` attachment for its owner. Replacing or removing a photo queues its old object for cleanup once no feature references it.
 
 Example PATCH body:
 
@@ -25,7 +29,7 @@ PATCH requires application/json, an allowed Origin and an active verified Bearer
 
 Migration 00010 adds directory_visible NOT NULL DEFAULT false. Existing and new members start hidden. It preserves existing names, credentials, verification and role assignments; no account is seeded or reset. Tests rehearse upgrading an existing version-9 account, repeat the migration and verify its editorial role survives. A privacy-only edit preserves legacy name formatting.
 
-Opting in currently stores a preference only. The future member directory must filter out hidden members server-side, show only approved fields and keep email addresses private by default. Ministries, directory search, biography/avatar uploads, recovery, email changes and account deletion are later slices.
+The member directory filters out hidden members server-side, shows only names and an optional short-lived signed photo, and keeps email addresses private. A member's photo is returned in directory results only while that member has opted in; the owner can still see it on their own profile when hidden. Ministries, biographies, recovery and email changes are separate slices.
 
 ## TDD and verification
 

@@ -1,6 +1,6 @@
 # Media storage setup
 
-Cloudflare R2 is the selected object store for post, sermon, and message attachments. The
+Cloudflare R2 is the selected object store for post, sermon, message attachments, and profile photos. The
 backend has a tested R2 adapter, PostgreSQL upload/scan-job repository,
 authenticated upload reservation/completion/status routes, post and sermon
 attachment associations, short-lived signed read URLs, and a standalone
@@ -119,6 +119,13 @@ must not be exposed by changing the bucket to public.
   URLs only to current conversation participants. Message deletion and group
   moderation detach files and queue clean objects for durable asynchronous R2
   deletion once no direct or group message still references them.
+- Use purpose `profile_photo` for JPEG, PNG or WebP profile images up to 5 MiB.
+  After the scan reports `available`, send its upload ID to `PUT
+  /api/v1/me/avatar`. Only the upload owner can associate it. The profile owner
+  receives a short-lived signed URL; directory results include it only when that
+  member opted into directory visibility. `DELETE /api/v1/me/avatar` removes it.
+  Replacements and removals use the durable cleanup queue after checking that no
+  message or account still references the object.
 - `POST /api/v1/posts` accepts optional `attachmentIds` after their uploads reach
   `available`; `GET /api/v1/posts` returns short-lived signed URLs.
 - Sermon draft creation and update accept `attachmentIds`. Public sermon list and

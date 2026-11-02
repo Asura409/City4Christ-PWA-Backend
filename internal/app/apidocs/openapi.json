@@ -622,6 +622,39 @@
         }
       }
     },
+    "/api/v1/me/avatar": {
+      "put": {
+        "tags": ["Profiles"],
+        "operationId": "SetOwnProfilePhoto",
+        "summary": "Set own profile photo",
+        "description": "Requires an active verified Bearer session and allowed Origin. Upload a JPEG, PNG or WebP image with purpose profile_photo (maximum 5 MiB), complete the upload, wait until its scan status is available, then associate its uploadId here. Only the upload owner can associate it. Replacing a photo queues the old object for cleanup. The signed photo is shown in the directory only when directoryVisible is true.",
+        "security": [{"bearerAuth": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProfilePhotoInput"}}}},
+        "responses": {
+          "200": {"description": "Profile photo set", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Member"}}}},
+          "400": {"$ref": "#/components/responses/400"},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "422": {"description": "Upload is not an available owned profile photo"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      },
+      "delete": {
+        "tags": ["Profiles"],
+        "operationId": "RemoveOwnProfilePhoto",
+        "summary": "Remove own profile photo",
+        "description": "Requires an active verified Bearer session and allowed Origin. Removal is idempotent and queues the old object for cleanup when it is no longer referenced.",
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {"description": "Profile photo removed", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Member"}}}},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      }
+    },
     "/api/v1/auth/google/start": {
       "get": {
         "tags": [
@@ -11233,6 +11266,10 @@
               "directoryVisible": {
                 "type": "boolean",
                 "description": "Directory listing opt-in. Defaults to false for existing and new accounts."
+              },
+              "avatar": {
+                "$ref": "#/components/schemas/MediaAttachment",
+                "description": "Optional scanned profile photo with a short-lived signed URL; present only to its owner here."
               }
             },
             "required": [
@@ -11728,6 +11765,12 @@
         },
         "description": "At least one non-null supported field required. Null means omitted. Names are trimmed and reject control characters. No email, password, verification or role changes."
       },
+      "ProfilePhotoInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["uploadId"],
+        "properties": {"uploadId": {"type": "string", "format": "uuid"}}
+      },
       "DirectoryMember": {
         "type": "object",
         "additionalProperties": false,
@@ -11746,6 +11789,10 @@
           },
           "lastName": {
             "type": "string"
+          },
+          "avatar": {
+            "$ref": "#/components/schemas/MediaAttachment",
+            "description": "Optional scanned photo, present only for directory-visible members; signed URL expires shortly."
           }
         }
       },
@@ -13564,10 +13611,12 @@
         "properties": {
           "purpose": {
             "type": "string",
+            "description": "profile_photo accepts only image/jpeg, image/png or image/webp and is limited to 5 MiB.",
             "enum": [
               "post_attachment",
               "sermon_attachment",
-              "message_attachment"
+              "message_attachment",
+              "profile_photo"
             ]
           },
           "contentType": {
@@ -13590,7 +13639,7 @@
             "type": "integer",
             "format": "int64",
             "minimum": 1,
-            "description": "Maximum: image 20 MiB, audio 50 MiB, video 100 MiB."
+            "description": "Maximum: profile_photo 5 MiB; other images 20 MiB, audio 50 MiB, video 100 MiB. Profile photos accept only JPEG, PNG and WebP."
           }
         }
       },
@@ -13670,7 +13719,8 @@
                 "enum": [
                   "post_attachment",
                   "sermon_attachment",
-                  "message_attachment"
+                  "message_attachment",
+                  "profile_photo"
                 ]
               },
               "status": {

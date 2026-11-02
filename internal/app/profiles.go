@@ -17,6 +17,8 @@ func profileRoutes(mux *http.ServeMux, service *profiles.Service, sessions *auth
 			writeError(w, 422, "validation_failed", "Check the indicated profile fields.", validation.Fields)
 		case errors.Is(err, profiles.ErrNotFound):
 			writeError(w, 401, "invalid_session", "Sign in again.", nil)
+		case errors.Is(err, profiles.ErrInvalidAvatarUpload):
+			writeError(w, 422, "invalid_avatar_upload", "Choose your own available, safety-checked profile photo upload.", nil)
 		default:
 			writeError(w, 503, "unavailable", "Service unavailable.", nil)
 		}
@@ -62,6 +64,44 @@ func profileRoutes(mux *http.ServeMux, service *profiles.Service, sessions *auth
 			return
 		}
 		p, err := service.Update(r.Context(), actor, input)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": p})
+	})
+	mux.HandleFunc("PUT /api/v1/me/avatar", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeError(w, 400, "invalid_parameters", "Do not use query parameters for profile photos.", nil)
+			return
+		}
+		input, ok := decodeJSON[struct {
+			UploadID string `json:"uploadId"`
+		}](w, r)
+		if !ok {
+			return
+		}
+		p, err := service.SetAvatar(r.Context(), actor, input.UploadID)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": p})
+	})
+	mux.HandleFunc("DELETE /api/v1/me/avatar", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			writeError(w, 400, "invalid_parameters", "Do not use query parameters for profile photos.", nil)
+			return
+		}
+		p, err := service.RemoveAvatar(r.Context(), actor)
 		if err != nil {
 			fail(w, err)
 			return
