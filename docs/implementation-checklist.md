@@ -259,8 +259,9 @@ with updated consent; broader visitor operations remain open. See [visitor welco
   returns only name, email, ID, and join date. `GET
   /api/v1/admin/members/{accountId}` now gives an explicit, audited detail read;
   each search result that discloses an email is audited too, and audit failure
-  blocks the response. Family/care fields, richer field-specific authorization,
-  and exports remain open, so M2.3 is not complete.
+  blocks the response. Super Admins can inspect a paginated, value-redacted
+  member email-access history. Family/care fields, richer field-specific
+  authorization, and exports remain open, so M2.3 is not complete.
 - [ ] **M2.4:** Implement private visitor intake and QR entry, duplicate handling,
   New Visitors follow-up list and secure verification/account claiming. Existing
   emails must not be claimed or linked by an unauthenticated form submission.

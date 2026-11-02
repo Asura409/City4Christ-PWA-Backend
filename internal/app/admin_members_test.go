@@ -90,3 +90,54 @@ func TestAdminMemberDetailThroughGlobalAppIsAuditedAndStaffOnly(t *testing.T) {
 		t.Fatalf("unverified member disclosed %d %s", w.Code, w.Body.String())
 	}
 }
+
+func TestSuperAdminCanReviewMemberRecordAccessAudit(t *testing.T) {
+	f := newChurchHTTPFixture(t)
+	superID, super := f.account(t, "super_administrator", false)
+	staffID, staff := f.account(t, "staff", false)
+	target, _ := f.account(t, "", false)
+
+	if w := f.request("GET", "/api/v1/admin/members/"+target, staff, ""); w.Code != 200 {
+		t.Fatalf("create audited detail read: %d %s", w.Code, w.Body.String())
+	}
+	path := "/api/v1/admin/members/" + target + "/access-audit"
+	if w := f.request("GET", path, "", ""); w.Code != 401 {
+		t.Fatalf("anonymous audit access: %d %s", w.Code, w.Body.String())
+	}
+	if w := f.request("GET", path, staff, ""); w.Code != 403 {
+		t.Fatalf("staff audit access: %d %s", w.Code, w.Body.String())
+	}
+	for _, suffix := range []string{"?limit=101", "?cursor=0", "?cursor=10&other=true"} {
+		if w := f.request("GET", path+suffix, super, ""); w.Code != 422 {
+			t.Fatalf("invalid audit options %s: %d %s", suffix, w.Code, w.Body.String())
+		}
+	}
+	w := f.request("GET", path+"?limit=10", super, "")
+	if w.Code != 200 || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("super admin audit access: %d %s", w.Code, w.Body.String())
+	}
+	var payload struct {
+		Data []struct {
+			ActorID         string   `json:"actorId"`
+			Action          string   `json:"action"`
+			SensitiveFields []string `json:"sensitiveFields"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &payload); err != nil || len(payload.Data) != 1 {
+		t.Fatalf("audit response %s: %v", w.Body.String(), err)
+	}
+	entry := payload.Data[0]
+	if entry.ActorID != staffID || entry.Action != "detail_view" || len(entry.SensitiveFields) != 1 || entry.SensitiveFields[0] != "email" {
+		t.Fatalf("wrong audit entry: %#v", entry)
+	}
+	if strings.Contains(strings.ToLower(w.Body.String()), "password") || strings.Contains(strings.ToLower(w.Body.String()), "token") {
+		t.Fatalf("sensitive account data leaked: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "@example.invalid") {
+		t.Fatalf("email value leaked into access history: %s", w.Body.String())
+	}
+	var views int
+	if err := f.db.QueryRow(`SELECT count(*) FROM member_record_audit_events WHERE actor_id=$1 AND member_id=$2 AND action='audit_view'`, superID, target).Scan(&views); err != nil || views != 1 {
+		t.Fatalf("audit inspection not recorded: count=%d err=%v", views, err)
+	}
+}

@@ -180,6 +180,14 @@ func TestAdminMemberSearchOpenAPIContract(t *testing.T) {
 	if !ok || len(get["security"].([]any)) != 1 || get["responses"].(map[string]any)["404"] == nil {
 		t.Fatal("member detail must require authentication and document missing members")
 	}
+	audit, ok := paths["/api/v1/admin/members/{accountId}/access-audit"].(map[string]any)
+	if !ok {
+		t.Fatal("member access audit contract missing")
+	}
+	auditGet, ok := audit["get"].(map[string]any)
+	if !ok || len(auditGet["security"].([]any)) != 1 || auditGet["responses"].(map[string]any)["403"] == nil {
+		t.Fatal("member access audit must require authentication and document authorization")
+	}
 }
 
 func TestVisitorAssignmentOpenAPIContract(t *testing.T) {
