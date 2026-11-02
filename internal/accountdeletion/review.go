@@ -4,9 +4,71 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 )
+
+func (s *Service) Restore(ctx context.Context, actor, id string, version int, reason string, guard Guard) (Request, error) {
+	if !validID(actor) || !validID(id) || version < 1 {
+		return Request{}, ErrInvalid
+	}
+	reason = strings.TrimSpace(reason)
+	if !utf8.ValidString(reason) || utf8.RuneCountInString(reason) < 3 || utf8.RuneCountInString(reason) > 500 {
+		return Request{}, ErrInvalid
+	}
+	for _, r := range reason {
+		if unicode.IsControl(r) {
+			return Request{}, ErrInvalid
+		}
+	}
+	tx, e := s.db.BeginTx(ctx, nil)
+	if e != nil {
+		return Request{}, e
+	}
+	defer tx.Rollback()
+	if guard == nil {
+		return Request{}, access.ErrForbidden
+	}
+	if e = access.CheckTx(ctx, tx, actor, "accounts.deletion.review", ""); e != nil {
+		return Request{}, e
+	}
+	r, e := scanRequest(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM account_deletion_requests d WHERE d.id=$1 FOR UPDATE`, id))
+	if errors.Is(e, sql.ErrNoRows) {
+		return r, ErrNotFound
+	}
+	if e != nil {
+		return r, e
+	}
+	if e = guard(ctx, tx); e != nil {
+		return Request{}, e
+	}
+	if r.Version != version || (r.Status != "requested" && r.Status != "reviewing") {
+		return Request{}, ErrConflict
+	}
+	now := s.now().UTC()
+	result, e := tx.ExecContext(ctx, `UPDATE accounts SET deletion_requested_at=NULL WHERE id=$1 AND deletion_requested_at IS NOT NULL`, r.AccountID)
+	if e != nil {
+		return Request{}, e
+	}
+	if count, e := result.RowsAffected(); e != nil {
+		return Request{}, e
+	} else if count != 1 {
+		return Request{}, ErrConflict
+	}
+	r.Status = "restored"
+	r.Version++
+	r.UpdatedAt = now
+	if _, e = tx.ExecContext(ctx, `UPDATE account_deletion_requests SET status=$2,version=$3,updated_at=$4 WHERE id=$1`, id, r.Status, r.Version, r.UpdatedAt); e != nil {
+		return Request{}, e
+	}
+	if _, e = tx.ExecContext(ctx, `INSERT INTO account_deletion_audit_events(request_id,actor_id,action,status,version,occurred_at,reason)VALUES($1,$2,'restored',$3,$4,$5,$6)`, r.ID, actor, r.Status, r.Version, now, reason); e != nil {
+		return Request{}, e
+	}
+	return r, tx.Commit()
+}
 
 func permit(ctx context.Context, tx *sql.Tx, actor string, guard Guard) error {
 	if guard == nil {
@@ -117,7 +179,7 @@ func (s *Service) Review(ctx context.Context, actor, id string, version int, gua
 	if e = guard(ctx, tx); e != nil {
 		return Request{}, e
 	}
-	if r.Version != version {
+	if r.Version != version || r.Status == "restored" {
 		return Request{}, ErrConflict
 	}
 	if r.Status == "reviewing" {

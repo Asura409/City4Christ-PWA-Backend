@@ -268,3 +268,72 @@ func TestReviewGuardRunsAfterRequestLockAndReadAuditsFailClosed(t *testing.T) {
 		t.Fatal("nil sensitive guard accepted", e)
 	}
 }
+
+func TestRestoreReenablesSignInWithoutRestoringDirectoryOrSessions(t *testing.T) {
+	db, s, id := fixture(t)
+	ctx := context.Background()
+	reviewer := admin(t, db)
+	if _, e := db.Exec(`INSERT INTO auth_sessions(id,account_id,expires_at)VALUES(gen_random_uuid(),$1,now()+interval '1 day')`, id); e != nil {
+		t.Fatal(e)
+	}
+	r, e := s.Request(ctx, id, true, PolicyVersion, guard)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, e = s.Review(ctx, reviewer, r.ID, r.Version, guard)
+	if e != nil {
+		t.Fatal(e)
+	}
+	restored, e := s.Restore(ctx, reviewer, r.ID, r.Version, "Member confirmed the request was submitted by mistake", guard)
+	if e != nil || restored.Status != "restored" || restored.Version != r.Version+1 {
+		t.Fatalf("restore %+v %v", restored, e)
+	}
+	var enabled, hidden, revoked bool
+	if e = db.QueryRow(`SELECT deletion_requested_at IS NULL,NOT directory_visible,NOT EXISTS(SELECT 1 FROM auth_sessions WHERE account_id=$1 AND revoked_at IS NULL)FROM accounts WHERE id=$1`, id).Scan(&enabled, &hidden, &revoked); e != nil || !enabled || !hidden || !revoked {
+		t.Fatalf("restore state enabled=%v hidden=%v revoked=%v err=%v", enabled, hidden, revoked, e)
+	}
+	status, e := s.Status(ctx, id)
+	if e != nil || status.Requested || status.Request == nil || status.Request.Status != "restored" {
+		t.Fatalf("restored status %+v %v", status, e)
+	}
+	newRequest, e := s.Request(ctx, id, true, PolicyVersion, guard)
+	if e != nil || newRequest.ID == r.ID {
+		t.Fatalf("new deletion request after restoration: %v", e)
+	}
+	var newestID string
+	if e = db.QueryRow(`SELECT id FROM account_deletion_requests WHERE account_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1`, id).Scan(&newestID); e != nil || newestID != newRequest.ID {
+		t.Fatalf("newest deletion request %s want %s: %v", newestID, newRequest.ID, e)
+	}
+	var reason string
+	if e = db.QueryRow(`SELECT reason FROM account_deletion_audit_events WHERE request_id=$1 AND action='restored'`, r.ID).Scan(&reason); e != nil || reason != "Member confirmed the request was submitted by mistake" {
+		t.Fatalf("restoration reason %q %v", reason, e)
+	}
+}
+
+func TestRestoreRejectsBadReasonStaleVersionAndFailedAuditAtomically(t *testing.T) {
+	db, s, id := fixture(t)
+	ctx := context.Background()
+	reviewer := admin(t, db)
+	r, e := s.Request(ctx, id, true, PolicyVersion, guard)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, reason := range []string{"", "no", strings.Repeat("a", 501)} {
+		if _, e = s.Restore(ctx, reviewer, r.ID, r.Version, reason, guard); !errors.Is(e, ErrInvalid) {
+			t.Fatalf("accepted invalid reason %q: %v", reason, e)
+		}
+	}
+	if _, e = s.Restore(ctx, reviewer, r.ID, r.Version+1, "Reviewed and approved", guard); !errors.Is(e, ErrConflict) {
+		t.Fatalf("accepted stale version: %v", e)
+	}
+	if _, e = db.Exec(`ALTER TABLE account_deletion_audit_events ADD CONSTRAINT test_reject_restore CHECK(action<>'restored')`); e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Restore(ctx, reviewer, r.ID, r.Version, "Reviewed and approved", guard); e == nil {
+		t.Fatal("restoration succeeded without its audit")
+	}
+	var disabled bool
+	if e = db.QueryRow(`SELECT deletion_requested_at IS NOT NULL FROM accounts WHERE id=$1`, id).Scan(&disabled); e != nil || !disabled {
+		t.Fatalf("failed restoration changed account: disabled=%v err=%v", disabled, e)
+	}
+}

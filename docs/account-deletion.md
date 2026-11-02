@@ -4,7 +4,8 @@ A verified member can request account deletion from their own Profile. This is a
 review request: it immediately disables sign-in, revokes every session and hides
 the member from the directory. It does **not** permanently erase the account,
 shared posts, messages, bookings or audit history. The email address remains
-reserved. There is no automatic reactivation, rejection, completion or purge flow.
+reserved. A Super Admin can restore access after review; permanent erasure and
+automatic deletion remain out of scope.
 No permanent-erasure deadline or new retention period is promised by this slice.
 
 The server provides the exact notice and policy version
@@ -64,6 +65,7 @@ takes effect on the next operation within the existing session.
 | GET | `/admin/account-deletion-requests` | Names and workflow metadata; no email |
 | GET | `/admin/account-deletion-requests/{requestId}` | Audited private detail, including email |
 | PATCH | `/admin/account-deletion-requests/{requestId}` | Mark a request as being reviewed |
+| POST | `/admin/account-deletion-requests/{requestId}/restore` | Restore sign-in after review, with an audited reason |
 
 List parameters are `status=requested|reviewing`, `limit=1..100` (default 20) and a
 UUID `cursor`. Default status is `requested`. Responses contain a `data` array and
@@ -78,9 +80,17 @@ identifiers, action, status, version and time, without copied contact informatio
 
 PATCH requires the current version and returns the updated request with incremented
 version. A stale version returns `409 version_conflict`; reload before making a
-new decision. The only statuses are `requested` and `reviewing`. Reviewing does not
-reactivate an account or claim that its data was erased. These review operations
-permit thirty attempts per account and 120 per IP per minute.
+new decision. The active statuses are `requested` and `reviewing`; a restored
+request becomes terminal status `restored`. Reviewing does not
+reactivate an account or claim that its data was erased. Restore also requires the
+current version and a 3–500 character reason. It clears the account deletion hold
+and marks the request `restored` in one transaction with its audit event. Sign-in
+can resume, but previous sessions remain revoked and directory visibility remains
+off. The member must sign in again and can separately opt back into the directory.
+Past shared content and role assignments remain; existing roles become effective
+again after restoration, subject to fresh sign-in and MFA checks. A later deletion
+request creates a new workflow record. These review operations permit thirty
+attempts per account and 120 per IP per minute.
 
 ## Errors and release
 
@@ -94,10 +104,13 @@ permit thirty attempts per account and 120 per IP per minute.
 - `429`: account/IP rate limit; `503`: required dependency unavailable.
 
 Migration `00047_account_deletion_requests.sql` is additive. It does not disable
-existing accounts, seed requests, purge data or reset staging. Apply migration 47 before installing or starting updated API or worker binaries:
+existing accounts, seed requests, purge data or reset staging. Apply migrations
+through 00055 before installing or starting updated API or worker binaries:
 their eligibility checks reference the new account column. Release the API and
 coordinate a separately authorized worker update so authentication and delivery
-consistently enforce the active-account policy. Request transactions remove queued
+consistently enforce the active-account policy. Migration
+`00055_account_deletion_restore.sql` adds audited restoration and permits a new
+request after a prior request is restored. Request transactions remove queued
 OTP/recovery mail even before the worker update, but a provider call already in
 flight cannot be recalled. No worker is upgraded automatically. No new provider
 or secret is required. Configure backup,

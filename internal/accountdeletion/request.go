@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 )
@@ -22,14 +23,14 @@ func (s *Service) Status(ctx context.Context, actor string) (Status, error) {
 	if !verified {
 		return out, access.ErrForbidden
 	}
-	r, e := scanRequest(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM account_deletion_requests d WHERE account_id=$1`, actor))
+	r, e := scanRequest(s.db.QueryRowContext(ctx, `SELECT `+columns+` FROM account_deletion_requests d WHERE account_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1`, actor))
 	if errors.Is(e, sql.ErrNoRows) {
 		return out, nil
 	}
 	if e != nil {
 		return out, e
 	}
-	out.Requested = true
+	out.Requested = r.Status == "requested" || r.Status == "reviewing"
 	out.Request = &r
 	return out, nil
 }
@@ -61,7 +62,7 @@ func (s *Service) Request(ctx context.Context, actor string, confirm bool, polic
 	if e = guard(ctx, tx); e != nil {
 		return Request{}, e
 	}
-	existing, e := scanRequest(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM account_deletion_requests d WHERE account_id=$1`, actor))
+	existing, e := scanRequest(tx.QueryRowContext(ctx, `SELECT `+columns+` FROM account_deletion_requests d WHERE account_id=$1 AND status IN('requested','reviewing') ORDER BY created_at DESC,id DESC LIMIT 1`, actor))
 	if e == nil {
 		return existing, tx.Commit()
 	}
@@ -84,12 +85,16 @@ func (s *Service) Request(ctx context.Context, actor string, confirm bool, polic
 	if commitments {
 		return Request{}, ErrActiveCommitments
 	}
-	r, e := scanRequest(tx.QueryRowContext(ctx, `INSERT INTO account_deletion_requests AS d(account_id,policy_version,consent,created_at,updated_at)VALUES($1,$2,true,$3,$3)RETURNING `+columns, actor, PolicyVersion, now))
+	var requestAt time.Time
+	if e = tx.QueryRowContext(ctx, `SELECT GREATEST($2::timestamptz,COALESCE((SELECT max(created_at)+interval '1 microsecond' FROM account_deletion_requests WHERE account_id=$1),$2::timestamptz))`, actor, now).Scan(&requestAt); e != nil {
+		return Request{}, e
+	}
+	r, e := scanRequest(tx.QueryRowContext(ctx, `INSERT INTO account_deletion_requests AS d(account_id,policy_version,consent,created_at,updated_at)VALUES($1,$2,true,$3,$3)RETURNING `+columns, actor, PolicyVersion, requestAt))
 	if e != nil {
 		return Request{}, e
 	}
 	for _, query := range []string{`UPDATE accounts SET deletion_requested_at=$2,directory_visible=false WHERE id=$1`, `UPDATE auth_sessions SET revoked_at=COALESCE(revoked_at,$2)WHERE account_id=$1`, `UPDATE password_recoveries SET consumed_at=$2,token_digest=NULL WHERE account_id=$1`, `UPDATE email_verifications SET consumed_at=$2,code_digest=NULL WHERE account_id=$1`} {
-		if _, e = tx.ExecContext(ctx, query, actor, now); e != nil {
+		if _, e = tx.ExecContext(ctx, query, actor, requestAt); e != nil {
 			return Request{}, e
 		}
 	}

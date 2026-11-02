@@ -16,6 +16,7 @@ func TestAccountDeletionAnonymousRoutes(t *testing.T) {
 	for _, tc := range []struct{ method, path string }{
 		{"GET", "/api/v1/me/deletion-request"}, {"DELETE", "/api/v1/me"},
 		{"GET", "/api/v1/admin/account-deletion-requests"},
+		{"POST", "/api/v1/admin/account-deletion-requests/11111111-1111-4111-8111-111111111111/restore"},
 	} {
 		if w := f.request(tc.method, tc.path, "", deletionBody); w.Code != 401 {
 			t.Fatalf("missing auth boundary %s %s: %d %s", tc.method, tc.path, w.Code, w.Body.String())
@@ -89,11 +90,53 @@ func TestAccountDeletionRequestAndReviewThroughGlobalApp(t *testing.T) {
 	if w = f.request("PATCH", path, reviewer, `{"version":2,"status":"completed"}`); w.Code != 422 {
 		t.Fatal("fake deletion completion", w.Code)
 	}
+	if w = f.request("POST", path+"/restore", reviewer, `{"version":2,"reason":"Member confirmed request was accidental"}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"status":"restored"`) || !strings.Contains(w.Body.String(), `"version":3`) {
+		t.Fatalf("restore %d %s", w.Code, w.Body.String())
+	}
+	if w = f.request("POST", path+"/restore", reviewer, `{"version":2,"reason":"Member confirmed request was accidental"}`); w.Code != 409 {
+		t.Fatalf("stale restore %d %s", w.Code, w.Body.String())
+	}
+	var restored, stillHidden, oldSessionRevoked bool
+	if err := f.db.QueryRow(`SELECT deletion_requested_at IS NULL,NOT directory_visible,NOT EXISTS(SELECT 1 FROM auth_sessions WHERE account_id=$1 AND revoked_at IS NULL)FROM accounts WHERE id=$1`, id).Scan(&restored, &stillHidden, &oldSessionRevoked); err != nil || !restored || !stillHidden || !oldSessionRevoked {
+		t.Fatalf("restore state restored=%v hidden=%v revoked=%v err=%v", restored, stillHidden, oldSessionRevoked, err)
+	}
 	if _, err := f.db.Exec("DELETE FROM account_roles WHERE role='super_administrator'"); err != nil {
 		t.Fatal(err)
 	}
 	if w = f.request("GET", path, reviewer, ""); w.Code != 403 {
 		t.Fatal("revoked review allowed", w.Code)
+	}
+}
+
+func TestAccountDeletionRestoreRequiresSuperAdminAndValidReason(t *testing.T) {
+	f := newChurchHTTPFixture(t)
+	_, member := f.account(t, "", true)
+	_, staff := f.account(t, "staff", true)
+	_, reviewer := f.account(t, "super_administrator", true)
+	w := f.request("DELETE", "/api/v1/me", member, deletionBody)
+	if w.Code != 202 {
+		t.Fatalf("request %d %s", w.Code, w.Body.String())
+	}
+	var request struct {
+		Data struct {
+			ID string `json:"id"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &request); err != nil || request.Data.ID == "" {
+		t.Fatalf("request id: %v %s", err, w.Body.String())
+	}
+	path := "/api/v1/admin/account-deletion-requests/" + request.Data.ID + "/restore"
+	for _, tc := range []struct {
+		token, body string
+		want        int
+	}{
+		{staff, `{"version":1,"reason":"Approved after review"}`, 403},
+		{reviewer, `{"version":1,"reason":"no"}`, 422},
+		{reviewer, `{"version":1,"reason":"Approved after review","extra":true}`, 400},
+	} {
+		if result := f.request("POST", path, tc.token, tc.body); result.Code != tc.want {
+			t.Fatalf("restore status=%d want=%d body=%s", result.Code, tc.want, result.Body.String())
+		}
 	}
 }
 func TestAccountDeletionNeedsFreshPrimaryAndEnrolledMFA(t *testing.T) {
