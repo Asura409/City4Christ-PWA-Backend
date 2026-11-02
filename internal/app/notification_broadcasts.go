@@ -33,11 +33,28 @@ func notificationBroadcastRoutes(mux *http.ServeMux, s *notifications.Service, a
 			return
 		}
 		q, err := url.ParseQuery(r.URL.RawQuery)
-		if err != nil || len(q) > 1 || (len(q) > 0 && (len(q["groupId"]) != 1 || q.Get("groupId") == "")) {
+		if err != nil {
 			fail(w, notifications.ErrInvalid)
 			return
 		}
-		items, err := s.Broadcasts(r.Context(), actor, q.Get("groupId"))
+		for key, values := range q {
+			if (key != "groupId" && key != "audience") || len(values) != 1 {
+				fail(w, notifications.ErrInvalid)
+				return
+			}
+		}
+		audience, groupID := q.Get("audience"), q.Get("groupId")
+		if audience == "" {
+			audience = "church"
+			if groupID != "" {
+				audience = "group"
+			}
+		}
+		if (audience == "group") != (groupID != "") {
+			fail(w, notifications.ErrInvalid)
+			return
+		}
+		items, err := s.Broadcasts(r.Context(), actor, audience, groupID)
 		if err != nil {
 			fail(w, err)
 			return

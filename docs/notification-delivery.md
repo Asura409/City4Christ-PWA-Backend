@@ -38,12 +38,18 @@ exports and frontend configuration; store them only in the protected database.
 
 ## Broadcast workflow
 
-- `GET /api/v1/admin/broadcasts[?groupId=<UUID>]`: latest 50 for an authorized audience.
+- `GET /api/v1/admin/broadcasts[?audience=church|staff][&groupId=<UUID>]`: latest 50 for an authorized audience. Use `groupId` alone to list a group audience.
 - `POST /api/v1/admin/broadcasts`: immutable draft `{title, body, audience, groupId?}`.
 - `GET /api/v1/admin/broadcasts/{id}`: review content and current recipient count.
 - `POST /api/v1/admin/broadcasts/{id}/send`: `{ "version": 1, "confirm": true }`.
 
-`audience` is `church` (no group ID) or `group` (required canonical group UUID).
+`audience` is `church` (no group ID), `group` (required canonical group UUID), or
+`staff` (no group ID). A staff-only broadcast targets verified, active accounts
+appointed as Super Admin, Assistant Pastor, or Staff when it is sent. Content
+Editor, Finance Officer, Ministry Leader, Access Administrator and ordinary
+member accounts are not included unless they also hold one of those operational
+staff appointments. Staff notices are hidden from inbox lists, unread counts,
+read actions and push delivery after the recipient loses the qualifying role.
 Global `broadcasts.send` belongs to Super Admin, Assistant Pastor and Staff; an
 exact-scope ministry leader may send only to their active group. Leadership audience
 eligibility is checked before group operations. No appointment powers are added.

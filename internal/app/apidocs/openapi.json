@@ -9982,7 +9982,19 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
+            "description": "Select this exact group audience."
+          },
+          {
+            "name": "audience",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "church",
+                "staff"
+              ]
+            },
+            "description": "Select the church-wide or operational staff audience. Use groupId alone for a group audience."
           }
         ]
       },
@@ -15253,7 +15265,8 @@
             "type": "string",
             "enum": [
               "church",
-              "group"
+              "group",
+              "staff"
             ]
           },
           "groupId": {
@@ -15294,7 +15307,8 @@
             "type": "string",
             "enum": [
               "church",
-              "group"
+              "group",
+              "staff"
             ]
           },
           "groupId": {

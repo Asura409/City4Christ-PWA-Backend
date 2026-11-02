@@ -56,6 +56,12 @@ type Service struct {
 	now  func() time.Time
 }
 
+// Staff-only announcements disappear from inbox reads and counts immediately
+// when the recipient loses the operational staff role.
+const staffNotificationVisibleSQL = `(n.kind <> 'staff.broadcast' OR EXISTS(
+	SELECT 1 FROM account_roles r WHERE r.account_id=n.account_id AND r.scope=''
+	AND r.role IN ('super_administrator','assistant_pastor','staff')))`
+
 func NewRepository(db *sql.DB) *Repository { return &Repository{db: db} }
 
 func NewService(repo *Repository, now func() time.Time) *Service {
@@ -144,8 +150,8 @@ func (r *Repository) List(ctx context.Context, accountID string, options Options
 		}
 		before = sequence
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT sequence,id,kind,title,body,resource_path,created_at,read_at FROM notifications
-		WHERE account_id=$1 AND c4c_group_content_visible(group_id,$1::uuid) AND ($2::bigint IS NULL OR sequence<$2) ORDER BY sequence DESC LIMIT $3`, accountID, before, limit+1)
+	rows, err := r.db.QueryContext(ctx, `SELECT n.sequence,n.id,n.kind,n.title,n.body,n.resource_path,n.created_at,n.read_at FROM notifications n
+		WHERE n.account_id=$1 AND c4c_group_content_visible(n.group_id,$1::uuid) AND `+staffNotificationVisibleSQL+` AND ($2::bigint IS NULL OR n.sequence<$2) ORDER BY n.sequence DESC LIMIT $3`, accountID, before, limit+1)
 	if err != nil {
 		return Page{}, err
 	}
@@ -170,7 +176,7 @@ func (r *Repository) List(ctx context.Context, accountID string, options Options
 
 func (r *Repository) UnreadCount(ctx context.Context, accountID string) (int, error) {
 	var count int
-	err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM notifications WHERE account_id=$1 AND read_at IS NULL AND c4c_group_content_visible(group_id,$1::uuid)`, accountID).Scan(&count)
+	err := r.db.QueryRowContext(ctx, `SELECT count(*) FROM notifications n WHERE n.account_id=$1 AND n.read_at IS NULL AND c4c_group_content_visible(n.group_id,$1::uuid) AND `+staffNotificationVisibleSQL, accountID).Scan(&count)
 	return count, err
 }
 
@@ -178,7 +184,7 @@ func (r *Repository) MarkRead(ctx context.Context, accountID, notificationID str
 	if !validID(accountID) || !validID(notificationID) {
 		return false, ErrInvalid
 	}
-	result, err := r.db.ExecContext(ctx, `UPDATE notifications SET read_at=$3 WHERE account_id=$1 AND id=$2 AND read_at IS NULL AND c4c_group_content_visible(group_id,$1::uuid)`, accountID, notificationID, now.UTC())
+	result, err := r.db.ExecContext(ctx, `UPDATE notifications n SET read_at=$3 WHERE n.account_id=$1 AND n.id=$2 AND n.read_at IS NULL AND c4c_group_content_visible(n.group_id,$1::uuid) AND `+staffNotificationVisibleSQL, accountID, notificationID, now.UTC())
 	if err != nil {
 		return false, err
 	}
@@ -190,7 +196,7 @@ func (r *Repository) MarkRead(ctx context.Context, accountID, notificationID str
 		return true, nil
 	}
 	var exists bool
-	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notifications WHERE account_id=$1 AND id=$2 AND c4c_group_content_visible(group_id,$1::uuid))`, accountID, notificationID).Scan(&exists); err != nil {
+	if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notifications n WHERE n.account_id=$1 AND n.id=$2 AND c4c_group_content_visible(n.group_id,$1::uuid) AND `+staffNotificationVisibleSQL+`)`, accountID, notificationID).Scan(&exists); err != nil {
 		return false, err
 	}
 	if !exists {

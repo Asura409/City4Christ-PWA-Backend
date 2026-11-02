@@ -116,3 +116,46 @@ func TestPushConsentSessionBindingRetryAndExpiry(t *testing.T) {
 		t.Fatal("logged out device received", sender.calls, e)
 	}
 }
+
+func TestStaffPushIsCancelledWhenRecipientLosesStaffRole(t *testing.T) {
+	db, repo, staff, _ := notificationFixture(t)
+	ctx := context.Background()
+	service := NewService(repo, nil)
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,'staff','')`, staff); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := auth.NewSessionService(db, auth.SessionConfig{Key: make([]byte, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tokens, err := sessions.Start(ctx, staff)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, sessionID, _, err := sessions.AuthenticateSession(ctx, tokens.AccessToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.Subscribe(ctx, staff, sessionID, testSubscription(t)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = service.SetPreferences(ctx, staff, Preferences{PushEnabled: true, Groups: true, Events: true, Pastoral: true, Messages: true, Announcements: true}); err != nil {
+		t.Fatal(err)
+	}
+	notice, err := repo.Create(ctx, CreateInput{AccountID: staff, Kind: "staff.broadcast", Title: "Team update", Body: "Private staff content", DedupKey: "staff-only-test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`DELETE FROM account_roles WHERE account_id=$1 AND role='staff' AND scope=''`, staff); err != nil {
+		t.Fatal(err)
+	}
+	sender := &pushStub{status: 201}
+	processed, err := NewPushWorker(db, sender, nil).RunOnce(ctx)
+	if err != nil || processed != 1 || sender.calls != 0 {
+		t.Fatalf("revoked staff push processed=%d sends=%d err=%v", processed, sender.calls, err)
+	}
+	var state string
+	if err = db.QueryRow(`SELECT state FROM notification_push_jobs WHERE notification_id=$1`, notice.ID).Scan(&state); err != nil || state != "cancelled" {
+		t.Fatalf("revoked staff push job state=%q err=%v", state, err)
+	}
+}

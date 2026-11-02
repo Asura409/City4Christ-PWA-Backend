@@ -46,7 +46,7 @@ func (s *Service) MarkAllRead(ctx context.Context, actor string) (int64, error) 
 	return s.repo.MarkAllRead(ctx, actor, s.now())
 }
 func (r *Repository) MarkAllRead(ctx context.Context, actor string, now time.Time) (int64, error) {
-	result, err := r.db.ExecContext(ctx, `UPDATE notifications SET read_at=$2 WHERE account_id=$1 AND read_at IS NULL AND c4c_group_content_visible(group_id,$1::uuid)`, actor, now.UTC())
+	result, err := r.db.ExecContext(ctx, `UPDATE notifications n SET read_at=$2 WHERE n.account_id=$1 AND n.read_at IS NULL AND c4c_group_content_visible(n.group_id,$1::uuid) AND `+staffNotificationVisibleSQL, actor, now.UTC())
 	if err != nil {
 		return 0, err
 	}

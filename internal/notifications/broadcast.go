@@ -55,7 +55,7 @@ func broadcastPermission(ctx context.Context, tx *sql.Tx, actor, group string) e
 func (s *Service) CreateBroadcast(ctx context.Context, actor string, in BroadcastInput) (Broadcast, error) {
 	in.Title = strings.TrimSpace(in.Title)
 	in.Body = strings.TrimSpace(in.Body)
-	if !broadcastText(in.Title, 120) || !broadcastText(in.Body, 500) || (in.Audience != "church" && in.Audience != "group") || (in.Audience == "church" && in.GroupID != "") || (in.Audience == "group" && !validID(in.GroupID)) {
+	if !broadcastText(in.Title, 120) || !broadcastText(in.Body, 500) || (in.Audience != "church" && in.Audience != "group" && in.Audience != "staff") || (in.Audience != "group" && in.GroupID != "") || (in.Audience == "group" && !validID(in.GroupID)) {
 		return Broadcast{}, ErrInvalid
 	}
 	tx, err := s.repo.db.BeginTx(ctx, nil)
@@ -68,7 +68,7 @@ func (s *Service) CreateBroadcast(ctx context.Context, actor string, in Broadcas
 	}
 	var b Broadcast
 	b.BroadcastInput = in
-	err = tx.QueryRowContext(ctx, `INSERT INTO notification_broadcasts(actor_id,title,body,group_id,created_at) VALUES($1,$2,$3,NULLIF($4,'')::uuid,$5) RETURNING id,status,version,created_at`, actor, in.Title, in.Body, in.GroupID, s.now()).Scan(&b.ID, &b.Status, &b.Version, &b.CreatedAt)
+	err = tx.QueryRowContext(ctx, `INSERT INTO notification_broadcasts(actor_id,title,body,group_id,staff_only,created_at) VALUES($1,$2,$3,NULLIF($4,'')::uuid,$5,$6) RETURNING id,status,version,created_at`, actor, in.Title, in.Body, in.GroupID, in.Audience == "staff", s.now()).Scan(&b.ID, &b.Status, &b.Version, &b.CreatedAt)
 	if err != nil {
 		return Broadcast{}, err
 	}
@@ -79,18 +79,24 @@ func (s *Service) CreateBroadcast(ctx context.Context, actor string, in Broadcas
 }
 func loadBroadcast(ctx context.Context, tx *sql.Tx, id string) (Broadcast, error) {
 	var b Broadcast
-	err := tx.QueryRowContext(ctx, `SELECT id,title,body,COALESCE(group_id::text,''),status,version,recipient_count,created_at,sent_at FROM notification_broadcasts WHERE id=$1 FOR UPDATE`, id).Scan(&b.ID, &b.Title, &b.Body, &b.GroupID, &b.Status, &b.Version, &b.RecipientCount, &b.CreatedAt, &b.SentAt)
+	var staffOnly bool
+	err := tx.QueryRowContext(ctx, `SELECT id,title,body,COALESCE(group_id::text,''),staff_only,status,version,recipient_count,created_at,sent_at FROM notification_broadcasts WHERE id=$1 FOR UPDATE`, id).Scan(&b.ID, &b.Title, &b.Body, &b.GroupID, &staffOnly, &b.Status, &b.Version, &b.RecipientCount, &b.CreatedAt, &b.SentAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Broadcast{}, ErrNotFound
 	}
 	b.Audience = "church"
+	if staffOnly {
+		b.Audience = "staff"
+	}
 	if b.GroupID != "" {
 		b.Audience = "group"
 	}
 	return b, err
 }
-func broadcastRecipients(ctx context.Context, tx *sql.Tx, group string) ([]string, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT id::text FROM accounts WHERE email_verified_at IS NOT NULL AND deletion_requested_at IS NULL AND c4c_group_content_visible(NULLIF($1,'')::uuid,id) ORDER BY id LIMIT 10001`, group)
+func broadcastRecipients(ctx context.Context, tx *sql.Tx, audience, group string) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT a.id::text FROM accounts a WHERE a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL AND
+ (( $1='staff' AND EXISTS(SELECT 1 FROM account_roles r WHERE r.account_id=a.id AND r.scope='' AND r.role IN ('super_administrator','assistant_pastor','staff')))
+ OR ($1<>'staff' AND c4c_group_content_visible(NULLIF($2,'')::uuid,a.id))) ORDER BY a.id LIMIT 10001`, audience, group)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +145,7 @@ func (s *Service) broadcastAction(ctx context.Context, actor, id string, version
 	if b.Status == "sent" {
 		return b, tx.Commit()
 	}
-	ids, err := broadcastRecipients(ctx, tx, b.GroupID)
+	ids, err := broadcastRecipients(ctx, tx, b.Audience, b.GroupID)
 	if err != nil {
 		return Broadcast{}, err
 	}
@@ -148,6 +154,9 @@ func (s *Service) broadcastAction(ctx context.Context, actor, id string, version
 		return b, tx.Commit()
 	}
 	path, kind := "/#/notifications", "church.broadcast"
+	if b.Audience == "staff" {
+		kind = "staff.broadcast"
+	}
 	if b.GroupID != "" {
 		path, kind = "/#/groups/"+b.GroupID, "group.broadcast"
 	}

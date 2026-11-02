@@ -85,7 +85,10 @@ membership decision notices were preserved; a service-level unverified roster ga
 was fixed. See [group content](group-content.md).
 
 Notification preferences, mark-all-read, generic message/event notices, immutable
-broadcast draft/review/confirmed-send and opt-in Web Push are implemented locally.
+broadcast draft/review/confirmed-send (including the staff-only audience) and
+opt-in Web Push are implemented locally. Staff-only recipients are the verified
+Super Admin, Assistant Pastor and Staff accounts at send time; revoked roles hide
+those notices and cancel pending push jobs.
 The worker uses maintained OSS encryption/VAPID, session-bound subscriptions,
 transactional jobs, current permission/consent checks, retries and expired endpoint
 cleanup. See [delivery and explicit worker rollout](notification-delivery.md).
@@ -283,9 +286,11 @@ gates are detailed in the [status audit](implementation-status-2026-11-01.md).
   connected. Preferences, read-all and notification-producing workflows remain.
 - [ ] **M3.3:** Implement Web Push subscription/revocation with browser opt-in,
   maintained libraries, protected provider credentials and expired-subscription cleanup.
-- [ ] **M3.4:** Implement draft/review/send broadcast and authorized audience
-  selection. Staff/Super Admin may broadcast church-wide; leaders cannot widen a
-  group audience. Audit recipients/counts without leaking sensitive payloads.
+- [x] **M3.4:** Implement draft/review/send broadcast and authorized audience
+  selection for church, operational staff and exact group audiences. Staff/Super
+  Admin may broadcast church-wide; leaders cannot widen a group audience. Audit
+  recipients/counts without leaking sensitive payloads. Current-role checks also
+  restrict staff-only inbox reads and pending push delivery.
 - [ ] **M3.5:** Wire welcome-team/visitor welcome events; select SMS only when its
   provider, consent and costs are approved. Use inbox fallback and safe push previews.
 - [ ] **M3.6:** Complete notification preferences/broadcast UIs and test duplicate jobs,
