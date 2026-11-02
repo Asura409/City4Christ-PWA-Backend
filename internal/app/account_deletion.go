@@ -22,11 +22,11 @@ type deletionHTTP struct {
 func deletionError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, accountdeletion.ErrInvalid):
-		writeError(w, 422, "validation_failed", "Confirm the current deletion policy and check the request fields.", nil)
+		writeError(w, 422, "validation_failed", "Check the deletion request fields, including any restoration reason.", nil)
 	case errors.Is(err, accountdeletion.ErrNotFound):
 		writeError(w, 404, "not_found", "Deletion request not found.", nil)
 	case errors.Is(err, accountdeletion.ErrConflict):
-		writeError(w, 409, "version_conflict", "This request changed. Reload before reviewing it.", nil)
+		writeError(w, 409, "version_conflict", "This request changed. Reload it before continuing.", nil)
 	case errors.Is(err, accountdeletion.ErrActiveCommitments):
 		writeError(w, 409, "blocked_active_commitments", "Cancel or resolve upcoming pastoral appointments before requesting account deletion.", nil)
 	case errors.Is(err, access.ErrLastAdministrator):

@@ -24,7 +24,7 @@ func TestAccountDeletionOpenAPIContract(t *testing.T) {
 	if e := json.Unmarshal(w.Body.Bytes(), &spec); e != nil {
 		t.Fatal(e)
 	}
-	for path, methods := range map[string][]string{"/api/v1/me/deletion-request": {"get"}, "/api/v1/me": {"delete"}, "/api/v1/admin/account-deletion-requests": {"get"}, "/api/v1/admin/account-deletion-requests/{requestId}": {"get", "patch"}} {
+	for path, methods := range map[string][]string{"/api/v1/me/deletion-request": {"get"}, "/api/v1/me": {"delete"}, "/api/v1/admin/account-deletion-requests": {"get"}, "/api/v1/admin/account-deletion-requests/{requestId}": {"get", "patch"}, "/api/v1/admin/account-deletion-requests/{requestId}/restore": {"post"}} {
 		for _, method := range methods {
 			op, ok := spec.Paths[path][method]
 			if !ok {
@@ -46,7 +46,7 @@ func TestAccountDeletionOpenAPIContract(t *testing.T) {
 	if len(spec.Paths["/api/v1/me"]["delete"].Responses["202"]) == 0 {
 		t.Fatal("deletion must document accepted review request, not completed purge")
 	}
-	for _, name := range []string{"AccountDeletionInput", "AccountDeletionReviewInput"} {
+	for _, name := range []string{"AccountDeletionInput", "AccountDeletionReviewInput", "AccountDeletionRestoreInput"} {
 		s, ok := spec.Components.Schemas[name]
 		if !ok || s.AdditionalProperties == nil || *s.AdditionalProperties {
 			t.Fatal("missing strict deletion input", name)

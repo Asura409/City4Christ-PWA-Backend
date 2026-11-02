@@ -75,4 +75,23 @@ func (h deletionHTTP) reviewRoutes(mux *http.ServeMux) {
 		}
 		writeJSON(w, 200, map[string]any{"data": data})
 	})
+	mux.HandleFunc("POST /api/v1/admin/account-deletion-requests/{requestId}/restore", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := h.authorize(w, r, true)
+		if !ok || !deletionNoQuery(w, r) {
+			return
+		}
+		input, ok := decodeJSON[struct {
+			Version int    `json:"version"`
+			Reason  string `json:"reason"`
+		}](w, r)
+		if !ok {
+			return
+		}
+		data, err := h.service.Restore(r.Context(), actor, r.PathValue("requestId"), input.Version, input.Reason, h.guard(r, true))
+		if err != nil {
+			deletionError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": data})
+	})
 }

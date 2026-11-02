@@ -11065,6 +11065,47 @@
         }
       }
     },
+    "/api/v1/admin/account-deletion-requests/{requestId}/restore": {
+      "post": {
+        "tags": ["Account deletion"],
+        "operationId": "RestoreAccountDeletionRequest",
+        "summary": "Restore access after reviewing a deletion request",
+        "description": "Requires current global accounts.deletion.review (Super Admin only), fresh primary confirmation and recent app MFA proof. Requires the current positive version and a 3–500 character audit reason. Re-enables sign-in but leaves the directory profile hidden, keeps all prior sessions revoked, and retains shared content and audit history. Existing role assignments become effective again after sign-in. The member may separately opt back into the directory. No query parameters.",
+        "security": [{"bearerAuth": []}],
+        "parameters": [{"name": "requestId", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/AccountDeletionRestoreInput"}, "example": {"version": 2, "reason": "Member confirmed this request was accidental"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Account access restored; old sessions remain revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["data"],
+                  "properties": {
+                    "data": {"$ref": "#/components/schemas/AccountDeletionRequest"}
+                  }
+                }
+              }
+            }
+          },
+          "400": {"$ref": "#/components/responses/400"},
+          "401": {"$ref": "#/components/responses/401"},
+          "403": {"$ref": "#/components/responses/403"},
+          "404": {"$ref": "#/components/responses/404"},
+          "409": {"description": "The request version changed or the account is no longer disabled", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}},
+          "413": {"$ref": "#/components/responses/413"},
+          "415": {"$ref": "#/components/responses/415"},
+          "422": {"$ref": "#/components/responses/422"},
+          "429": {"$ref": "#/components/responses/429"},
+          "503": {"$ref": "#/components/responses/503"}
+        }
+      }
+    },
     "/api/v1/conversations/{conversationId}/messages/{messageId}": {
       "patch": {
         "tags": [
@@ -15896,6 +15937,15 @@
           "status",
           "version"
         ]
+      },
+      "AccountDeletionRestoreInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "version": {"type": "integer", "minimum": 1},
+          "reason": {"type": "string", "minLength": 3, "maxLength": 500}
+        },
+        "required": ["version", "reason"]
       },
       "AccountDeletionStatus": {
         "type": "object",
