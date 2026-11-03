@@ -34,6 +34,7 @@ func TestCurrentAssignmentRepository(t *testing.T) {
 
 func TestCurrentEffectiveAccess(t *testing.T) {
 	db, s, admin, member := fixture(t)
+	superAdmin(t, db, admin)
 	ctx := context.Background()
 	current, err := s.Current(ctx, member)
 	if err != nil || current.Roles == nil || current.Capabilities == nil || len(current.Roles) != 0 || len(current.Capabilities) != 0 {
@@ -52,8 +53,8 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := []Capability{{Permission: "devotionals.manage", Scope: ""}, {Permission: "groups.content.moderate", Scope: a}, {Permission: "groups.content.moderate", Scope: b}, {Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "roles.manage", Scope: ""}, {Permission: "sermons.manage", Scope: ""}}
-	if len(current.Roles) != 5 || !reflect.DeepEqual(current.Capabilities, expected) {
+	expected := []Capability{{Permission: "devotionals.manage", Scope: ""}, {Permission: "groups.content.moderate", Scope: a}, {Permission: "groups.content.moderate", Scope: b}, {Permission: "ministry.members.manage", Scope: a}, {Permission: "ministry.members.manage", Scope: b}, {Permission: "prayer.moderate", Scope: a}, {Permission: "prayer.moderate", Scope: b}, {Permission: "sermons.manage", Scope: ""}}
+	if len(current.Roles) != 4 || !reflect.DeepEqual(current.Capabilities, expected) {
 		t.Fatalf("incorrect scoped/deduplicated snapshot: %+v", current)
 	}
 	for _, capability := range current.Capabilities {
@@ -104,7 +105,7 @@ func TestCurrentEffectiveAccess(t *testing.T) {
 
 func TestPrayerModerationCapabilityRoleScopes(t *testing.T) {
 	global := rolesForPermission("prayer.moderate", "")
-	expected := []string{"super_administrator", "assistant_pastor", "staff"}
+	expected := []string{"super_administrator", "assistant_pastor"}
 	if !reflect.DeepEqual(global, expected) {
 		t.Fatalf("global prayer moderation roles=%v, want %v", global, expected)
 	}
@@ -115,7 +116,7 @@ func TestPrayerModerationCapabilityRoleScopes(t *testing.T) {
 
 func TestCommunityContentModerationCapabilityScopes(t *testing.T) {
 	global := rolesForPermission("groups.content.moderate", "")
-	expected := []string{"super_administrator", "assistant_pastor", "staff"}
+	expected := []string{"super_administrator", "assistant_pastor"}
 	if !reflect.DeepEqual(global, expected) {
 		t.Fatalf("global content moderation roles=%v, want %v", global, expected)
 	}

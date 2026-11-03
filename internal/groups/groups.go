@@ -62,6 +62,7 @@ type Member struct {
 	AccountID string `json:"accountId"`
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
+	CanRemove bool   `json:"canRemove"`
 }
 type Repository struct{ db *sql.DB }
 type Service struct {
@@ -580,8 +581,8 @@ func (s *Service) Members(ctx context.Context, actor, groupID string) ([]Member,
 		return nil, err
 	}
 	defer tx.Rollback()
-	var audience string
-	err = tx.QueryRowContext(ctx, `SELECT audience FROM groups WHERE id=$1 AND archived_at IS NULL`, groupID).Scan(&audience)
+	var audience, creator string
+	err = tx.QueryRowContext(ctx, `SELECT audience,created_by FROM groups WHERE id=$1 AND archived_at IS NULL`, groupID).Scan(&audience, &creator)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -598,9 +599,11 @@ func (s *Service) Members(ctx context.Context, actor, groupID string) ([]Member,
 		}
 	}
 	canManage := false
+	globalManager := false
 	permissionErr := access.CheckTx(ctx, tx, actor, "groups.members.manage", "")
 	if permissionErr == nil {
 		canManage = true
+		globalManager = true
 	} else if !errors.Is(permissionErr, access.ErrForbidden) {
 		return nil, permissionErr
 	}
@@ -631,6 +634,13 @@ func (s *Service) Members(ctx context.Context, actor, groupID string) ([]Member,
 		var member Member
 		if err = rows.Scan(&member.AccountID, &member.FirstName, &member.LastName); err != nil {
 			return nil, err
+		}
+		if canManage && member.AccountID != actor {
+			var isLeader, isAdmin bool
+			if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND role='ministry_leader' AND scope=$2), EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND role='super_administrator' AND scope='')`, member.AccountID, groupID).Scan(&isLeader, &isAdmin); err != nil {
+				return nil, err
+			}
+			member.CanRemove = !isLeader && (globalManager || (member.AccountID != creator && !isAdmin))
 		}
 		result = append(result, member)
 	}

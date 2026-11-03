@@ -42,8 +42,8 @@ func TestChurchProtectedDelegation(t *testing.T) {
 	if ok, err := s.ChurchGrant(ctx, super, target, in, churchGuard); err != nil || !ok {
 		t.Fatalf("grant: %v %v", ok, err)
 	}
-	if err := s.Check(ctx, target, "roles.operational.manage", ""); err != nil {
-		t.Fatal(err)
+	if err := s.Check(ctx, target, "roles.operational.manage", ""); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("staff retained role assignment authority: %v", err)
 	}
 	if err := s.Check(ctx, target, "roles.privileged.manage", ""); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("staff escalation: %v", err)
@@ -51,15 +51,13 @@ func TestChurchProtectedDelegation(t *testing.T) {
 	if _, err := s.ChurchRevoke(ctx, super, super, Change{Role: "super_administrator", Reason: "Retire"}, churchGuard); !errors.Is(err, ErrLastAdministrator) {
 		t.Fatalf("last admin: %v", err)
 	}
-	assignments, err := s.ChurchList(ctx, target, super)
-	if err != nil || len(assignments) != 1 {
-		t.Fatalf("list %v %v", assignments, err)
+	if _, err := s.ChurchList(ctx, target, super); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("staff accessed role assignments: %v", err)
 	}
-	page, err := s.Candidates(ctx, target, "Access", "", 1)
-	if err != nil || len(page.Data) != 1 || page.NextCursor == "" {
-		t.Fatalf("candidates %+v %v", page, err)
+	if _, err := s.Candidates(ctx, target, "Access", "", 1); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("staff accessed role candidates: %v", err)
 	}
-	if _, err = s.Candidates(ctx, legacy, "Access", "", 10); !errors.Is(err, ErrForbidden) {
+	if _, err := s.Candidates(ctx, legacy, "Access", "", 10); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("legacy directory: %v", err)
 	}
 }

@@ -12,8 +12,9 @@ type roleRule struct {
 	ministry         bool
 }
 
-// Only implemented policy belongs here. Future finance/care/group actions
-// remain denied until their domain flows and authorization boundaries exist.
+// Only implemented policy belongs here. Administrative member access, role
+// delegation, and church-wide group administration are Super Admin duties.
+// Group leaders receive only exact ministry-scoped capabilities.
 var roleRules = [...]roleRule{
 	{role: "super_administrator", permission: "accounts.deletion.review"},
 	{role: "super_administrator", permission: "visitors.follow_up"},
@@ -25,7 +26,6 @@ var roleRules = [...]roleRule{
 	{role: "super_administrator", permission: "roles.read"},
 	{role: "super_administrator", permission: "members.records.read"},
 	{role: "super_administrator", permission: "members.records.audit.read"},
-	{role: "super_administrator", permission: "members.records.manage"},
 	{role: "super_administrator", permission: "roles.operational.manage"},
 	{role: "super_administrator", permission: "roles.privileged.manage"},
 	{role: "super_administrator", permission: "roles.manage"},
@@ -37,33 +37,20 @@ var roleRules = [...]roleRule{
 	{role: "super_administrator", permission: "events.manage"},
 	{role: "super_administrator", permission: "prayer.moderate"},
 	{role: "super_administrator", permission: "groups.content.moderate"},
-	{role: "assistant_pastor", permission: "roles.read"},
-	{role: "assistant_pastor", permission: "members.records.read"},
-	{role: "assistant_pastor", permission: "members.records.manage"},
-	{role: "assistant_pastor", permission: "roles.operational.manage"},
 	{role: "assistant_pastor", permission: "sermons.manage"},
 	{role: "assistant_pastor", permission: "devotionals.manage"},
-	{role: "assistant_pastor", permission: "groups.manage"},
-	{role: "assistant_pastor", permission: "groups.members.manage"},
 	{role: "assistant_pastor", permission: "events.manage"},
 	{role: "assistant_pastor", permission: "prayer.moderate"},
 	{role: "assistant_pastor", permission: "groups.content.moderate"},
-	{role: "staff", permission: "roles.read"},
-	{role: "staff", permission: "members.records.read"},
-	{role: "staff", permission: "members.records.manage"},
-	{role: "staff", permission: "roles.operational.manage"},
 	{role: "staff", permission: "sermons.manage"},
 	{role: "staff", permission: "devotionals.manage"},
-	{role: "staff", permission: "groups.manage"},
-	{role: "staff", permission: "groups.members.manage"},
 	{role: "staff", permission: "events.manage"},
-	{role: "staff", permission: "prayer.moderate"},
-	{role: "staff", permission: "groups.content.moderate"},
+	// Staff has operational follow-up and publishing access only. Group and
+	// prayer moderation require a separate scoped or pastoral workflow.
 	{role: "content_editor", permission: "sermons.manage"},
 	{role: "content_editor", permission: "devotionals.manage"},
 	{role: "system_administrator", permission: "sermons.manage"},
 	{role: "system_administrator", permission: "devotionals.manage"},
-	{role: "access_administrator", permission: "roles.manage"},
 	{role: "ministry_leader", permission: "ministry.members.manage", ministry: true},
 	{role: "ministry_leader", permission: "prayer.moderate", ministry: true},
 	{role: "ministry_leader", permission: "groups.content.moderate", ministry: true},

@@ -313,42 +313,47 @@ func TestStaffGroupLifecycleAndLeadershipAudienceBoundary(t *testing.T) {
 	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role,scope) VALUES($1,'staff','')`, staff); err != nil {
 		t.Fatal(err)
 	}
-	church, err := service.Create(ctx, staff, CreateInput{Name: "Youth", Audience: "church", JoinPolicy: "approval"})
+	if _, err := service.Create(ctx, staff, CreateInput{Name: "Youth", Audience: "church", JoinPolicy: "approval"}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("staff created church group: %v", err)
+	}
+	church, err := service.Create(ctx, admin, CreateInput{Name: "Youth", Audience: "church", JoinPolicy: "approval"})
 	if err != nil {
-		t.Fatalf("staff create church group: %v", err)
+		t.Fatalf("super admin create church group: %v", err)
 	}
 	leadership, err := service.Create(ctx, admin, CreateInput{Name: "Leadership", Audience: "leadership", JoinPolicy: "closed"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	managed, err := service.AdminList(ctx, staff, false)
-	if err != nil || len(managed) != 1 || managed[0].ID != church.ID {
-		t.Fatalf("staff managed group list leaked or omitted groups: %+v %v", managed, err)
+	if _, err = service.AdminList(ctx, staff, false); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("staff listed managed groups: %v", err)
 	}
 	if _, err = service.Archive(ctx, staff, leadership.ID, "Not authorized"); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("staff archived leadership group: %v", err)
 	}
-	if changed, err := service.Archive(ctx, staff, church.ID, "Ministry paused"); err != nil || !changed {
-		t.Fatalf("staff archive: changed=%v err=%v", changed, err)
+	if changed, err := service.Archive(ctx, staff, church.ID, "Ministry paused"); !errors.Is(err, ErrForbidden) || changed {
+		t.Fatalf("staff archived group: changed=%v err=%v", changed, err)
 	}
-	if changed, err := service.Archive(ctx, staff, church.ID, "Repeat request"); err != nil || changed {
+	if changed, err := service.Archive(ctx, admin, church.ID, "Ministry paused"); err != nil || !changed {
+		t.Fatalf("super admin archive: changed=%v err=%v", changed, err)
+	}
+	if changed, err := service.Archive(ctx, admin, church.ID, "Repeat request"); err != nil || changed {
 		t.Fatalf("archive must be repeat-safe: changed=%v err=%v", changed, err)
 	}
-	active, err := service.AdminList(ctx, staff, false)
-	if err != nil || len(active) != 0 {
+	active, err := service.AdminList(ctx, admin, false)
+	if err != nil || len(active) != 1 || active[0].ID != leadership.ID {
 		t.Fatalf("archived group appeared in active list: %+v %v", active, err)
 	}
-	all, err := service.AdminList(ctx, staff, true)
-	if err != nil || len(all) != 1 || !all[0].Archived || all[0].ID != church.ID {
+	all, err := service.AdminList(ctx, admin, true)
+	if err != nil || len(all) != 2 || !all[0].Archived || all[0].ID != church.ID {
 		t.Fatalf("archive list did not expose archived church group: %+v %v", all, err)
 	}
-	if changed, err := service.Restore(ctx, staff, church.ID, "Ministry resumed"); err != nil || !changed {
+	if changed, err := service.Restore(ctx, admin, church.ID, "Ministry resumed"); err != nil || !changed {
 		t.Fatalf("staff restore: changed=%v err=%v", changed, err)
 	}
-	if changed, err := service.Restore(ctx, staff, church.ID, "Repeat request"); err != nil || changed {
+	if changed, err := service.Restore(ctx, admin, church.ID, "Repeat request"); err != nil || changed {
 		t.Fatalf("restore must be repeat-safe: changed=%v err=%v", changed, err)
 	}
-	leaders, err := service.Leaders(ctx, staff, church.ID)
+	leaders, err := service.Leaders(ctx, admin, church.ID)
 	if err != nil || len(leaders) != 0 {
 		t.Fatalf("staff leader list: %+v %v", leaders, err)
 	}
@@ -356,7 +361,7 @@ func TestStaffGroupLifecycleAndLeadershipAudienceBoundary(t *testing.T) {
 		t.Fatalf("staff accessed leadership-group leaders: %v", err)
 	}
 	var auditCount int
-	if err = db.QueryRow(`SELECT count(*) FROM group_audit_events WHERE group_id=$1 AND actor_id=$2 AND action IN ('archived','restored')`, church.ID, staff).Scan(&auditCount); err != nil || auditCount != 2 {
+	if err = db.QueryRow(`SELECT count(*) FROM group_audit_events WHERE group_id=$1 AND actor_id=$2 AND action IN ('archived','restored')`, church.ID, admin).Scan(&auditCount); err != nil || auditCount != 2 {
 		t.Fatalf("expected one audit for each lifecycle transition, got %d err=%v", auditCount, err)
 	}
 }

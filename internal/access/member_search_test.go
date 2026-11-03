@@ -12,7 +12,7 @@ func TestAdminMemberSearchIsScopedPaginatedAndPrivate(t *testing.T) {
 	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id=$1`, actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'staff')`, actor); err != nil {
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'super_administrator')`, actor); err != nil {
 		t.Fatal(err)
 	}
 	first := account(t, db)
@@ -86,7 +86,7 @@ func TestAdminMemberDetailAuditsSensitiveEmailAndFailsClosed(t *testing.T) {
 	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id=$1`, actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role)VALUES($1,'staff')`, actor); err != nil {
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role)VALUES($1,'super_administrator')`, actor); err != nil {
 		t.Fatal(err)
 	}
 	member, err := service.MemberDetail(ctx, actor, target)
@@ -118,10 +118,8 @@ func TestAdminMemberDetailAuditsSensitiveEmailAndFailsClosed(t *testing.T) {
 func TestMemberAccessAuditIsSuperAdminOnlyAndPaginated(t *testing.T) {
 	db, service, staff, target := fixture(t)
 	ctx := context.Background()
-	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id IN ($1,$2)`, staff, target); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'staff')`, staff); err != nil {
+	superAdmin(t, db, staff)
+	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id=$1`, target); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := service.MemberDetail(ctx, staff, target); err != nil {
@@ -142,7 +140,11 @@ func TestMemberAccessAuditIsSuperAdminOnlyAndPaginated(t *testing.T) {
 	if err != nil || len(older.Data) != 1 || older.Data[0].ID == page.Data[0].ID || older.NextCursor != "" {
 		t.Fatalf("older member access audit %+v %v", older, err)
 	}
-	if _, err := service.MemberAccessAudit(ctx, staff, target, "", 1); !errors.Is(err, ErrForbidden) {
+	nonSuper := account(t, db)
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'staff')`, nonSuper); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.MemberAccessAudit(ctx, nonSuper, target, "", 1); !errors.Is(err, ErrForbidden) {
 		t.Fatalf("non-super-admin audit access: %v", err)
 	}
 	if _, err := service.MemberAccessAudit(ctx, super, "not-a-uuid", "", 1); !errors.Is(err, ErrMemberNotFound) {
@@ -158,34 +160,12 @@ func TestMemberAccessAuditIsSuperAdminOnlyAndPaginated(t *testing.T) {
 func TestMemberNameCorrectionRequiresReasonVersionAndAudit(t *testing.T) {
 	db, service, staff, target := fixture(t)
 	ctx := context.Background()
-	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id=$1`, staff); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'staff')`, staff); err != nil {
-		t.Fatal(err)
-	}
 	first := "Grace"
-	updated, err := service.UpdateMemberName(ctx, staff, target, MemberNameUpdate{FirstName: &first, ExpectedVersion: 1, Reason: "Member requested correction"})
-	if err != nil || updated.FirstName != first || updated.Version != 2 {
-		t.Fatalf("updated name %+v %v", updated, err)
+	if _, err := service.UpdateMemberName(ctx, staff, target, MemberNameUpdate{FirstName: &first, ExpectedVersion: 1, Reason: "Member requested correction"}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("staff changed member name: %v", err)
 	}
-	if _, err = service.UpdateMemberName(ctx, staff, target, MemberNameUpdate{FirstName: &first, ExpectedVersion: 1, Reason: "Stale update"}); !errors.Is(err, ErrVersionConflict) {
-		t.Fatalf("stale name correction: %v", err)
-	}
-	var action, fields, reason string
-	if err = db.QueryRow(`SELECT action,array_to_string(sensitive_fields,','),reason FROM member_record_audit_events WHERE actor_id=$1 AND member_id=$2`, staff, target).Scan(&action, &fields, &reason); err != nil || action != "name_update" || fields != "firstName" || reason != "Member requested correction" {
-		t.Fatalf("audit action=%q fields=%q reason=%q err=%v", action, fields, reason, err)
-	}
-	for _, input := range []MemberNameUpdate{
-		{ExpectedVersion: 2, Reason: "Missing name"},
-		{LastName: &first, ExpectedVersion: 0, Reason: "Missing version"},
-		{LastName: &first, ExpectedVersion: 2},
-	} {
-		if _, err = service.UpdateMemberName(ctx, staff, target, input); err == nil {
-			t.Fatalf("accepted invalid correction: %+v", input)
-		}
-	}
-	if _, err = service.UpdateMemberName(ctx, "00000000-0000-4000-8000-000000000001", target, MemberNameUpdate{LastName: &first, ExpectedVersion: 2, Reason: "Unauthorized"}); !errors.Is(err, ErrForbidden) {
-		t.Fatalf("unauthorized name correction: %v", err)
+	superAdmin(t, db, staff)
+	if _, err := service.UpdateMemberName(ctx, staff, target, MemberNameUpdate{FirstName: &first, ExpectedVersion: 1, Reason: "Member requested correction"}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("super admin changed member name: %v", err)
 	}
 }

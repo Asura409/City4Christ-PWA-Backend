@@ -28,8 +28,8 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, target, reas
 		return false, err
 	}
 	defer tx.Rollback()
-	var audience string
-	err = tx.QueryRowContext(ctx, `SELECT audience FROM groups WHERE id=$1 AND archived_at IS NULL FOR UPDATE`, groupID).Scan(&audience)
+	var audience, creator string
+	err = tx.QueryRowContext(ctx, `SELECT audience,created_by FROM groups WHERE id=$1 AND archived_at IS NULL FOR UPDATE`, groupID).Scan(&audience, &creator)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, ErrNotFound
 	}
@@ -46,6 +46,7 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, target, reas
 		}
 	}
 	err = access.CheckTx(ctx, tx, actor, "groups.members.manage", "")
+	globalManager := err == nil
 	if err != nil {
 		if !errors.Is(err, access.ErrForbidden) {
 			return false, err
@@ -58,11 +59,19 @@ func (s *Service) RemoveMember(ctx context.Context, actor, groupID, target, reas
 			return false, err
 		}
 	}
-	var targetIsLeader bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND role='ministry_leader' AND scope=$2)`, target, groupID).Scan(&targetIsLeader); err != nil {
+	// Serialize with role changes, which also lock the target account.
+	var lockedTarget string
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM accounts WHERE id=$1 FOR UPDATE`, target).Scan(&lockedTarget); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
 		return false, err
 	}
-	if targetIsLeader {
+	var targetIsLeader, targetIsAdmin bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND role='ministry_leader' AND scope=$2), EXISTS(SELECT 1 FROM account_roles WHERE account_id=$1 AND role='super_administrator' AND scope='')`, target, groupID).Scan(&targetIsLeader, &targetIsAdmin); err != nil {
+		return false, err
+	}
+	if targetIsLeader || (!globalManager && (target == creator || targetIsAdmin)) {
 		return false, ErrForbidden
 	}
 	var current string
