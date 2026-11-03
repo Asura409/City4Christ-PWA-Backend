@@ -39,7 +39,7 @@ func (s *Service) SearchMembers(ctx context.Context, actor, query, cursor string
 		return page, err
 	}
 	query = strings.TrimSpace(query)
-	if !utf8.ValidString(query) || strings.ContainsRune(query, 0) || utf8.RuneCountInString(query) < 3 || utf8.RuneCountInString(query) > 100 || limit < 1 || limit > 50 || (cursor != "" && !validID(cursor)) {
+	if !utf8.ValidString(query) || strings.ContainsRune(query, 0) || (query != "" && utf8.RuneCountInString(query) < 3) || utf8.RuneCountInString(query) > 100 || limit < 1 || limit > 50 || (cursor != "" && !validID(cursor)) {
 		return page, ErrInvalid
 	}
 	pattern := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(query) + "%"

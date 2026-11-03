@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestDirectoryPrivacySearchAndPagination(t *testing.T) {
+func TestDirectoryMemberSearchAndPagination(t *testing.T) {
 	db, r, actor, other := fixture(t)
 	ctx := context.Background()
 	s := NewService(r)
@@ -20,9 +20,9 @@ func TestDirectoryPrivacySearchAndPagination(t *testing.T) {
 	if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,directory_visible) VALUES('pending@example.invalid','Grace','Pending',true) RETURNING id`).Scan(&pending); err != nil {
 		t.Fatal(err)
 	}
-	page, err := s.Directory(ctx, actor, DirectoryOptions{})
+	page, err := s.Directory(ctx, actor, DirectoryOptions{Query: "Grace"})
 	if err != nil || len(page.Items) != 1 || page.Items[0].ID != other {
-		t.Fatalf("visibility: %+v %v", page, err)
+		t.Fatalf("member search: %+v %v", page, err)
 	}
 	raw, _ := json.Marshal(page.Items[0])
 	var fields map[string]any
@@ -68,35 +68,30 @@ func TestDirectoryPrivacySearchAndPagination(t *testing.T) {
 		}
 		cursor = page.NextCursor
 	}
-	if len(seen) != 5 {
-		t.Fatalf("missing visible members: %d", len(seen))
+	if len(seen) != 6 {
+		t.Fatalf("missing members: %d", len(seen))
 	}
 	if _, err = db.Exec(`UPDATE accounts SET directory_visible=false WHERE id=$1`, other); err != nil {
 		t.Fatal(err)
 	}
 	page, err = s.Directory(ctx, actor, DirectoryOptions{})
-	if err != nil || len(page.Items) != 4 {
-		t.Fatal("opt-out ignored")
+	if err != nil || len(page.Items) != 6 {
+		t.Fatalf("member visibility preference unexpectedly filtered results: %+v %v", page, err)
 	}
-	for _, member := range page.Items {
-		if member.ID == other {
-			t.Fatal("opted-out member returned")
-		}
-	}
-	// Replaying a cursor cannot restore a member who has opted out.
+	// Replaying a cursor cannot bypass the verified/active account filters.
 	forged, _ := json.Marshal(DirectoryCursor{Version: 1, ID: "00000000-0000-4000-8000-000000000001", Query: ""})
 	page, err = s.Directory(ctx, actor, DirectoryOptions{Cursor: base64.RawURLEncoding.EncodeToString(forged)})
-	if err != nil || len(page.Items) != 4 {
-		t.Fatalf("cursor bypassed visibility: %+v %v", page, err)
+	if err != nil || len(page.Items) != 6 {
+		t.Fatalf("cursor returned the wrong member set: %+v %v", page, err)
 	}
 	for _, member := range page.Items {
-		if member.ID == other || member.ID == pending || member.ID == actor {
-			t.Fatal("private/unverified member leaked through cursor")
+		if member.ID == pending {
+			t.Fatal("unverified member leaked through cursor")
 		}
 	}
 	members, err := r.ListDirectory(ctx, DirectoryOptions{Limit: 100}, nil)
-	if err != nil || len(members) != 4 {
-		t.Fatal("repository visibility filter failed")
+	if err != nil || len(members) != 6 {
+		t.Fatalf("repository member filter failed: %d %v", len(members), err)
 	}
 }
 func TestDirectoryRejectsInvalidOptionsAndCursor(t *testing.T) {

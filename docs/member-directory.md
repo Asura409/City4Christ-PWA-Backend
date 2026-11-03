@@ -44,8 +44,9 @@ This slice provides directory search/listing only. Ministries, group memberships
 ## Staff member lookup
 
 `GET /api/v1/admin/members?query=...` is a separate, read-only operational lookup
-for Super Admin, Assistant Pastor, and Staff. It searches verified, active
-accounts by literal case-insensitive substring in name or email and returns
+for Super Admin, Assistant Pastor, and Staff. The query is optional: an empty
+query returns the complete verified, active roster, while a non-empty query
+searches by literal case-insensitive substring in name or email and returns
 `id`, `firstName`, `lastName`, `email`, and `joinedAt`. Results are paginated by
 opaque UUID cursor, limited to 50 rows per page, and excluded for unverified or
 deletion-requested accounts. Each returned email is recorded as an audited

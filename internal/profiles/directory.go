@@ -105,7 +105,8 @@ func (s *Service) Directory(ctx context.Context, actor string, o DirectoryOption
 	return page, nil
 }
 
-// ListDirectory filters privacy in SQL on every page, independently of cursors.
+// ListDirectory returns verified, active members on every page, independently
+// of cursors. Private account/security fields are intentionally not selected.
 // UUID ordering remains stable when members rename themselves.
 func (r *Repository) ListDirectory(ctx context.Context, o DirectoryOptions, after *DirectoryCursor) ([]DirectoryMember, error) {
 	var id *string
@@ -114,7 +115,7 @@ func (r *Repository) ListDirectory(ctx context.Context, o DirectoryOptions, afte
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT a.id,a.first_name,a.last_name,u.id::text,u.actual_content_type,u.actual_size,u.available_object_key FROM accounts a
  LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'
- WHERE a.directory_visible AND a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL
+ WHERE a.email_verified_at IS NOT NULL AND a.deletion_requested_at IS NULL
  AND ($1='' OR strpos(lower(a.first_name||' '||a.last_name),lower($1))>0)
  AND ($2::uuid IS NULL OR a.id>$2::uuid)
  ORDER BY a.id ASC LIMIT $3`, o.Query, id, o.Limit+1)

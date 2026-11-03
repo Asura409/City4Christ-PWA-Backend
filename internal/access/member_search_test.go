@@ -57,7 +57,11 @@ func TestAdminMemberSearchIsScopedPaginatedAndPrivate(t *testing.T) {
 	if err != nil || len(secondPage.Data) != 1 || secondPage.Data[0].ID == firstPage.Data[0].ID {
 		t.Fatalf("second page %+v %v", secondPage, err)
 	}
-	for _, query := range []string{"ab", "", "%", "\x00bad"} {
+	allPage, err := service.SearchMembers(ctx, actor, "", "", 1)
+	if err != nil || len(allPage.Data) != 1 || allPage.NextCursor == "" {
+		t.Fatalf("unfiltered page %+v %v", allPage, err)
+	}
+	for _, query := range []string{"ab", "%", "\x00bad"} {
 		if _, err := service.SearchMembers(ctx, actor, query, "", 20); !errors.Is(err, ErrInvalid) {
 			t.Fatalf("query %q: %v", query, err)
 		}

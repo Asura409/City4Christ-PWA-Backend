@@ -34,11 +34,11 @@
     },
     {
       "name": "Profiles",
-      "description": "Own member profile and directory visibility preference. No public member directory is exposed by this slice."
+      "description": "Own member profile and legacy directory visibility preference. The authenticated member directory is available to verified members."
     },
     {
       "name": "Members",
-      "description": "Authenticated member directory. Only verified, explicitly opted-in members are listed; email and account security fields remain private."
+      "description": "Authenticated member directory. All verified, active members are listed; email and account security fields remain private."
     },
     {
       "name": "Member administration",
@@ -1118,10 +1118,10 @@
         "tags": ["Member administration"],
         "summary": "Search verified active members",
         "operationId": "SearchAdminMembers",
-        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). Search by name or email using at least three characters. Returns basic identity and account join date only. Each returned email is recorded as an audited search result; query text is not copied into the audit. Results exclude unverified and deletion-requested accounts. Account and IP rate limits apply; responses use Cache-Control: no-store.",
+        "description": "Requires a verified session and members.records.read (Super Admin, Assistant Pastor, or Staff). An empty query returns the complete verified active roster; a non-empty query searches by name or email using at least three characters. Returns basic identity and account join date only. Each returned email is recorded as an audited search result; query text is not copied into the audit. Results exclude unverified and deletion-requested accounts. Account and IP rate limits apply; responses use Cache-Control: no-store.",
         "security": [{"bearerAuth": []}],
         "parameters": [
-          {"name": "query", "in": "query", "required": true, "schema": {"type": "string", "minLength": 3, "maxLength": 100}},
+          {"name": "query", "in": "query", "required": false, "schema": {"type": "string", "minLength": 0, "maxLength": 100}},
           {"name": "cursor", "in": "query", "required": false, "schema": {"type": "string", "format": "uuid"}},
           {"name": "limit", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}}
         ],
@@ -1723,7 +1723,7 @@
           "Members"
         ],
         "operationId": "ListVisibleMembers",
-        "summary": "Search the opted-in member directory",
+        "summary": "Search the authenticated member directory",
         "description": "Verified active Bearer session required. The caller may keep their own profile hidden and still browse visible members. Every page filters verified accounts with directoryVisible=true. Returns only id, firstName and lastName; no email, credentials, verification flags, roles or hidden-profile details. Search is literal, case-insensitive substring matching over firstName + space + lastName; % and _ are ordinary characters. Stable UUID ascending order, independent of names; pagination is live, not a frozen snapshot. 60 requests/account/minute and 120 requests/IP/minute. Unknown or repeated parameters are rejected. Opt out through PATCH /api/v1/me. No member detail-by-ID route is exposed.",
         "security": [
           {

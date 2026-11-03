@@ -1,6 +1,6 @@
 # Member profiles and privacy: first slice
 
-Members can read their own account/profile, edit first name and last name, choose whether they appear in the member directory, and manage one profile photo. The caller is always taken from a verified active Bearer session. There is no account-ID parameter on profile edits.
+Members can read their own account/profile, edit first name and last name, and manage one profile photo. The caller is always taken from a verified active Bearer session. There is no account-ID parameter on profile edits.
 
 ## API
 
@@ -29,7 +29,7 @@ PATCH requires application/json, an allowed Origin and an active verified Bearer
 
 Migration 00010 adds directory_visible NOT NULL DEFAULT false. Existing and new members start hidden. It preserves existing names, credentials, verification and role assignments; no account is seeded or reset. Tests rehearse upgrading an existing version-9 account, repeat the migration and verify its editorial role survives. A privacy-only edit preserves legacy name formatting.
 
-The member directory filters out hidden members server-side, shows only names and an optional short-lived signed photo, and keeps email addresses private. A member's photo is returned in directory results only while that member has opted in; the owner can still see it on their own profile when hidden. Ministries, biographies, recovery and email changes are separate slices.
+The authenticated member directory shows all verified, active members, with only names and an optional short-lived signed photo. Email addresses and other account/security fields remain private. The legacy `directory_visible` profile field is retained for compatibility but no longer controls member search visibility. Ministries, biographies, recovery and email changes are separate slices.
 
 ## TDD and verification
 
