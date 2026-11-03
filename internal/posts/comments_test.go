@@ -10,6 +10,44 @@ import (
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/testpg"
 )
 
+func TestCommentAuthorProfilePhotoIsReturnedWithSignedURL(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var owner, commenter, reader string
+	for email, target := range map[string]*string{"comments-photo-owner@example.invalid": &owner, "comments-photo-author@example.invalid": &commenter, "comments-photo-reader@example.invalid": &reader} {
+		if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES($1,'Photo','Member',now()) RETURNING id`, email).Scan(target); err != nil {
+			t.Fatal(err)
+		}
+	}
+	upload := insertProfileUpload(t, db, commenter)
+	if _, err := db.Exec(`UPDATE accounts SET avatar_upload_id=$2 WHERE id=$1`, commenter, upload); err != nil {
+		t.Fatal(err)
+	}
+	posts := NewService(NewRepository(db))
+	post, err := posts.Create(ctx, owner, CreateInput{Body: "Photo comment"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := &postDownloadSigner{}
+	comments := NewCommentService(NewCommentRepository(db), signer)
+	created, err := comments.Create(ctx, commenter, post.ID, CommentInput{Body: "A comment"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := comments.List(ctx, reader, post.ID, CommentOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []Comment{created, page.Items[0]} {
+		if item.Avatar == nil || item.Avatar.URL == "" {
+			t.Fatalf("comment author avatar missing: %+v", item.Avatar)
+		}
+	}
+}
+
 func TestCommentsArePaginatedMemberVisibleAndOwnerDeletable(t *testing.T) {
 	db := testpg.New(t)
 	ctx := context.Background()

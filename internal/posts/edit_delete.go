@@ -43,13 +43,21 @@ func (r *Repository) Update(ctx context.Context, authorID, postID string, in Upd
 		return Post{}, err
 	}
 	p, err := scan(tx.QueryRowContext(ctx, `UPDATE church_posts p SET body=$1
-FROM accounts a WHERE p.id=$2 AND p.author_id=$3 AND p.deleted_at IS NULL AND a.id=p.author_id
+FROM accounts a LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'
+WHERE p.id=$2 AND p.author_id=$3 AND p.deleted_at IS NULL AND a.id=p.author_id
 RETURNING p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,
  (SELECT count(*) FROM post_reactions pr WHERE pr.post_id=p.id AND pr.reaction='amen'),
  EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=$3 AND pr.reaction='amen'),
- (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL),COALESCE(p.group_id::text,'')`, in.Body, postID, authorID))
+(SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL),COALESCE(p.group_id::text,''),u.id::text,u.actual_content_type,u.actual_size,u.available_object_key`, in.Body, postID, authorID))
 	if err != nil {
 		return Post{}, err
+	}
+	if p.avatar != nil {
+		signed, e := media.SignAttachments(ctx, signer, []media.Attachment{*p.avatar})
+		if e != nil {
+			return Post{}, e
+		}
+		p.Avatar = &signed[0]
 	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM post_media_attachments WHERE post_id=$1`, postID); err != nil {
 		return Post{}, err
