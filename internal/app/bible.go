@@ -32,11 +32,15 @@ func bibleRoutes(mux *http.ServeMux, db *sql.DB, limiter *auth.RateLimiter, c Co
 	if provider == nil {
 		provider = bible.NewAPI(nil)
 	}
+	providerName := "bible-api.com"
+	if _, ok := provider.(*bible.APIBible); ok {
+		providerName = "api.bible"
+	}
 	service := bible.NewService(provider, func(ctx context.Context) (bool, error) {
 		if limiter == nil || db == nil {
 			return false, bible.ErrUnavailable
 		}
-		return limiter.Allow(ctx, "bible-provider", "bible-api.com", 12, 30*time.Second)
+		return limiter.Allow(ctx, "bible-provider", providerName, 12, 30*time.Second)
 	}, c.Now)
 	allowed := func(w http.ResponseWriter, r *http.Request) bool {
 		if limiter == nil || db == nil {
@@ -54,7 +58,16 @@ func bibleRoutes(mux *http.ServeMux, db *sql.DB, limiter *auth.RateLimiter, c Co
 			bibleError(w, bible.ErrInvalid)
 			return
 		}
-		writeJSON(w, 200, map[string]any{"data": bible.Translations()})
+		translations := bible.Translations()
+		if catalog, ok := provider.(bible.CatalogProvider); ok {
+			var err error
+			translations, err = catalog.Translations(r.Context())
+			if err != nil {
+				bibleError(w, err)
+				return
+			}
+		}
+		writeJSON(w, 200, map[string]any{"data": translations})
 	})
 	mux.HandleFunc("GET /api/v1/bible/passages", func(w http.ResponseWriter, r *http.Request) {
 		if !allowed(w, r) {

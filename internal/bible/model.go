@@ -33,9 +33,28 @@ type Translation struct {
 
 var catalog = []Translation{{"web", "World English Bible", "English", "Public domain", true}, {"webbe", "World English Bible, British Edition", "English (UK)", "Public domain", true}, {"asv", "American Standard Version (1901)", "English", "Public domain", true}}
 
+var licensedCatalog = []Translation{
+	{"niv", "New International Version", "English", "Licensed via API.Bible", false},
+	{"kjv", "King James Version", "English", "Public domain via API.Bible", true},
+	{"nkjv", "New King James Version", "English", "Licensed via API.Bible", false},
+	{"amp", "Amplified Bible", "English", "Licensed via API.Bible", false},
+}
+
 func Translations() []Translation { return append([]Translation{}, catalog...) }
 func findTranslation(id string) (Translation, bool) {
 	for _, t := range catalog {
+		if t.ID == id {
+			return t, true
+		}
+	}
+	return Translation{}, false
+}
+
+func findAnyTranslation(id string) (Translation, bool) {
+	if t, ok := findTranslation(id); ok {
+		return t, true
+	}
+	for _, t := range licensedCatalog {
 		if t.ID == id {
 			return t, true
 		}
@@ -62,9 +81,16 @@ type Passage struct {
 type Provider interface {
 	Lookup(context.Context, Query) (Passage, error)
 }
+type CatalogProvider interface {
+	Translations(context.Context) ([]Translation, error)
+}
 type Gate func(context.Context) (bool, error)
 
 func normalize(q Query) (Query, error) {
+	return normalizeWithCatalog(q, false)
+}
+
+func normalizeWithCatalog(q Query, includeLicensed bool) (Query, error) {
 	if !utf8.ValidString(q.Reference) || utf8.RuneCountInString(q.Reference) > 128 {
 		return q, invalid("reference", "Use a short Bible reference, such as John 3:16 or Psalm 23.")
 	}
@@ -85,7 +111,13 @@ func normalize(q Query) (Query, error) {
 	if q.Translation == "" {
 		q.Translation = "web"
 	}
-	if _, ok := findTranslation(q.Translation); !ok {
+	var ok bool
+	if includeLicensed {
+		_, ok = findAnyTranslation(q.Translation)
+	} else {
+		_, ok = findTranslation(q.Translation)
+	}
+	if !ok {
 		return q, invalid("translation", "Choose a supported translation.")
 	}
 	return q, nil

@@ -9520,7 +9520,7 @@
           "Bible"
         ],
         "security": [],
-        "description": "Public-domain WEB, WEB British Edition and ASV (1901). Lookup uses bible-api.com with a five-second timeout, one-hour bounded in-memory cache, a shared 12 uncached requests per 30 seconds quota and 60 requests per IP per minute. Upstream outages return 503; no translation fallback. Saving or publishing Daily Bread is a separate editorial operation.",
+        "description": "Without BIBLE_API_KEY, public-domain WEB, WEB British Edition and ASV (1901) are available. With BIBLE_API_KEY, the backend uses API.Bible and exposes the enabled NIV, KJV, NKJV and AMP versions. Lookup uses a five-second timeout, one-hour bounded in-memory cache, a shared 12 uncached requests per 30 seconds quota and 60 requests per IP per minute. Upstream outages return 503; no translation fallback. Saving or publishing Daily Bread is a separate editorial operation.",
         "responses": {
           "200": {
             "description": "Success",
@@ -9563,7 +9563,7 @@
           "Bible"
         ],
         "security": [],
-        "description": "Public-domain WEB, WEB British Edition and ASV (1901). Lookup uses bible-api.com with a five-second timeout, one-hour bounded in-memory cache, a shared 12 uncached requests per 30 seconds quota and 60 requests per IP per minute. Upstream outages return 503; no translation fallback. Saving or publishing Daily Bread is a separate editorial operation.",
+        "description": "Without BIBLE_API_KEY, public-domain WEB, WEB British Edition and ASV (1901) are available. With BIBLE_API_KEY, the backend uses API.Bible and exposes the enabled NIV, KJV, NKJV and AMP versions. Lookup uses a five-second timeout, one-hour bounded in-memory cache, a shared 12 uncached requests per 30 seconds quota and 60 requests per IP per minute. Upstream outages return 503; no translation fallback. Saving or publishing Daily Bread is a separate editorial operation.",
         "responses": {
           "200": {
             "description": "Success",

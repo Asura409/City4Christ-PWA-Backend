@@ -9,8 +9,10 @@ Initial versions: World English Bible (`web`), World English Bible British Editi
 (`webbe`) and American Standard Version 1901 (`asv`). These are public domain.
 [Provider documentation](https://bible-api.com/) and
 [publisher licensing](https://ebible.org/eng-web/) describe the source material.
-Modern licensed translations such as NIV are outside this initial catalog.
-No Bible API key or new deployment environment variable is required.
+When `BIBLE_API_KEY` is configured, the backend uses [API.Bible](https://api.bible/)
+and exposes the enabled NIV (`niv`), KJV (`kjv`), NKJV (`nkjv`) and AMP (`amp`)
+versions through the same public backend endpoints. The API key stays
+server-side. Without it, the public-domain catalog above remains active.
 
 ## Public API
 
