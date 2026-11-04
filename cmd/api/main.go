@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/app"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/bible"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/googleoidc"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
@@ -41,6 +42,7 @@ type serverConfig struct {
 	allowedOrigins                     []string
 	crossSiteCookies                   bool
 	trustedProxyCIDRs                  []string
+	bibleAPIKey                        string
 	googleClientID, googleClientSecret string
 	r2Config                           media.R2Config
 	r2Configured                       bool
@@ -127,6 +129,7 @@ func loadConfig(getenv func(string) string) (serverConfig, error) {
 	}
 	c.googleClientID = getenv("GOOGLE_CLIENT_ID")
 	c.googleClientSecret = getenv("GOOGLE_CLIENT_SECRET")
+	c.bibleAPIKey = strings.TrimSpace(getenv("BIBLE_API_KEY"))
 	if (c.googleClientID == "") != (c.googleClientSecret == "") || c.googleClientID != "" && c.appOrigin == "" {
 		return c, errors.New("Google requires client ID, client secret, and APP_ORIGIN")
 	}
@@ -157,6 +160,9 @@ func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfi
 	defer stopRetention()
 	go runVisitorRetention(retentionCtx, db)
 	appConfig := app.Config{VisitorIntakeEnabled: c.visitorEnabled, VisitorProtection: c.visitorProtection, PushEnabled: c.pushEnabled, PushPublicKey: c.pushPublicKey, RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
+	if c.bibleAPIKey != "" {
+		appConfig.BibleProvider = bible.NewAPIBible(c.bibleAPIKey, nil)
+	}
 	if c.r2Configured {
 		store, err := media.NewR2Storage(c.r2Config, nil)
 		if err != nil {
