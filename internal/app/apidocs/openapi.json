@@ -4699,9 +4699,7 @@
             "description": "Select this exact active group. Posts require active membership; editorial event/report queries require the exact group management capability."
           }
         ]
-      }
-    },
-    "/api/v1/admin/events": {
+      },
       "post": {
         "tags": [
           "Event management"
