@@ -16,7 +16,7 @@ func TestAPIBibleLoadsConfiguredVersionsAndPassages(t *testing.T) {
 		var body string
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/bibles"):
-			body = `{"data":[{"id":"niv-id","abbreviation":"NIV","name":"New International Version"},{"id":"kjv-id","abbreviation":"KJV","name":"King James Version"},{"id":"nkjv-id","abbreviation":"NKJV","name":"New King James Version"},{"id":"amp-id","abbreviation":"AMP","name":"Amplified Bible"}]}`
+			body = `{"data":[{"id":"niv-id","abbreviation":"NIV11","abbreviationLocal":"NIV","name":"New International Version 2011","nameLocal":"New International Version"},{"id":"kjv-id","abbreviation":"engKJV","abbreviationLocal":"KJV","name":"King James (Authorised) Version","nameLocal":"King James Version"},{"id":"nkjv-id","abbreviation":"NKJV","abbreviationLocal":"NKJV","name":"New King James Version"},{"id":"amp-id","abbreviation":"AMP","abbreviationLocal":"AMP","name":"Amplified Bible"}]}`
 		case strings.Contains(r.URL.Path, "/chapters/"):
 			body = `{"data":{"reference":"John 3","copyright":"Test copyright","content":[{"name":"para","type":"tag","items":[{"name":"verse","type":"tag","attrs":{"sid":"JHN 3:16"},"items":[{"text":"16","type":"text"},{"text":"For God so loved the world.","type":"text","attrs":{"verseId":"JHN.3.16"}}]}]}]}}`
 		default:

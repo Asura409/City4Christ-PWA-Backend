@@ -40,10 +40,12 @@ func NewAPIBible(key string, client *http.Client) *APIBible {
 }
 
 type remoteBible struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Abbreviation string `json:"abbreviation"`
-	Language     struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	NameLocal         string `json:"nameLocal"`
+	Abbreviation      string `json:"abbreviation"`
+	AbbreviationLocal string `json:"abbreviationLocal"`
+	Language          struct {
 		ID string `json:"id"`
 	} `json:"language"`
 }
@@ -87,16 +89,18 @@ func (a *APIBible) loadCatalog(ctx context.Context) error {
 	}
 	remote := map[string]string{}
 	for _, item := range response.Data {
-		id := strings.ToUpper(strings.TrimSpace(item.Abbreviation))
-		switch id {
-		case "NIV":
-			remote["niv"] = item.ID
-		case "KJV":
-			remote["kjv"] = item.ID
-		case "NKJV":
-			remote["nkjv"] = item.ID
-		case "AMP", "AMPC":
+		abbreviation := strings.ToUpper(strings.TrimSpace(item.Abbreviation))
+		localAbbreviation := strings.ToUpper(strings.TrimSpace(item.AbbreviationLocal))
+		name := strings.ToUpper(strings.TrimSpace(item.Name + " " + item.NameLocal))
+		switch {
+		case abbreviation == "AMP" || localAbbreviation == "AMP" || strings.Contains(name, "AMPLIFIED BIBLE"):
 			remote["amp"] = item.ID
+		case abbreviation == "NKJV" || localAbbreviation == "NKJV" || strings.Contains(name, "NEW KING JAMES VERSION"):
+			remote["nkjv"] = item.ID
+		case abbreviation == "NIV" || abbreviation == "NIV11" || localAbbreviation == "NIV" || strings.Contains(name, "NEW INTERNATIONAL VERSION"):
+			remote["niv"] = item.ID
+		case abbreviation == "KJV" || strings.HasSuffix(abbreviation, "KJV") || localAbbreviation == "KJV" || (strings.Contains(name, "KING JAMES") && !strings.Contains(name, "NEW KING JAMES")):
+			remote["kjv"] = item.ID
 		}
 	}
 	a.mu.Lock()
