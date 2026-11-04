@@ -58,7 +58,12 @@ func (s *Service) put(key string, p Passage) {
 	s.cache[key] = cached{clone(p), s.now().Add(time.Hour)}
 }
 func (s *Service) Lookup(ctx context.Context, q Query) (Passage, error) {
-	q, err := normalize(q)
+	var err error
+	if _, dynamicCatalog := s.provider.(CatalogProvider); dynamicCatalog {
+		q, err = normalizeReference(q)
+	} else {
+		q, err = normalize(q)
+	}
 	if err != nil {
 		return Passage{}, err
 	}

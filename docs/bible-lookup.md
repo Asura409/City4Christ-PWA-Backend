@@ -9,10 +9,10 @@ Initial versions: World English Bible (`web`), World English Bible British Editi
 (`webbe`) and American Standard Version 1901 (`asv`). These are public domain.
 [Provider documentation](https://bible-api.com/) and
 [publisher licensing](https://ebible.org/eng-web/) describe the source material.
-When `BIBLE_API_KEY` is configured, the backend uses [API.Bible](https://api.bible/)
-and exposes the enabled NIV (`niv`), KJV (`kjv`), NKJV (`nkjv`) and AMP (`amp`)
-versions through the same public backend endpoints. The API key stays
-server-side. Without it, the public-domain catalog above remains active.
+When `YVP_APP_KEY` is configured, the backend uses the [YouVersion Platform API](https://developers.youversion.com/api/bibles)
+and exposes exactly the English versions available to that App Key through the
+same public backend endpoints. The App Key stays server-side. Without it, the
+public-domain catalog above remains active.
 
 ## Public API
 
@@ -24,13 +24,13 @@ English book names, chapter numbers and optional verses. Unknown, duplicated or
 unsupported parameters return 422. No arbitrary upstream URLs are accepted.
 Single-chapter books use chapter interpretation for references such as `Jude 1`.
 
-The backend calls a fixed HTTPS bible-api.com endpoint with a five-second timeout,
-redirects disabled, bounded response sizes and validated plain text. It retains up
-to 128 successful lookups for one hour per process and coalesces simultaneous
+The backend calls a fixed HTTPS provider endpoint with a five-second timeout,
+redirects disabled, bounded response sizes and validated plain text. It retains
+up to 128 successful lookups for one hour per process and coalesces simultaneous
 identical requests. The persistent shared provider budget permits 12 uncached
 requests per 30 seconds; caller IPs have a 60-request/minute limit. Lookup may
-return 429 or 503; it never substitutes another translation on failure. This free
-provider has no availability guarantee. Cached data is lost on restart.
+return 429 or 503; it never substitutes another translation on failure. Cached
+data is lost on restart.
 
 ## Daily Bread workflow
 

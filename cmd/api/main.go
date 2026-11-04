@@ -129,7 +129,7 @@ func loadConfig(getenv func(string) string) (serverConfig, error) {
 	}
 	c.googleClientID = getenv("GOOGLE_CLIENT_ID")
 	c.googleClientSecret = getenv("GOOGLE_CLIENT_SECRET")
-	c.bibleAPIKey = strings.TrimSpace(getenv("BIBLE_API_KEY"))
+	c.bibleAPIKey = strings.TrimSpace(getenv("YVP_APP_KEY"))
 	if (c.googleClientID == "") != (c.googleClientSecret == "") || c.googleClientID != "" && c.appOrigin == "" {
 		return c, errors.New("Google requires client ID, client secret, and APP_ORIGIN")
 	}
@@ -161,7 +161,7 @@ func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfi
 	go runVisitorRetention(retentionCtx, db)
 	appConfig := app.Config{VisitorIntakeEnabled: c.visitorEnabled, VisitorProtection: c.visitorProtection, PushEnabled: c.pushEnabled, PushPublicKey: c.pushPublicKey, RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
 	if c.bibleAPIKey != "" {
-		appConfig.BibleProvider = bible.NewAPIBible(c.bibleAPIKey, nil)
+		appConfig.BibleProvider = bible.NewYouVersion(c.bibleAPIKey, nil)
 	}
 	if c.r2Configured {
 		store, err := media.NewR2Storage(c.r2Config, nil)

@@ -90,6 +90,20 @@ func normalize(q Query) (Query, error) {
 	return normalizeWithCatalog(q, false)
 }
 
+func normalizeReference(q Query) (Query, error) {
+	requestedTranslation := q.Translation
+	q.Translation = "web"
+	q, err := normalizeWithCatalog(q, false)
+	if err != nil {
+		return q, err
+	}
+	q.Translation = strings.ToLower(strings.TrimSpace(requestedTranslation))
+	if q.Translation == "" {
+		q.Translation = "web"
+	}
+	return q, nil
+}
+
 func normalizeWithCatalog(q Query, includeLicensed bool) (Query, error) {
 	if !utf8.ValidString(q.Reference) || utf8.RuneCountInString(q.Reference) > 128 {
 		return q, invalid("reference", "Use a short Bible reference, such as John 3:16 or Psalm 23.")

@@ -36,6 +36,9 @@ func bibleRoutes(mux *http.ServeMux, db *sql.DB, limiter *auth.RateLimiter, c Co
 	if _, ok := provider.(*bible.APIBible); ok {
 		providerName = "api.bible"
 	}
+	if _, ok := provider.(*bible.YouVersion); ok {
+		providerName = "youversion"
+	}
 	service := bible.NewService(provider, func(ctx context.Context) (bool, error) {
 		if limiter == nil || db == nil {
 			return false, bible.ErrUnavailable
