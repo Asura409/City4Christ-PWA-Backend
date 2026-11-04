@@ -80,7 +80,7 @@ func (a *APIBible) loadCatalog(ctx context.Context) error {
 	if ready {
 		return nil
 	}
-	u := apiBibleBaseURL + "/bibles?language=eng&limit=500"
+	u := apiBibleBaseURL + "/bibles?language=eng"
 	var response remoteList
 	if err := a.getJSON(ctx, u, &response); err != nil {
 		return err
