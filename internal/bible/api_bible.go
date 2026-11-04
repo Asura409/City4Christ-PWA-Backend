@@ -123,11 +123,19 @@ type apiResponse[T any] struct {
 }
 
 type contentNode struct {
-	Name  string            `json:"name"`
-	Type  string            `json:"type"`
-	Text  string            `json:"text"`
-	Attrs map[string]string `json:"attrs"`
-	Items []contentNode     `json:"items"`
+	Name  string                     `json:"name"`
+	Type  string                     `json:"type"`
+	Text  string                     `json:"text"`
+	Attrs map[string]json.RawMessage `json:"attrs"`
+	Items []contentNode              `json:"items"`
+}
+
+func contentAttr(node contentNode, name string) string {
+	var value string
+	if json.Unmarshal(node.Attrs[name], &value) != nil {
+		return ""
+	}
+	return value
 }
 
 var referencePattern = regexp.MustCompile(`^(.+?)\s+(\d+)(?::(\d+)(?:-(?:(\d+):)?(\d+))?)?$`)
@@ -236,10 +244,10 @@ func parseContent(raw json.RawMessage) []Verse {
 	var walk func([]contentNode, string)
 	walk = func(items []contentNode, current string) {
 		for _, node := range items {
-			if node.Name == "verse" && node.Attrs["sid"] != "" {
-				current = node.Attrs["sid"]
+			if node.Name == "verse" && contentAttr(node, "sid") != "" {
+				current = contentAttr(node, "sid")
 			}
-			if verseID := node.Attrs["verseId"]; verseID != "" && strings.TrimSpace(node.Text) != "" {
+			if verseID := contentAttr(node, "verseId"); verseID != "" && strings.TrimSpace(node.Text) != "" {
 				parts := strings.FieldsFunc(verseID, func(r rune) bool { return r == '.' })
 				if len(parts) == 3 {
 					key := verseID
