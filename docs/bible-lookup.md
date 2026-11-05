@@ -6,7 +6,9 @@ its published reference and translation; an unsupported original translation
 requires an explicit choice rather than silently displaying another version.
 
 Initial versions: World English Bible (`web`), World English Bible British Edition
-(`webbe`) and American Standard Version 1901 (`asv`). These are public domain.
+(`webbe`), American Standard Version 1901 (`asv`) and King James Version (`kjv`).
+These are public domain. KJV is served from HelloAO's public JSON API; the other
+initial versions use the existing public provider.
 [Provider documentation](https://bible-api.com/) and
 [publisher licensing](https://ebible.org/eng-web/) describe the source material.
 When `YVP_APP_KEY` is configured, the backend uses the [YouVersion Platform API](https://developers.youversion.com/api/bibles)
@@ -31,6 +33,25 @@ identical requests. The persistent shared provider budget permits 12 uncached
 requests per 30 seconds; caller IPs have a 60-request/minute limit. Lookup may
 return 429 or 503; it never substitutes another translation on failure. Cached
 data is lost on restart.
+
+## KJV database import worker
+
+The KJV tables are created by migration `00059_bible_kjv.sql`. The API starts
+the one-time importer in the background after migrations complete. It downloads
+HelloAO chapters in order and upserts them into `bible_verses`. It uses a
+PostgreSQL advisory lock and records its checkpoint in `bible_import_jobs`, so
+it is safe to restart after a failure. The same importer is also packaged as a
+standalone worker for deployments that provide a dedicated background-worker
+service:
+
+```text
+Build command: go build -o bible-import-worker ./cmd/bible-import-worker
+Start command: ./bible-import-worker
+```
+
+Configure the Render Background Worker with the same `DATABASE_URL` as the API.
+After the worker completes, KJV lookups are served from PostgreSQL; before then,
+the API safely uses HelloAO as a fallback.
 
 ## Daily Bread workflow
 
