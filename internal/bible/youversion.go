@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,7 +58,7 @@ func (y *YouVersion) Translations(ctx context.Context) ([]Translation, error) {
 		if strings.TrimSpace(item.Copyright) == "" {
 			license = "Open access via YouVersion"
 		}
-		result = append(result, Translation{ID: id, Name: item.Title, Language: item.LanguageTag, License: license})
+		result = append(result, Translation{ID: id, Name: item.Title, Language: item.LanguageTag, License: license, CanImport: strings.TrimSpace(item.Copyright) == ""})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
 	return result, nil
@@ -108,7 +110,10 @@ func (y *YouVersion) Lookup(ctx context.Context, q Query) (Passage, error) {
 		return Passage{}, err
 	}
 	endpoint := fmt.Sprintf("%s/bibles/%d/passages/%s", youVersionBaseURL, remote.ID, url.PathEscape(passage))
-	query := url.Values{"format": []string{"text"}}
+	// The text response is compact, but it does not retain verse boundaries.
+	// HTML responses include YouVersion's verse spans, which we convert to the
+	// provider-neutral Verse model before returning plain text to the client.
+	query := url.Values{"format": []string{"html"}, "include_headings": []string{"false"}, "include_notes": []string{"false"}}
 	var response struct {
 		ID        string `json:"id"`
 		Reference string `json:"reference"`
@@ -117,21 +122,77 @@ func (y *YouVersion) Lookup(ctx context.Context, q Query) (Passage, error) {
 	if err := y.getJSON(ctx, endpoint+"?"+query.Encode(), &response); err != nil {
 		return Passage{}, err
 	}
-	if !plain(response.Content, 30000) {
-		return Passage{}, ErrUnavailable
+	verses := parseYouVersionHTML(response.Content, passage)
+	text := strings.TrimSpace(response.Content)
+	if len(verses) > 0 {
+		parts := make([]string, 0, len(verses))
+		for _, verse := range verses {
+			parts = append(parts, fmt.Sprintf("[%d] %s", verse.Number, verse.Text))
+		}
+		text = strings.Join(parts, " ")
+	} else {
+		// Keep the integration compatible with versions whose HTML response does
+		// not expose the standard verse spans. Those passages remain usable, but
+		// cannot receive inline markers until the provider returns boundaries.
+		textQuery := url.Values{"format": []string{"text"}}
+		var textResponse struct {
+			Content string `json:"content"`
+		}
+		if err := y.getJSON(ctx, endpoint+"?"+textQuery.Encode(), &textResponse); err != nil || !plain(textResponse.Content, 30000) {
+			return Passage{}, ErrUnavailable
+		}
+		text = strings.TrimSpace(textResponse.Content)
 	}
-	translation := Translation{ID: q.Translation, Name: remote.Title, Language: remote.LanguageTag, License: "YouVersion"}
+	translation := Translation{ID: q.Translation, Name: remote.Title, Language: remote.LanguageTag, License: "YouVersion", CanImport: strings.TrimSpace(remote.Copyright) == ""}
 	if strings.TrimSpace(remote.Copyright) == "" {
 		translation.License = "Open access via YouVersion"
 	}
 	return Passage{
 		Reference:   displayReference,
 		Translation: translation,
-		Text:        strings.TrimSpace(response.Content),
-		Verses:      []Verse{{BookID: strings.Split(passage, ".")[0], BookName: bookNames[strings.Split(passage, ".")[0]], Text: strings.TrimSpace(response.Content)}},
+		Text:        text,
+		Verses:      verses,
 		Source:      "YouVersion",
 		SourceURL:   "https://www.youversion.com/",
 	}, nil
+}
+
+var youVersionSpanPattern = regexp.MustCompile(`(?is)<span\b([^>]*)>(.*?)</span>`)
+var youVersionVerseNumberPattern = regexp.MustCompile(`(?i)\bv\s*=\s*["']([0-9]+)["']`)
+
+// parseYouVersionHTML extracts the verse spans from YouVersion's HTML format.
+// It deliberately strips markup so imported Daily verse text remains plain
+// text and is safe to render with React's normal text escaping.
+func parseYouVersionHTML(raw, passage string) []Verse {
+	book := strings.Split(passage, ".")[0]
+	matches := youVersionSpanPattern.FindAllStringSubmatch(raw, -1)
+	result := make([]Verse, 0, len(matches))
+	for _, match := range matches {
+		attrs := match[1]
+		if !strings.Contains(strings.ToLower(attrs), "yv-v") {
+			continue
+		}
+		numberMatch := youVersionVerseNumberPattern.FindStringSubmatch(attrs)
+		if len(numberMatch) != 2 {
+			continue
+		}
+		number, err := strconv.Atoi(numberMatch[1])
+		if err != nil {
+			continue
+		}
+		text := strings.TrimSpace(html.UnescapeString(stripHTMLTags(match[2])))
+		if text == "" {
+			continue
+		}
+		result = append(result, Verse{BookID: book, BookName: bookNames[book], Number: number, Text: text})
+	}
+	return result
+}
+
+var htmlTagPattern = regexp.MustCompile(`(?is)<[^>]+>`)
+
+func stripHTMLTags(value string) string {
+	return strings.Join(strings.Fields(htmlTagPattern.ReplaceAllString(value, " ")), " ")
 }
 
 func (y *YouVersion) getJSON(ctx context.Context, endpoint string, target any) error {
