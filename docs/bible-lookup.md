@@ -36,10 +36,13 @@ data is lost on restart.
 
 ## KJV database import worker
 
-The KJV tables are created by migration `00059_bible_kjv.sql`. The one-time
-import worker downloads HelloAO chapters in order and upserts them into
-`bible_verses`. It uses a PostgreSQL advisory lock and records its checkpoint in
-`bible_import_jobs`, so it is safe to restart after a failure:
+The KJV tables are created by migration `00059_bible_kjv.sql`. The API starts
+the one-time importer in the background after migrations complete. It downloads
+HelloAO chapters in order and upserts them into `bible_verses`. It uses a
+PostgreSQL advisory lock and records its checkpoint in `bible_import_jobs`, so
+it is safe to restart after a failure. The same importer is also packaged as a
+standalone worker for deployments that provide a dedicated background-worker
+service:
 
 ```text
 Build command: go build -o bible-import-worker ./cmd/bible-import-worker

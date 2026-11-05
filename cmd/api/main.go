@@ -158,6 +158,13 @@ func migrate(ctx context.Context, db *sql.DB) error { return database.Migrate(ct
 func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfig) error {
 	retentionCtx, stopRetention := context.WithCancel(ctx)
 	defer stopRetention()
+	go func() {
+		if err := bible.NewKJVImporter(db, nil).ImportKJV(ctx); err != nil {
+			slog.Error("KJV background import stopped", "error", err)
+			return
+		}
+		slog.Info("KJV background import complete")
+	}()
 	go runVisitorRetention(retentionCtx, db)
 	appConfig := app.Config{VisitorIntakeEnabled: c.visitorEnabled, VisitorProtection: c.visitorProtection, PushEnabled: c.pushEnabled, PushPublicKey: c.pushPublicKey, RegistrationEnabled: c.registrationEnabled, VerificationKey: c.verificationKey, AppOrigin: c.appOrigin, AllowedOrigins: c.allowedOrigins, CrossSiteCookies: c.crossSiteCookies, TrustedProxyCIDRs: c.trustedProxyCIDRs}
 	provider := bible.Provider(bible.NewAPI(nil))
