@@ -37,6 +37,9 @@ var roleRules = [...]roleRule{
 	{role: "super_administrator", permission: "events.manage"},
 	{role: "super_administrator", permission: "prayer.moderate"},
 	{role: "super_administrator", permission: "groups.content.moderate"},
+	{role: "super_administrator", permission: "groups.settings.manage"},
+	{role: "super_administrator", permission: "groups.analytics.read"},
+	{role: "super_administrator", permission: "groups.ownership.transfer"},
 	{role: "assistant_pastor", permission: "roles.read"},
 	{role: "assistant_pastor", permission: "members.records.read"},
 	{role: "assistant_pastor", permission: "members.records.manage"},
@@ -48,6 +51,9 @@ var roleRules = [...]roleRule{
 	{role: "assistant_pastor", permission: "events.manage"},
 	{role: "assistant_pastor", permission: "prayer.moderate"},
 	{role: "assistant_pastor", permission: "groups.content.moderate"},
+	{role: "assistant_pastor", permission: "groups.settings.manage"},
+	{role: "assistant_pastor", permission: "groups.analytics.read"},
+	{role: "assistant_pastor", permission: "groups.ownership.transfer"},
 	{role: "staff", permission: "roles.read"},
 	{role: "staff", permission: "members.records.read"},
 	{role: "staff", permission: "members.records.manage"},
@@ -59,6 +65,8 @@ var roleRules = [...]roleRule{
 	{role: "staff", permission: "events.manage"},
 	{role: "staff", permission: "prayer.moderate"},
 	{role: "staff", permission: "groups.content.moderate"},
+	{role: "staff", permission: "groups.settings.manage"},
+	{role: "staff", permission: "groups.analytics.read"},
 	{role: "content_editor", permission: "sermons.manage"},
 	{role: "content_editor", permission: "devotionals.manage"},
 	{role: "system_administrator", permission: "sermons.manage"},
@@ -67,6 +75,8 @@ var roleRules = [...]roleRule{
 	{role: "ministry_leader", permission: "ministry.members.manage", ministry: true},
 	{role: "ministry_leader", permission: "prayer.moderate", ministry: true},
 	{role: "ministry_leader", permission: "groups.content.moderate", ministry: true},
+	{role: "ministry_leader", permission: "groups.settings.manage", ministry: true},
+	{role: "ministry_leader", permission: "groups.analytics.read", ministry: true},
 }
 
 func (rule roleRule) acceptsScope(scope string) bool {

@@ -180,6 +180,61 @@ func groupRoutes(mux *http.ServeMux, service *groups.Service, sessions *auth.Ses
 		}
 		writeJSON(w, 200, map[string]any{"data": map[string]bool{"changed": changed}})
 	})
+	mux.HandleFunc("PUT /api/v1/admin/groups/{groupId}", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[groups.UpdateInput](w, r)
+		if !ok {
+			return
+		}
+		updated, err := service.Update(r.Context(), actor, r.PathValue("groupId"), in)
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": updated})
+	})
+	mux.HandleFunc("POST /api/v1/admin/groups/{groupId}/ownership", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, true)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		in, ok := decodeJSON[groups.OwnershipInput](w, r)
+		if !ok {
+			return
+		}
+		if err := service.TransferOwnership(r.Context(), actor, r.PathValue("groupId"), in); err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": map[string]bool{"changed": true}})
+	})
+	mux.HandleFunc("GET /api/v1/admin/groups/{groupId}/analytics", func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := authorize(w, r, false)
+		if !ok {
+			return
+		}
+		if r.URL.RawQuery != "" {
+			groupError(w, groups.ErrInvalid)
+			return
+		}
+		stats, err := service.Analytics(r.Context(), actor, r.PathValue("groupId"))
+		if err != nil {
+			groupError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]any{"data": stats})
+	})
 	mux.HandleFunc("POST /api/v1/groups/{groupId}/membership", func(w http.ResponseWriter, r *http.Request) {
 		actor, ok := authorize(w, r, true)
 		if !ok {
