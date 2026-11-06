@@ -36,8 +36,18 @@ func account(t *testing.T, db *sql.DB) string {
 	}
 	return id
 }
+func superAdmin(t *testing.T, db *sql.DB, id string) {
+	t.Helper()
+	if _, err := db.Exec(`DELETE FROM account_roles WHERE account_id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'super_administrator')`, id); err != nil {
+		t.Fatal(err)
+	}
+}
 func TestDelegationAndScopes(t *testing.T) {
 	db, s, admin, target := fixture(t)
+	superAdmin(t, db, admin)
 	ctx := context.Background()
 	in := Change{Role: "content_editor", Reason: "Appointed by church leadership"}
 	if _, err := s.Grant(ctx, target, admin, in); !errors.Is(err, ErrForbidden) {
@@ -82,8 +92,8 @@ func TestDelegationAndScopes(t *testing.T) {
 			t.Fatal("scope leak")
 		}
 	}
-	if err = s.Check(ctx, admin, "sermons.manage", ""); !errors.Is(err, ErrForbidden) {
-		t.Fatal("access admin inherited editorial powers")
+	if err = s.Check(ctx, admin, "sermons.manage", ""); err != nil {
+		t.Fatalf("super administrator lost editorial access: %v", err)
 	}
 	if err = s.Check(ctx, target, "unknown", a); !errors.Is(err, ErrForbidden) {
 		t.Fatal("unknown permission allowed")
@@ -104,6 +114,7 @@ func TestDelegationAndScopes(t *testing.T) {
 }
 func TestValidationAndAuditRollback(t *testing.T) {
 	db, s, admin, target := fixture(t)
+	superAdmin(t, db, admin)
 	ctx := context.Background()
 	for _, in := range []Change{{Role: "content_editor"}, {Role: "content_editor", Scope: "bad", Reason: "Reason"}, {Role: "ministry_leader", Reason: "Reason"}, {Role: "ministry_leader", Scope: "33333333-3333-4333-8333-333333333333", Reason: "Reason"}} {
 		if _, err := s.Grant(ctx, admin, target, in); !errors.Is(err, ErrInvalid) {
@@ -122,6 +133,7 @@ func TestValidationAndAuditRollback(t *testing.T) {
 }
 func TestConcurrentGrantsAndRevokedAdministrator(t *testing.T) {
 	db, s, admin, target := fixture(t)
+	superAdmin(t, db, admin)
 	ctx := context.Background()
 	in := Change{Role: "content_editor", Reason: "Appointment"}
 	var wg sync.WaitGroup
@@ -163,6 +175,7 @@ func TestConcurrentGrantsAndRevokedAdministrator(t *testing.T) {
 
 func TestUnverifiedAccountsAndRevocationRollback(t *testing.T) {
 	db, s, admin, target := fixture(t)
+	superAdmin(t, db, admin)
 	ctx := context.Background()
 	in := Change{Role: "content_editor", Reason: "Appointment"}
 	if _, err := db.Exec(`UPDATE accounts SET email_verified_at=NULL WHERE id=$1`, target); err != nil {
@@ -252,8 +265,9 @@ func TestUpgradePreservesLegacyEditorialRoles(t *testing.T) {
 
 func TestDelegationDoesNotRequireExclusiveAccountLocks(t *testing.T) {
 	db, s, admin, other := fixture(t)
+	superAdmin(t, db, admin)
 	ctx := context.Background()
-	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'access_administrator')`, other); err != nil {
+	if _, err := db.Exec(`INSERT INTO account_roles(account_id,role) VALUES($1,'super_administrator')`, other); err != nil {
 		t.Fatal(err)
 	}
 	reader, err := db.BeginTx(ctx, nil)

@@ -82,7 +82,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	profileRoutes(mux, profileService, sessions, limiter, config)
 	accountDeletionRoutes(mux, accountdeletion.NewService(db, config.Now), sessions, limiter, config)
 	directoryRoutes(mux, profileService, sessions, limiter, config)
-	accessService := access.NewService(db)
+	accessService := access.NewService(db, downloadSigner)
 	postRoutes(mux, posts.NewService(posts.NewRepository(db), downloadSigner), sessions, limiter, config)
 	moderationService := posts.NewModerationService(posts.NewModerationRepository(db), accessService, config.Now)
 	postModerationRoutes(mux, moderationService, sessions, limiter, config)

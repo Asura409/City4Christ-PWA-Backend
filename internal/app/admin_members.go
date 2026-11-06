@@ -152,7 +152,7 @@ func adminMemberRoutes(mux *http.ServeMux, service *access.Service, sessions *au
 		}
 		page, err := service.SearchMembers(r.Context(), actor, query.Get("query"), query.Get("cursor"), limit)
 		if errors.Is(err, access.ErrInvalid) {
-			writeError(w, 422, "validation_failed", "Search with at least three characters and a valid cursor and limit.", nil)
+			writeError(w, 422, "validation_failed", "Use an empty query or at least three characters, with a valid cursor and limit.", nil)
 			return
 		}
 		if err != nil {
