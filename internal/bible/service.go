@@ -94,7 +94,7 @@ func (s *Service) Lookup(ctx context.Context, q Query) (Passage, error) {
 		if err != nil {
 			return Passage{}, err
 		}
-		if p.Translation.ID != q.Translation || len(p.Verses) == 0 || p.Text == "" {
+		if p.Translation.ID != q.Translation || strings.TrimSpace(p.Text) == "" {
 			return Passage{}, ErrUnavailable
 		}
 		s.put(key, p)

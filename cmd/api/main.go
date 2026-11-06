@@ -171,7 +171,9 @@ func serve(ctx context.Context, db *sql.DB, listener net.Listener, c serverConfi
 	if c.bibleAPIKey != "" {
 		provider = bible.NewYouVersion(c.bibleAPIKey, nil)
 	}
-	appConfig.BibleProvider = bible.NewMultiProvider(bible.NewDatabase(db), bible.NewHelloAO(nil), provider)
+	// KJV is served from the imported database. All other translations are
+	// served by the configured remote provider, currently YouVersion.
+	appConfig.BibleProvider = bible.NewMultiProvider(bible.NewDatabase(db), provider)
 	if c.r2Configured {
 		store, err := media.NewR2Storage(c.r2Config, nil)
 		if err != nil {
