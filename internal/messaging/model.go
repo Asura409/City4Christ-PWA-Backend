@@ -8,15 +8,17 @@ import (
 )
 
 type Conversation struct {
-	ID                  string    `json:"id"`
-	PartnerID           string    `json:"partnerId"`
-	PartnerFirstName    string    `json:"partnerFirstName"`
-	PartnerLastName     string    `json:"partnerLastName"`
-	LastMessage         *Message  `json:"lastMessage,omitempty"`
-	UnreadCount         int       `json:"unreadCount"`
-	MyLastReadSequence  int64     `json:"myLastReadSequence"`
-	PartnerReadSequence int64     `json:"partnerReadSequence"`
-	CreatedAt           time.Time `json:"createdAt"`
+	ID                  string            `json:"id"`
+	PartnerID           string            `json:"partnerId"`
+	PartnerFirstName    string            `json:"partnerFirstName"`
+	PartnerLastName     string            `json:"partnerLastName"`
+	LastMessage         *Message          `json:"lastMessage,omitempty"`
+	UnreadCount         int               `json:"unreadCount"`
+	MyLastReadSequence  int64             `json:"myLastReadSequence"`
+	PartnerReadSequence int64             `json:"partnerReadSequence"`
+	CreatedAt           time.Time         `json:"createdAt"`
+	PartnerAvatar       *media.Attachment `json:"partnerAvatar,omitempty"`
+	partnerAvatar       *media.Attachment
 }
 
 type Message struct {
@@ -70,6 +72,10 @@ type GroupMessage struct {
 	Sequence        int64              `json:"sequence"`
 	CreatedAt       time.Time          `json:"createdAt"`
 	Deleted         bool               `json:"deleted"`
+	SenderFirstName string             `json:"senderFirstName,omitempty"`
+	SenderLastName  string             `json:"senderLastName,omitempty"`
+	SenderAvatar    *media.Attachment  `json:"senderAvatar,omitempty"`
+	senderAvatar    *media.Attachment
 }
 
 type GroupMessagePage struct {

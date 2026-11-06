@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/database"
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/testpg"
+	"github.com/google/uuid"
 	"testing"
 	"time"
 )
@@ -52,6 +54,37 @@ func TestRepositoryCreatesOneConversationPerVerifiedPair(t *testing.T) {
 	if err != nil || len(outsiderList) != 1 || outsiderList[0].PartnerID != first {
 		t.Fatalf("outsider's conversations = (%+v,%v)", outsiderList, err)
 	}
+}
+
+func TestConversationReturnsSignedPartnerProfilePhoto(t *testing.T) {
+	db, seed := messagingDB(t)
+	ctx := context.Background()
+	first, second := seed("dm-photo-first@example.invalid"), seed("dm-photo-second@example.invalid")
+	var upload string
+	upload = uuid.NewString()
+	_, err := db.Exec(`INSERT INTO media_uploads(id,owner_id,purpose,object_key,available_object_key,declared_content_type,declared_size,actual_content_type,actual_size,status,expires_at,uploaded_at,scanned_at) VALUES($1,$2,'profile_photo',$3,$4,'image/png',8,'image/png',8,'available',now()+interval '1 hour',now(),now())`, upload, second, "src/"+upload, "profiles/"+upload+"/clean.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE accounts SET avatar_upload_id=$2 WHERE id=$1`, second, upload); err != nil {
+		t.Fatal(err)
+	}
+	signer := &testAvatarSigner{}
+	service := NewService(NewRepository(db), nil, signer)
+	conversation, _, err := service.CreateConversation(ctx, first, second)
+	if err != nil || conversation.PartnerAvatar == nil || conversation.PartnerAvatar.URL != "https://cdn.example.invalid/profiles/"+upload+"/clean.png" {
+		t.Fatalf("created conversation avatar: %+v %v", conversation.PartnerAvatar, err)
+	}
+	items, err := service.ListConversations(ctx, first)
+	if err != nil || len(items) != 1 || items[0].PartnerAvatar == nil {
+		t.Fatalf("listed conversation avatar: %+v %v", items, err)
+	}
+}
+
+type testAvatarSigner struct{}
+
+func (*testAvatarSigner) PresignDownload(_ context.Context, key string, _ time.Duration) (media.SignedRequest, error) {
+	return media.SignedRequest{URL: "https://cdn.example.invalid/" + key}, nil
 }
 
 func TestRepositoryPersistsIdempotentMessagesAndMonotonicReadCursor(t *testing.T) {

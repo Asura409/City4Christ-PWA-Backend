@@ -34,6 +34,8 @@ type Post struct {
 	AmenCount    int                `json:"amenCount"`
 	Reacted      bool               `json:"reacted"`
 	CommentCount int                `json:"commentCount"`
+	Avatar       *media.Attachment  `json:"avatar,omitempty"`
+	avatar       *media.Attachment
 }
 
 type ReactionState struct {
@@ -98,8 +100,8 @@ func (r *Repository) Create(ctx context.Context, author string, in CreateInput, 
  INSERT INTO church_posts(author_id,body,group_id) VALUES($1,$2,NULLIF($3,'')::uuid)
  RETURNING id,author_id,body,created_at,group_id
 )
-SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,0::bigint,false,0::bigint,COALESCE(p.group_id::text,'')
-FROM created p JOIN accounts a ON a.id=p.author_id`, author, in.Body, in.GroupID))
+SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,0::bigint,false,0::bigint,COALESCE(p.group_id::text,''),u.id::text,u.actual_content_type,u.actual_size,u.available_object_key
+FROM created p JOIN accounts a ON a.id=p.author_id LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'`, author, in.Body, in.GroupID))
 	if err != nil {
 		return Post{}, err
 	}
@@ -132,8 +134,9 @@ func (r *Repository) List(ctx context.Context, o Options, after *Cursor, viewerI
 	rows, err := r.db.QueryContext(ctx, `SELECT p.id,p.author_id,a.first_name,a.last_name,p.body,p.created_at,
  (SELECT count(*) FROM post_reactions pr WHERE pr.post_id=p.id AND pr.reaction='amen'),
  EXISTS(SELECT 1 FROM post_reactions pr WHERE pr.post_id=p.id AND pr.account_id=NULLIF($4,'')::uuid AND pr.reaction='amen'),
- (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL),COALESCE(p.group_id::text,'')
+ (SELECT count(*) FROM post_comments pc WHERE pc.post_id=p.id AND pc.deleted_at IS NULL),COALESCE(p.group_id::text,''),u.id::text,u.actual_content_type,u.actual_size,u.available_object_key
  FROM church_posts p JOIN accounts a ON a.id=p.author_id
+ LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'
  WHERE p.deleted_at IS NULL AND COALESCE(p.group_id::text,'')=$5 AND c4c_group_content_visible(p.group_id,NULLIF($4,'')::uuid) AND ($1::timestamptz IS NULL OR (p.created_at,p.id)<($1::timestamptz,$2::uuid))
 	ORDER BY p.created_at DESC,p.id DESC LIMIT $3`, at, id, o.Limit+1, viewerID, o.GroupID)
 	if err != nil {
@@ -183,7 +186,12 @@ func loadPostAttachments(ctx context.Context, q interface {
 
 func scan(row interface{ Scan(...any) error }) (Post, error) {
 	var p Post
-	err := row.Scan(&p.ID, &p.AuthorID, &p.FirstName, &p.LastName, &p.Body, &p.CreatedAt, &p.AmenCount, &p.Reacted, &p.CommentCount, &p.GroupID)
+	var avatarID, contentType, objectKey sql.NullString
+	var size sql.NullInt64
+	err := row.Scan(&p.ID, &p.AuthorID, &p.FirstName, &p.LastName, &p.Body, &p.CreatedAt, &p.AmenCount, &p.Reacted, &p.CommentCount, &p.GroupID, &avatarID, &contentType, &size, &objectKey)
+	if avatarID.Valid && contentType.Valid && size.Valid && objectKey.Valid {
+		p.avatar = &media.Attachment{ID: avatarID.String, ContentType: contentType.String, Size: size.Int64, ObjectKey: objectKey.String}
+	}
 	p.CreatedAt = p.CreatedAt.UTC()
 	return p, err
 }
@@ -223,7 +231,18 @@ func (s *Service) Create(ctx context.Context, author string, in CreateInput) (Po
 	if media.ValidateAttachmentIDs(in.AttachmentIDs, media.MaxPostAttachments) != nil {
 		return Post{}, ErrInvalid
 	}
-	return s.repo.Create(ctx, author, in, s.signer)
+	p, err := s.repo.Create(ctx, author, in, s.signer)
+	if err != nil {
+		return Post{}, err
+	}
+	if p.avatar != nil {
+		signed, e := media.SignAttachments(ctx, s.signer, []media.Attachment{*p.avatar})
+		if e != nil {
+			return Post{}, e
+		}
+		p.Avatar = &signed[0]
+	}
+	return p, nil
 }
 
 func (s *Service) List(ctx context.Context, o Options, viewer ...string) (Page, error) {
@@ -265,6 +284,13 @@ func (s *Service) List(ctx context.Context, o Options, viewer ...string) (Page, 
 		items[i].Attachments, err = media.SignAttachments(ctx, s.signer, items[i].Attachments)
 		if err != nil {
 			return Page{}, err
+		}
+		if items[i].avatar != nil {
+			signed, e := media.SignAttachments(ctx, s.signer, []media.Attachment{*items[i].avatar})
+			if e != nil {
+				return Page{}, e
+			}
+			items[i].Avatar = &signed[0]
 		}
 	}
 	page := Page{Items: items}

@@ -86,7 +86,7 @@ func New(db *sql.DB, config Config) http.Handler {
 	postRoutes(mux, posts.NewService(posts.NewRepository(db), downloadSigner), sessions, limiter, config)
 	moderationService := posts.NewModerationService(posts.NewModerationRepository(db), accessService, config.Now)
 	postModerationRoutes(mux, moderationService, sessions, limiter, config)
-	postCommentRoutes(mux, posts.NewCommentService(posts.NewCommentRepository(db)), sessions, limiter, config)
+	postCommentRoutes(mux, posts.NewCommentService(posts.NewCommentRepository(db), downloadSigner), sessions, limiter, config)
 	eventRoutes(mux, events.NewService(events.NewRepository(db), config.Now), sessions, limiter, config)
 	sermonPublishingRoutes(mux, catalog, sessions, limiter, config)
 	groupRoutes(mux, groups.NewService(groups.NewRepository(db), config.Now), sessions, limiter, config)

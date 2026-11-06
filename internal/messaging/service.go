@@ -49,13 +49,40 @@ func (s *Service) CreateConversation(ctx context.Context, actor, recipient strin
 	if !validID(actor) || !validID(recipient) || actor == recipient {
 		return Conversation{}, false, ErrInvalid
 	}
-	return s.repo.CreateConversation(ctx, actor, recipient, s.now())
+	c, created, err := s.repo.CreateConversation(ctx, actor, recipient, s.now())
+	if err != nil {
+		return Conversation{}, false, err
+	}
+	c, err = s.signPartnerAvatar(ctx, c)
+	return c, created, err
 }
 func (s *Service) ListConversations(ctx context.Context, actor string) ([]Conversation, error) {
 	if !validID(actor) {
 		return nil, ErrInvalid
 	}
-	return s.repo.ListConversations(ctx, actor)
+	items, err := s.repo.ListConversations(ctx, actor)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		items[i], err = s.signPartnerAvatar(ctx, items[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return items, nil
+}
+
+func (s *Service) signPartnerAvatar(ctx context.Context, c Conversation) (Conversation, error) {
+	if c.partnerAvatar == nil {
+		return c, nil
+	}
+	signed, err := media.SignAttachments(ctx, s.downloadSigner, []media.Attachment{*c.partnerAvatar})
+	if err != nil {
+		return Conversation{}, err
+	}
+	c.PartnerAvatar = &signed[0]
+	return c, nil
 }
 func (s *Service) SendMessage(ctx context.Context, actor, conversationID, clientMessageID, body string) (Message, bool, error) {
 	return s.SendMessageWithAttachments(ctx, actor, conversationID, clientMessageID, body, nil)
@@ -247,6 +274,21 @@ func (s *Service) hydrateGroupMessages(ctx context.Context, messages []GroupMess
 	attachments, err := s.repo.groupMessageAttachments(ctx, ids)
 	if err != nil {
 		return err
+	}
+	authors, err := s.repo.groupMessageAuthors(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range messages {
+		author := authors[messages[i].ID]
+		messages[i].SenderFirstName, messages[i].SenderLastName, messages[i].senderAvatar = author.SenderFirstName, author.SenderLastName, author.senderAvatar
+		if messages[i].senderAvatar != nil {
+			signed, e := media.SignAttachments(ctx, s.downloadSigner, []media.Attachment{*messages[i].senderAvatar})
+			if e != nil {
+				return e
+			}
+			messages[i].SenderAvatar = &signed[0]
+		}
 	}
 	for i := range messages {
 		items := attachments[messages[i].ID]

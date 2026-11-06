@@ -4,12 +4,48 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/access"
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/google/uuid"
 )
+
+func (r *Repository) groupMessageAuthors(ctx context.Context, ids []string) (map[string]GroupMessage, error) {
+	result := make(map[string]GroupMessage, len(ids))
+	if len(ids) == 0 {
+		return result, nil
+	}
+	args := make([]any, len(ids))
+	placeholders := make([]string, len(ids))
+	for i, id := range ids {
+		args[i] = id
+		placeholders[i] = fmt.Sprintf("$%d", i+1)
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT m.id::text,a.first_name,a.last_name,u.id::text,u.actual_content_type,u.actual_size,u.available_object_key
+		FROM group_chat_messages m JOIN accounts a ON a.id=m.sender_id
+		LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'
+		WHERE m.id IN (`+strings.Join(placeholders, ",")+")", args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var item GroupMessage
+		var avatarID, avatarType, avatarKey sql.NullString
+		var avatarSize sql.NullInt64
+		if err = rows.Scan(&item.ID, &item.SenderFirstName, &item.SenderLastName, &avatarID, &avatarType, &avatarSize, &avatarKey); err != nil {
+			return nil, err
+		}
+		if avatarID.Valid && avatarType.Valid && avatarSize.Valid && avatarKey.Valid {
+			item.senderAvatar = &media.Attachment{ID: avatarID.String, ContentType: avatarType.String, Size: avatarSize.Int64, ObjectKey: avatarKey.String}
+		}
+		result[item.ID] = item
+	}
+	return result, rows.Err()
+}
 
 func (r *Repository) ListGroupConversations(ctx context.Context, actor string) ([]GroupConversation, error) {
 	var verified bool
