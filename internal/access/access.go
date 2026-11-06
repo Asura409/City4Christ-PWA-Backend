@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -27,9 +28,18 @@ type Assignment struct {
 	Role  string `json:"role"`
 	Scope string `json:"scope"`
 }
-type Service struct{ db *sql.DB }
+type Service struct {
+	db     *sql.DB
+	signer media.DownloadSigner
+}
 
-func NewService(db *sql.DB) *Service { return &Service{db: db} }
+func NewService(db *sql.DB, signer ...media.DownloadSigner) *Service {
+	var downloadSigner media.DownloadSigner
+	if len(signer) > 0 {
+		downloadSigner = signer[0]
+	}
+	return &Service{db: db, signer: downloadSigner}
+}
 func validID(id string) bool {
 	v, err := uuid.Parse(id)
 	return err == nil && v.String() == id && v != uuid.Nil
