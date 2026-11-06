@@ -119,12 +119,10 @@ func (y *YouVersion) Lookup(ctx context.Context, q Query) (Passage, error) {
 		Reference string `json:"reference"`
 		Content   string `json:"content"`
 	}
-	if err := y.getJSON(ctx, endpoint+"?"+query.Encode(), &response); err != nil {
-		return Passage{}, err
-	}
+	htmlErr := y.getJSON(ctx, endpoint+"?"+query.Encode(), &response)
 	verses := parseYouVersionHTML(response.Content, passage)
-	text := strings.TrimSpace(response.Content)
-	if len(verses) > 0 {
+	text := ""
+	if htmlErr == nil && len(verses) > 0 {
 		parts := make([]string, 0, len(verses))
 		for _, verse := range verses {
 			parts = append(parts, fmt.Sprintf("[%d] %s", verse.Number, verse.Text))
@@ -132,7 +130,8 @@ func (y *YouVersion) Lookup(ctx context.Context, q Query) (Passage, error) {
 		text = strings.Join(parts, " ")
 	} else {
 		// Keep the integration compatible with versions whose HTML response does
-		// not expose the standard verse spans. Those passages remain usable, but
+		// not expose the standard verse spans, or providers that do not support
+		// the HTML representation at all. Those passages remain usable, but
 		// cannot receive inline markers until the provider returns boundaries.
 		textQuery := url.Values{"format": []string{"text"}}
 		var textResponse struct {
