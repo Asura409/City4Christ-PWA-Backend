@@ -11,6 +11,58 @@ import (
 // can serve KJV until the one-time import has completed.
 type Database struct{ db *sql.DB }
 
+type databaseReference struct {
+	bookID, bookName         string
+	startChapter, endChapter int
+	startVerse, endVerse     int
+	hasVerse                 bool
+}
+
+func parseDatabaseReference(reference string) (databaseReference, string, error) {
+	m := referencePattern.FindStringSubmatch(strings.TrimSpace(reference))
+	if m == nil {
+		return databaseReference{}, "", invalid("reference", "Use a book, chapter and optional verse range.")
+	}
+	bookID, ok := bookIDs[strings.ToLower(strings.TrimSpace(m[1]))]
+	if !ok {
+		return databaseReference{}, "", invalid("reference", "Use a recognized English Bible book name.")
+	}
+	startChapter := atoi(m[2])
+	result := databaseReference{
+		bookID:       bookID,
+		bookName:     bookNames[bookID],
+		startChapter: startChapter,
+		endChapter:   startChapter,
+	}
+	if startChapter < 1 {
+		return databaseReference{}, "", invalid("reference", "Use a valid chapter number.")
+	}
+	if m[3] == "" {
+		return result, bookNames[bookID] + " " + m[2], nil
+	}
+	result.hasVerse = true
+	result.startVerse = atoi(m[3])
+	result.endVerse = result.startVerse
+	if m[5] != "" {
+		result.endVerse = atoi(m[5])
+		if m[4] != "" {
+			result.endChapter = atoi(m[4])
+		}
+	}
+	if result.startChapter < 1 || result.endChapter < result.startChapter || result.startVerse < 1 || result.endVerse < 1 || (result.endChapter == result.startChapter && result.endVerse < result.startVerse) {
+		return databaseReference{}, "", invalid("reference", "Use a valid verse or verse range.")
+	}
+	displayReference := bookNames[bookID] + " " + m[2] + ":" + m[3]
+	if m[5] != "" {
+		displayReference += "-"
+		if m[4] != "" {
+			displayReference += m[4] + ":"
+		}
+		displayReference += m[5]
+	}
+	return result, displayReference, nil
+}
+
 func NewDatabase(db *sql.DB) *Database { return &Database{db: db} }
 
 func (d *Database) Translations(ctx context.Context) ([]Translation, error) {
@@ -44,23 +96,11 @@ func (d *Database) Lookup(ctx context.Context, q Query) (Passage, error) {
 	if d == nil || d.db == nil || strings.ToLower(strings.TrimSpace(q.Translation)) != "kjv" {
 		return Passage{}, invalid("translation", "Choose a supported translation.")
 	}
-	id, reference, err := passageID(q.Reference)
+	parsed, reference, err := parseDatabaseReference(q.Reference)
 	if err != nil {
 		return Passage{}, err
 	}
-	parts := strings.Split(id, ".")
-	if len(parts) != 3 {
-		return Passage{}, invalid("reference", "Choose a verse or verse range for database lookup.")
-	}
-	rangeParts := strings.Split(parts[2], "-")
-	start, end := atoi(rangeParts[0]), atoi(rangeParts[0])
-	if len(rangeParts) == 2 {
-		end = atoi(rangeParts[1])
-	}
-	if start < 1 || end < start {
-		return Passage{}, invalid("reference", "Use a valid verse or verse range.")
-	}
-	rows, err := d.db.QueryContext(ctx, `SELECT book_id, book_name, chapter, verse, text FROM bible_verses WHERE translation_id=$1 AND book_id=$2 AND chapter=$3 AND verse BETWEEN $4 AND $5 ORDER BY verse`, "kjv", parts[0], atoi(parts[1]), start, end)
+	rows, err := d.db.QueryContext(ctx, `SELECT book_id, book_name, chapter, verse, text FROM bible_verses WHERE translation_id=$1 AND book_id=$2 AND chapter BETWEEN $3 AND $4 ORDER BY chapter, verse`, "kjv", parsed.bookID, parsed.startChapter, parsed.endChapter)
 	if err != nil {
 		return Passage{}, ErrUnavailable
 	}
@@ -70,6 +110,14 @@ func (d *Database) Lookup(ctx context.Context, q Query) (Passage, error) {
 		var verse Verse
 		if err := rows.Scan(&verse.BookID, &verse.BookName, &verse.Chapter, &verse.Number, &verse.Text); err != nil {
 			return Passage{}, ErrUnavailable
+		}
+		if parsed.hasVerse {
+			if verse.Chapter == parsed.startChapter && verse.Number < parsed.startVerse {
+				continue
+			}
+			if verse.Chapter == parsed.endChapter && verse.Number > parsed.endVerse {
+				continue
+			}
 		}
 		verses = append(verses, verse)
 	}
