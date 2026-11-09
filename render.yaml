@@ -6,6 +6,7 @@ previews:
 services:
   - type: web
     name: city4christ-staging-api
+    repo: https://github.com/Kasa-IT-Firm/City4Christ-PWA-Backend
     runtime: docker
     plan: free
     region: oregon
