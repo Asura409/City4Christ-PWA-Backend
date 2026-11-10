@@ -70,12 +70,13 @@ func (r *Repository) ListConversations(ctx context.Context, actor string) ([]Con
 		return nil, ErrForbidden
 	}
 	rows, err := r.db.QueryContext(ctx, `SELECT c.id,other.id,other.first_name,other.last_name,c.created_at,me.last_read_sequence,peer.last_read_sequence,
- COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.edited_at,last.deleted_at IS NOT NULL,COALESCE(last.attachment_count,0)
+ COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.edited_at,last.deleted_at IS NOT NULL,COALESCE(last.attachment_count,0),avatar.id::text,avatar.actual_content_type,avatar.actual_size,avatar.available_object_key
  FROM direct_conversations c
  JOIN direct_conversation_members me ON me.conversation_id=c.id AND me.account_id=$1
  JOIN accounts self ON self.id=me.account_id AND self.email_verified_at IS NOT NULL
  JOIN direct_conversation_members peer ON peer.conversation_id=c.id AND peer.account_id<>$1
  JOIN accounts other ON other.id=peer.account_id AND other.email_verified_at IS NOT NULL
+ LEFT JOIN media_uploads avatar ON avatar.id=other.avatar_upload_id AND avatar.status='available' AND avatar.purpose='profile_photo'
  LEFT JOIN LATERAL (SELECT count(*)::int AS count FROM direct_messages m WHERE m.conversation_id=c.id AND m.sender_id<>$1 AND m.sequence>me.last_read_sequence) unread ON true
  LEFT JOIN LATERAL (SELECT m.id,m.conversation_id,m.sender_id,m.client_message_id,m.body,m.sequence,m.created_at,m.edited_at,m.deleted_at,
   (SELECT count(*)::int FROM direct_message_media_attachments a WHERE a.message_id=m.id) attachment_count
@@ -94,8 +95,13 @@ func (r *Repository) ListConversations(ctx context.Context, actor string) ([]Con
 		var lastEditedAt sql.NullTime
 		var lastDeleted bool
 		var lastAttachmentCount int
-		if err = rows.Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastEditedAt, &lastDeleted, &lastAttachmentCount); err != nil {
+		var avatarID, avatarType, avatarKey sql.NullString
+		var avatarSize sql.NullInt64
+		if err = rows.Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastEditedAt, &lastDeleted, &lastAttachmentCount, &avatarID, &avatarType, &avatarSize, &avatarKey); err != nil {
 			return nil, err
+		}
+		if avatarID.Valid && avatarType.Valid && avatarSize.Valid && avatarKey.Valid {
+			c.partnerAvatar = &media.Attachment{ID: avatarID.String, ContentType: avatarType.String, Size: avatarSize.Int64, ObjectKey: avatarKey.String}
 		}
 		if lastID.Valid {
 			last := &Message{ID: lastID.String, ConversationID: lastConversationID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: lastBody.String, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time, AttachmentCount: lastAttachmentCount, Deleted: lastDeleted}
@@ -276,20 +282,26 @@ func conversationFor(ctx context.Context, tx *sql.Tx, id, actor string) (Convers
 	var lastAt sql.NullTime
 	var lastEditedAt sql.NullTime
 	var lastDeleted bool
+	var avatarID, avatarType, avatarKey sql.NullString
+	var avatarSize sql.NullInt64
 	err := tx.QueryRowContext(ctx, `SELECT c.id,other.id,other.first_name,other.last_name,c.created_at,me.last_read_sequence,peer.last_read_sequence,
-	COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.edited_at,last.deleted_at IS NOT NULL
+	COALESCE(unread.count,0),last.id,last.conversation_id,last.sender_id,last.client_message_id,last.body,last.sequence,last.created_at,last.edited_at,last.deleted_at IS NOT NULL,avatar.id::text,avatar.actual_content_type,avatar.actual_size,avatar.available_object_key
  FROM direct_conversations c
  JOIN direct_conversation_members me ON me.conversation_id=c.id AND me.account_id=$2
  JOIN direct_conversation_members peer ON peer.conversation_id=c.id AND peer.account_id<>$2
  JOIN accounts other ON other.id=peer.account_id AND other.email_verified_at IS NOT NULL
+	LEFT JOIN media_uploads avatar ON avatar.id=other.avatar_upload_id AND avatar.status='available' AND avatar.purpose='profile_photo'
  LEFT JOIN LATERAL (SELECT count(*)::int AS count FROM direct_messages m WHERE m.conversation_id=c.id AND m.sender_id<>$2 AND m.sequence>me.last_read_sequence) unread ON true
 	LEFT JOIN LATERAL (SELECT id,conversation_id,sender_id,client_message_id,body,sequence,created_at,edited_at,deleted_at FROM direct_messages m WHERE m.conversation_id=c.id ORDER BY sequence DESC LIMIT 1) last ON true
-	WHERE c.id=$1`, id, actor).Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastEditedAt, &lastDeleted)
+	WHERE c.id=$1`, id, actor).Scan(&c.ID, &c.PartnerID, &c.PartnerFirstName, &c.PartnerLastName, &c.CreatedAt, &c.MyLastReadSequence, &c.PartnerReadSequence, &c.UnreadCount, &lastID, &lastConversationID, &lastSenderID, &lastClientID, &lastBody, &lastSequence, &lastAt, &lastEditedAt, &lastDeleted, &avatarID, &avatarType, &avatarSize, &avatarKey)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Conversation{}, ErrNotFound
 	}
 	if err != nil {
 		return Conversation{}, err
+	}
+	if avatarID.Valid && avatarType.Valid && avatarSize.Valid && avatarKey.Valid {
+		c.partnerAvatar = &media.Attachment{ID: avatarID.String, ContentType: avatarType.String, Size: avatarSize.Int64, ObjectKey: avatarKey.String}
 	}
 	if lastID.Valid {
 		last := &Message{ID: lastID.String, ConversationID: lastConversationID.String, SenderID: lastSenderID.String, ClientMessageID: lastClientID.String, Body: lastBody.String, Sequence: lastSequence.Int64, CreatedAt: lastAt.Time, Deleted: lastDeleted}

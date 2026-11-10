@@ -5,10 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
+	"github.com/google/uuid"
 )
 
 type messageAttachmentSigner struct{}
@@ -79,6 +81,36 @@ func TestGroupMessagesCanAttachCleanFilesForCurrentMembers(t *testing.T) {
 	page, err := service.ListGroupMessages(ctx, second, groupID, 0, 20)
 	if err != nil || len(page.Items) != 1 || len(page.Items[0].Attachments) != 1 || page.Items[0].Attachments[0].ID != attachmentID {
 		t.Fatalf("member group history = (%+v, %v)", page, err)
+	}
+}
+
+func TestGroupMessagesReturnSignedSenderProfilePhoto(t *testing.T) {
+	db, seed := messagingDB(t)
+	ctx := context.Background()
+	sender, recipient := seed("group-photo-sender@example.invalid"), seed("group-photo-reader@example.invalid")
+	var groupID string
+	if err := db.QueryRow(`INSERT INTO groups(name,description,audience,join_policy,created_by) VALUES('Photo group','', 'church','open',$1) RETURNING id::text`, sender).Scan(&groupID); err != nil {
+		t.Fatal(err)
+	}
+	for _, accountID := range []string{sender, recipient} {
+		if _, err := db.Exec(`INSERT INTO group_memberships(group_id,account_id,status) VALUES($1,$2,'active')`, groupID, accountID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	upload := uuid.NewString()
+	if _, err := db.Exec(`INSERT INTO media_uploads(id,owner_id,purpose,object_key,available_object_key,declared_content_type,declared_size,actual_content_type,actual_size,status,expires_at,uploaded_at,scanned_at) VALUES($1,$2,'profile_photo',$3,$4,'image/png',8,'image/png',8,'available',now()+interval '1 hour',now(),now())`, upload, sender, "src/"+upload, "profiles/"+upload+"/clean.png"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE accounts SET avatar_upload_id=$2 WHERE id=$1`, sender, upload); err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(NewRepository(db), nil, messageAttachmentSigner{})
+	if _, _, err := service.SendGroupMessage(ctx, sender, groupID, "7219a6ea-b436-48ca-9d75-b2b8f5dd18ef", "Hello group"); err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.ListGroupMessages(ctx, recipient, groupID, 0, 20)
+	if err != nil || len(page.Items) != 1 || page.Items[0].SenderAvatar == nil || !strings.HasPrefix(page.Items[0].SenderAvatar.URL, "https://media.example.invalid/profiles/"+upload+"/clean.png?") {
+		t.Fatalf("group sender photo: %+v %v", page, err)
 	}
 }
 

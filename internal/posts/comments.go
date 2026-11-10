@@ -12,6 +12,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/City4Christ/City4Christ-PWA-Backend/internal/media"
 	"github.com/google/uuid"
 )
 
@@ -21,13 +22,15 @@ var (
 )
 
 type Comment struct {
-	ID        string    `json:"id"`
-	PostID    string    `json:"postId"`
-	AuthorID  string    `json:"authorId"`
-	FirstName string    `json:"firstName"`
-	LastName  string    `json:"lastName"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string            `json:"id"`
+	PostID    string            `json:"postId"`
+	AuthorID  string            `json:"authorId"`
+	FirstName string            `json:"firstName"`
+	LastName  string            `json:"lastName"`
+	Body      string            `json:"body"`
+	CreatedAt time.Time         `json:"createdAt"`
+	Avatar    *media.Attachment `json:"avatar,omitempty"`
+	avatar    *media.Attachment
 }
 
 type CommentInput struct {
@@ -75,8 +78,8 @@ func (r *CommentRepository) Create(ctx context.Context, authorID, postID, body s
  INSERT INTO post_comments(post_id,account_id,body) VALUES($1,$2,$3)
  RETURNING id,post_id,account_id,body,created_at
 )
-SELECT c.id::text,c.post_id::text,c.account_id::text,a.first_name,a.last_name,c.body,c.created_at
-FROM created c JOIN accounts a ON a.id=c.account_id`, postID, authorID, body))
+SELECT c.id::text,c.post_id::text,c.account_id::text,a.first_name,a.last_name,c.body,c.created_at,u.id::text,u.actual_content_type,u.actual_size,u.available_object_key
+FROM created c JOIN accounts a ON a.id=c.account_id LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'`, postID, authorID, body))
 	if err != nil {
 		return Comment{}, err
 	}
@@ -103,8 +106,9 @@ func (r *CommentRepository) List(ctx context.Context, postID string, options Com
 	if after != nil {
 		createdAt, id = &after.CreatedAt, &after.ID
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT c.id::text,c.post_id::text,c.account_id::text,a.first_name,a.last_name,c.body,c.created_at
+	rows, err := r.db.QueryContext(ctx, `SELECT c.id::text,c.post_id::text,c.account_id::text,a.first_name,a.last_name,c.body,c.created_at,u.id::text,u.actual_content_type,u.actual_size,u.available_object_key
 		FROM post_comments c JOIN accounts a ON a.id=c.account_id JOIN church_posts p ON p.id=c.post_id
+		LEFT JOIN media_uploads u ON u.id=a.avatar_upload_id AND u.status='available' AND u.purpose='profile_photo'
 		WHERE c.post_id=$1 AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND c4c_group_content_visible(p.group_id,NULLIF($5,'')::uuid)
 		AND ($2::timestamptz IS NULL OR (c.created_at,c.id)<($2::timestamptz,$3::uuid))
 		ORDER BY c.created_at DESC,c.id DESC LIMIT $4`, postID, createdAt, id, options.Limit+1, viewer)
@@ -142,14 +146,28 @@ func (r *CommentRepository) Delete(ctx context.Context, authorID, postID, commen
 
 func scanComment(row interface{ Scan(...any) error }) (Comment, error) {
 	var item Comment
-	err := row.Scan(&item.ID, &item.PostID, &item.AuthorID, &item.FirstName, &item.LastName, &item.Body, &item.CreatedAt)
+	var avatarID, contentType, objectKey sql.NullString
+	var size sql.NullInt64
+	err := row.Scan(&item.ID, &item.PostID, &item.AuthorID, &item.FirstName, &item.LastName, &item.Body, &item.CreatedAt, &avatarID, &contentType, &size, &objectKey)
+	if avatarID.Valid && contentType.Valid && size.Valid && objectKey.Valid {
+		item.avatar = &media.Attachment{ID: avatarID.String, ContentType: contentType.String, Size: size.Int64, ObjectKey: objectKey.String}
+	}
 	item.CreatedAt = item.CreatedAt.UTC()
 	return item, err
 }
 
-type CommentService struct{ repo *CommentRepository }
+type CommentService struct {
+	repo   *CommentRepository
+	signer media.DownloadSigner
+}
 
-func NewCommentService(repo *CommentRepository) *CommentService { return &CommentService{repo: repo} }
+func NewCommentService(repo *CommentRepository, signers ...media.DownloadSigner) *CommentService {
+	s := &CommentService{repo: repo}
+	if len(signers) > 0 {
+		s.signer = signers[0]
+	}
+	return s
+}
 
 func commentID(value string) bool {
 	id, err := uuid.Parse(value)
@@ -161,7 +179,11 @@ func (s *CommentService) Create(ctx context.Context, authorID, postID string, in
 	if !commentID(authorID) || !commentID(postID) || !utf8.ValidString(input.Body) || len([]rune(input.Body)) < 1 || len([]rune(input.Body)) > 2000 || strings.ContainsRune(input.Body, 0) {
 		return Comment{}, ErrCommentInvalid
 	}
-	return s.repo.Create(ctx, authorID, postID, input.Body)
+	item, err := s.repo.Create(ctx, authorID, postID, input.Body)
+	if err != nil {
+		return Comment{}, err
+	}
+	return s.signAvatar(ctx, item)
 }
 
 func (s *CommentService) List(ctx context.Context, viewerID, postID string, options CommentOptions) (CommentPage, error) {
@@ -192,6 +214,12 @@ func (s *CommentService) List(ctx context.Context, viewerID, postID string, opti
 	if err != nil {
 		return CommentPage{}, err
 	}
+	for i := range items {
+		items[i], err = s.signAvatar(ctx, items[i])
+		if err != nil {
+			return CommentPage{}, err
+		}
+	}
 	page := CommentPage{Items: items}
 	if len(items) > options.Limit {
 		page.Items = items[:options.Limit]
@@ -203,6 +231,18 @@ func (s *CommentService) List(ctx context.Context, viewerID, postID string, opti
 		page.NextCursor = base64.RawURLEncoding.EncodeToString(raw)
 	}
 	return page, nil
+}
+
+func (s *CommentService) signAvatar(ctx context.Context, item Comment) (Comment, error) {
+	if item.avatar == nil {
+		return item, nil
+	}
+	signed, err := media.SignAttachments(ctx, s.signer, []media.Attachment{*item.avatar})
+	if err != nil {
+		return Comment{}, err
+	}
+	item.Avatar = &signed[0]
+	return item, nil
 }
 
 func (s *CommentService) Delete(ctx context.Context, authorID, postID, commentIDValue string) error {

@@ -149,6 +149,48 @@ func TestRepositoryCreateAndStableFeedPages(t *testing.T) {
 	}
 }
 
+func TestPostAuthorProfilePhotoIsReturnedWithSignedURL(t *testing.T) {
+	db := testpg.New(t)
+	ctx := context.Background()
+	if err := database.Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	var author string
+	if err := db.QueryRow(`INSERT INTO accounts(email,first_name,last_name,email_verified_at) VALUES('photo-post@example.invalid','Ada','Photo',now()) RETURNING id`).Scan(&author); err != nil {
+		t.Fatal(err)
+	}
+	upload := insertProfileUpload(t, db, author)
+	if _, err := db.Exec(`UPDATE accounts SET avatar_upload_id=$2 WHERE id=$1`, author, upload); err != nil {
+		t.Fatal(err)
+	}
+	signer := &postDownloadSigner{}
+	service := NewService(NewRepository(db), signer)
+	created, err := service.Create(ctx, author, CreateInput{Body: "Photo post"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := service.List(ctx, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, post := range []Post{created, page.Items[0]} {
+		if post.Avatar == nil || !strings.HasPrefix(post.Avatar.URL, "https://private.r2.example/") {
+			t.Fatalf("post avatar missing or unsigned: %+v", post.Avatar)
+		}
+	}
+}
+
+func insertProfileUpload(t *testing.T, db *sql.DB, owner string) string {
+	t.Helper()
+	id := uuid.NewString()
+	_, err := db.Exec(`INSERT INTO media_uploads(id,owner_id,purpose,object_key,available_object_key,declared_content_type,declared_size,actual_content_type,actual_size,status,expires_at,uploaded_at,scanned_at)
+		VALUES($1,$2,'profile_photo',$3,$4,'image/png',8,'image/png',8,'available',now()+interval '1 hour',now(),now())`, id, owner, "profile-source/"+id, "profiles/"+id+"/clean.png")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return id
+}
+
 func TestAmenReactionsAreIdempotentAndScopedPerMember(t *testing.T) {
 	db := testpg.New(t)
 	ctx := context.Background()

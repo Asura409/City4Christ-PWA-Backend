@@ -12863,6 +12863,10 @@
           "lastName": {
             "type": "string"
           },
+          "avatar": {
+            "$ref": "#/components/schemas/MediaAttachment",
+            "description": "Available to viewers authorized for this post; the signed photo URL expires after 30 minutes."
+          },
           "body": {
             "type": "string"
           },
@@ -13370,6 +13374,10 @@
           "partnerLastName": {
             "type": "string"
           },
+          "partnerAvatar": {
+            "$ref": "#/components/schemas/MediaAttachment",
+            "description": "Signed profile-photo URL visible to participants in this direct conversation."
+          },
           "lastMessage": {
             "allOf": [
               {
@@ -13788,6 +13796,16 @@
           "senderId": {
             "type": "string",
             "format": "uuid"
+          },
+          "senderFirstName": {
+            "type": "string"
+          },
+          "senderLastName": {
+            "type": "string"
+          },
+          "senderAvatar": {
+            "$ref": "#/components/schemas/MediaAttachment",
+            "description": "Signed profile photo for the group-message sender, available to current group members."
           },
           "clientMessageId": {
             "type": "string",
@@ -14238,6 +14256,10 @@
           },
           "lastName": {
             "type": "string"
+          },
+          "avatar": {
+            "$ref": "#/components/schemas/MediaAttachment",
+            "description": "Signed profile-photo URL, visible to viewers authorized for the parent post."
           },
           "body": {
             "type": "string"
