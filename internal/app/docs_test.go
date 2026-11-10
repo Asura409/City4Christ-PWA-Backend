@@ -1,11 +1,81 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func walkJSONWithoutDuplicateKeys(decoder *json.Decoder, path string) error {
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	delim, isDelimiter := token.(json.Delim)
+	if !isDelimiter {
+		return nil
+	}
+
+	switch delim {
+	case '{':
+		seen := make(map[string]struct{})
+		for decoder.More() {
+			keyToken, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			key, ok := keyToken.(string)
+			if !ok {
+				return fmt.Errorf("object key at %s is not a string", path)
+			}
+			if _, exists := seen[key]; exists {
+				return fmt.Errorf("duplicate JSON object key %q at %s", key, path)
+			}
+			seen[key] = struct{}{}
+			if err := walkJSONWithoutDuplicateKeys(decoder, path+"."+key); err != nil {
+				return err
+			}
+		}
+	case '[':
+		index := 0
+		for decoder.More() {
+			if err := walkJSONWithoutDuplicateKeys(decoder, fmt.Sprintf("%s[%d]", path, index)); err != nil {
+				return err
+			}
+			index++
+		}
+	default:
+		return fmt.Errorf("unexpected JSON delimiter %q at %s", delim, path)
+	}
+
+	_, err = decoder.Token()
+	return err
+}
+
+func assertJSONHasUniqueObjectKeys(document []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(document))
+	if err := walkJSONWithoutDuplicateKeys(decoder, "$"); err != nil {
+		return err
+	}
+	if token, err := decoder.Token(); err != io.EOF {
+		return fmt.Errorf("unexpected trailing JSON token %v: %w", token, err)
+	}
+	return nil
+}
+
+func TestOpenAPIDefinitionHasNoDuplicateObjectKeys(t *testing.T) {
+	document, err := documentation.ReadFile("apidocs/openapi.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := assertJSONHasUniqueObjectKeys(document); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestDocumentationThroughGlobalApp(t *testing.T) {
 	handler := New(nil, Config{})
